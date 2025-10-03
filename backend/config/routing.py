@@ -1,5 +1,9 @@
-"""Channels routing configuration placeholder."""
+"""Channels routing configuration."""
 
 from django.urls import path
 
-websocket_urlpatterns = []
+from apps.rooms.consumers import RoomConsumer
+
+websocket_urlpatterns = [
+    path("ws/rooms/<int:room_id>/", RoomConsumer.as_asgi(), name="room-consumer"),
+]

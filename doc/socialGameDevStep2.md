@@ -81,3 +81,64 @@
 - **第 4 周中旬**：前端大厅、房间、聊天联调通过；完成步骤二验收。
 
 > 步骤二完成后，系统具备稳定的房间与实时通信能力，可进入“谁是卧底”游戏引擎的实现。
+
+## 7. 实现情况总结（2025-10-03）
+
+- **后端**
+  - `Room` 模型扩展状态、阶段、人数上限、配置等字段；新增 `RoomPlayer` 维护座位、房主标记、AI 占位等信息，提供唯一约束防止并发冲突。
+  - 新增服务层 `apps.rooms.services` 负责创建/加入/退出/解散/开始逻辑，并对接 Channels 群组广播；REST API 通过 `RoomViewSet` 暴露全量接口。
+  - `RoomConsumer` 完成 JWT 鉴权、成员校验、消息协议、系统同步等逻辑；ASGI 路由绑定 `ws/rooms/<room_id>/`。
+  - 引入 `pytest`、`pytest-django`、`pytest-asyncio`，提供房间 API 与 WebSocket 单元测试；新增 `config.settings.test` 以及 `CHANNEL_LAYERS` 的内存配置。
+
+- **前端**
+  - 编写 `rooms` API 与 `useRoomsStore`，统一封装大厅分页、房间详情、加入/退出/房号加入、WebSocket 消息管理。
+  - 大厅页面支持搜索、状态筛选、房号加入与创建弹窗，集成房主权限提示；房间页面展示成员席位、连接状态、实时聊天输入与房主操作按钮。
+  - `GameSocket` 支持获取底层实例用于消息发送，新增 `VITE_WS_BASE_URL` 环境变量并补充 `.env.example`。
+
+- **验证与工具**
+  - `pytest` 成功覆盖房间创建/加入/退出、房主权限校验、双端 WebSocket 聊天与非成员拒绝接入场景。
+  - 文档与 README 更新说明房间 REST/WebSocket 接口、前端使用说明及测试方法。
+
+> 后续开发可在此基础上聚焦玩法引擎、房内状态机以及 AI 逻辑。
+
+## 8. 接入与验证指南
+
+### 8.1 REST 接口速查
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/rooms/` | 创建房间，自动生成房号并将房主入座 |
+| `GET` | `/api/rooms/` | 分页房间列表，支持 `search`、`status`、`is_private` 查询参数 |
+| `GET` | `/api/rooms/{id}/` | 房间详情，返回成员列表、房主标识、配置信息 |
+| `POST` | `/api/rooms/{id}/join/` | 当前用户加入指定房间 |
+| `POST` | `/api/rooms/{id}/leave/` | 退出房间，必要时触发房主转移 |
+| `POST` | `/api/rooms/join-by-code/` | 通过房号加入房间 |
+| `POST` | `/api/rooms/{id}/start/` | 房主触发游戏开始（当前阶段仅广播状态） |
+| `DELETE` | `/api/rooms/{id}/` | 房主解散房间，所有成员收到系统广播 |
+
+所有接口均需携带 `Authorization: Bearer <access_token>`，用户可通过认证接口获取 JWT。
+
+### 8.2 WebSocket 消息协议
+
+- 连接地址：`ws://<host>/ws/rooms/<room_id>/?token=<access_token>`。
+- 服务端事件：
+  - `system.sync`：连接成功后推送房间快照（房间详情 + 成员列表）。
+  - `system.broadcast`：房间状态变更、成员进出等通知。
+  - `chat.message`：聊天消息广播，包含 `sender`、`content`、`timestamp`。
+  - `error`：错误提示（如消息格式错误、权限不足）。
+  - `pong`：心跳回复，回应客户端发送的 `type: "ping"`。
+- 客户端需发送 `{"type": "chat.message", "payload": {"content": "..."}}` 来广播文本消息。
+
+### 8.3 本地联调步骤
+
+1. 启动后端（参考 `backend/README.md`）并执行 `python manage.py migrate`。
+2. 启动前端 `npm run dev`，确保 `.env` 中 `VITE_API_BASE_URL`、`VITE_WS_BASE_URL` 指向后端地址。
+3. 注册/登录用户，访问大厅页面 `/lobby` 创建或加入房间。
+4. 打开两个浏览器窗口分别登录不同账号，验证聊天室消息可实时同步。
+5. 在后端仓库执行 `pytest`，确认核心流程可通过自动化测试。
+
+### 8.4 常见扩展点
+
+- **自定义房间配置**：在 `Room.config` 中增加玩法配置字段后，可通过序列化器自动下发至前端。
+- **系统广播类型**：扩展 `apps/rooms/services.broadcast_room_event`（或新增 helper）时，请同步更新前端 `rooms` Store 对应的消息处理逻辑。
+- **断线重连**：`system.sync` 已提供房间快照，前端可在重连后刷新状态；如需补齐历史聊天记录，可在 REST 层补充消息列表接口。
