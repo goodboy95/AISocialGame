@@ -3,6 +3,8 @@ __pycache__/
 *.sqlite3
 .env
 .env.*
+!.env.example
+!frontend/.env.example
 node_modules/
 dist/
 .vscode/

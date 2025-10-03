@@ -22,4 +22,12 @@ export class GameSocket {
   close() {
     this.socket?.close();
   }
+
+  getRawInstance() {
+    return this.socket;
+  }
+
+  isConnected() {
+    return this.socket?.readyState === WebSocket.OPEN;
+  }
 }
