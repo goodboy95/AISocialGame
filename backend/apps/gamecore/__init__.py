@@ -1,0 +1,1 @@
+"""Gamecore application."""

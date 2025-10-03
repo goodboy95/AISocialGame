@@ -1,0 +1,29 @@
+@use "sass:color";
+
+:root {
+  --primary-color: #409eff;
+  --bg-light: #f5f7fa;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background-color: var(--bg-light);
+  color: #1f2329;
+}
+
+a {
+  color: inherit;
+}
+
+.el-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: transparent;
+  border-bottom: 1px solid color.adjust(#dcdfe6, $alpha: -0.7);
+}
+
+.el-main {
+  padding: 24px 0;
+}
