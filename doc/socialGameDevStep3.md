@@ -87,3 +87,21 @@
 - **第 6 周中旬**：前端游戏面板联调完成，交付“谁是卧底”可玩版本。
 
 > 步骤三交付首个完整游戏模式，后续可在此基础上拓展“狼人杀”与更多玩法。
+
+## 7. 实现回顾与交接提示
+
+- **后端**
+  - `apps/gamecore`：新增 `BaseGameEngine`、`GameSession` 扩展字段与 `services.start_room_game/handle_room_event`，统筹状态持久化与广播。
+  - `apps/games`：引入 `WordPair` 词库模型与 `undercover/engine.py`，负责发牌、发言、投票、胜负判定与 AI 自动操作；`apps/ai/services.py` 提供简易 AI 策略与昵称生成。
+  - `apps/rooms/services.py`：`start_room` 会自动补齐 AI 玩家、调用游戏引擎并推送 `system.broadcast` 与 `game.event`。
+  - `apps/rooms/consumers.py`：WebSocket 支持 `game.event` 消息类型，调用 `handle_room_event` 处理 `ready`、`submit_speech`、`submit_vote` 等事件。
+  - 新增 `apps/gamecore/tests/test_undercover_engine.py` 以及对现有房间测试的适配，覆盖完整一轮发言/投票流程。
+- **前端**
+  - `src/store/rooms.ts` 扩展 `gameSession` 状态、`sendGameEvent` 方法与 `game.event` 处理逻辑，收到事件后会自动刷新房间详情。
+  - `src/pages/RoomPage.vue` 重构为游戏面板，展示身份词语、阶段提示、发言记录、投票按钮与实时聊天；支持房主 `ready`、玩家 `submit_speech`、`submit_vote` 的交互。
+  - `src/types/rooms.ts` 补充 `GameSessionSnapshot` 与卧底状态类型，便于前端类型推导。
+- **测试与环境**
+  - `pytest` 测试覆盖房间 REST/WS 流程及卧底引擎；运行前请执行 `pip install -r requirements/dev.txt` 并使用 `pytest` 回归。
+  - 词库数据默认为空，需要通过 Django shell 或管理端补充 `WordPair` 后才能正常开始对局。
+
+> 后续开发建议：在 `apps/gamecore/services.py` 中扩展引擎注册表即可新增玩法；若需增强 AI，考虑在 `apps/ai/services.py` 中替换为调用大模型的客户端并扩展超时/重试策略。

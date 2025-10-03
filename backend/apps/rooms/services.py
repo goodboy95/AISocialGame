@@ -15,6 +15,10 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
 
+from apps.ai import generate_ai_display_name
+from apps.gamecore.engine import GameEngineError
+from apps.gamecore.services import serialize_session_for_user, start_room_game
+
 from .models import Room, RoomPlayer
 
 LOGGER = logging.getLogger(__name__)
@@ -72,7 +76,54 @@ def _broadcast(event_type: str, payload: dict) -> None:
 def _serialize_room(room: Room) -> dict:
     from .serializers import RoomDetailSerializer  # Lazy import to avoid circular dependency
 
-    return RoomDetailSerializer(room).data
+    data = RoomDetailSerializer(room).data
+    session = room.sessions.filter(status="active").first()
+    if session:
+        data["game_session"] = serialize_session_for_user(session)
+    else:
+        data["game_session"] = None
+    return data
+
+
+def _should_autofill_ai(room: Room) -> bool:
+    config = room.config or {}
+    ai_cfg = config.get("ai", {})
+    return ai_cfg.get("auto_fill", True)
+
+
+def _ai_fill_target(room: Room) -> int:
+    config = room.config or {}
+    ai_cfg = config.get("ai", {})
+    return int(ai_cfg.get("fill_to", room.max_players))
+
+
+def _ensure_ai_players(room: Room) -> list[RoomPlayer]:
+    if not _should_autofill_ai(room):
+        return []
+    target = max(2, min(room.max_players, _ai_fill_target(room)))
+    active_players = list(room.players.filter(is_active=True))
+    needed = max(0, target - len(active_players))
+    if needed == 0:
+        return []
+    existing_names = {player.resolved_display_name for player in active_players}
+    created: list[RoomPlayer] = []
+    for _ in range(needed):
+        seat = _next_available_seat(room)
+        display_name = generate_ai_display_name(existing_names)
+        existing_names.add(display_name)
+        created.append(
+            RoomPlayer.objects.create(
+                room=room,
+                user=None,
+                seat_number=seat,
+                is_host=False,
+                is_ai=True,
+                is_active=True,
+                display_name=display_name,
+            )
+        )
+    LOGGER.info("Room %s auto-filled %s AI players", room.code, len(created))
+    return created
 
 
 def create_room(*, owner, name: str, max_players: int = 8, is_private: bool = False, config: Optional[dict] = None) -> Room:
@@ -225,10 +276,30 @@ def start_room(*, room: Room, user) -> Room:
     if not membership.is_host:
         raise RoomServiceError("只有房主可以开始游戏")
 
+    with transaction.atomic():
+        locked_room = (
+            Room.objects.select_for_update()
+            .prefetch_related("players__user")
+            .get(pk=room.pk)
+        )
+        _ensure_ai_players(locked_room)
+        locked_room.status = Room.RoomStatus.IN_PROGRESS
+        locked_room.phase = Room.RoomPhase.PREPARE
+        locked_room.current_round = 1
+        locked_room.save(update_fields=["status", "phase", "current_round", "updated_at"])
+
+    try:
+        session = start_room_game(room)
+    except GameEngineError as exc:
+        room.status = Room.RoomStatus.WAITING
+        room.phase = Room.RoomPhase.LOBBY
+        room.save(update_fields=["status", "phase"])
+        raise RoomServiceError(str(exc)) from exc
+
     room.status = Room.RoomStatus.IN_PROGRESS
-    room.phase = Room.RoomPhase.PREPARE
-    room.current_round = 1
-    room.save(update_fields=["status", "phase", "current_round", "updated_at"])
+    room.phase = Room.RoomPhase.PLAYING
+    room.current_round = session.round_number
+    room.save(update_fields=["phase", "current_round", "updated_at"])
 
     payload = {
         "room": _serialize_room(room),

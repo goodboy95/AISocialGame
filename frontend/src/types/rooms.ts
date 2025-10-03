@@ -19,6 +19,56 @@ export interface RoomPlayer {
   isAlive: boolean;
 }
 
+export interface UndercoverAssignmentView {
+  playerId: number;
+  displayName: string;
+  isAi: boolean;
+  isAlive: boolean;
+  role: string | null;
+  word: string | null;
+}
+
+export interface UndercoverSpeech {
+  player_id: number;
+  content: string;
+  is_ai: boolean;
+  timestamp: string;
+}
+
+export interface UndercoverVoteSummary {
+  submitted: number;
+  required: number;
+  tally: Record<string, number>;
+  selfTarget?: number;
+}
+
+export interface UndercoverStateView {
+  phase: string;
+  round: number;
+  current_player_id: number | null;
+  assignments: UndercoverAssignmentView[];
+  speeches: UndercoverSpeech[];
+  voteSummary: UndercoverVoteSummary;
+  word_pair: {
+    topic?: string;
+    difficulty?: string;
+    selfWord?: string;
+  };
+  winner?: string;
+}
+
+export interface GameSessionSnapshot<TState = Record<string, unknown>> {
+  id: number;
+  engine: string;
+  phase: string;
+  round: number;
+  currentPlayerId: number | null;
+  status: string;
+  startedAt: string;
+  updatedAt: string;
+  state: TState;
+}
+
 export interface RoomListItem {
   id: number;
   name: string;
@@ -41,6 +91,7 @@ export interface RoomDetail extends RoomListItem {
   players: RoomPlayer[];
   isMember: boolean;
   isOwner: boolean;
+  gameSession: GameSessionSnapshot<UndercoverStateView> | null;
 }
 
 export interface ChatMessage {

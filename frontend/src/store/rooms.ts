@@ -1,5 +1,12 @@
 import { defineStore } from "pinia";
-import type { ChatMessage, RoomDetail, RoomListItem } from "../types/rooms";
+import type {
+  ChatMessage,
+  GameSessionSnapshot,
+  RoomDetail,
+  RoomListItem,
+  UndercoverAssignmentView,
+  UndercoverStateView
+} from "../types/rooms";
 import {
   createRoom as createRoomApi,
   fetchRooms as fetchRoomsApi,
@@ -68,7 +75,45 @@ function normalizeRoomDetail(data: any): RoomDetail {
     config: data.config ?? {},
     players: Array.isArray(data.players) ? data.players.map(normalizePlayer) : [],
     isMember: data.is_member ?? false,
-    isOwner: data.is_owner ?? false
+    isOwner: data.is_owner ?? false,
+    gameSession: data.game_session ? normalizeGameSession(data.game_session) : null
+  };
+}
+
+function normalizeGameSession(data: any): GameSessionSnapshot<UndercoverStateView> {
+  return {
+    id: data.id,
+    engine: data.engine,
+    phase: data.phase,
+    round: data.round,
+    currentPlayerId: data.currentPlayerId ?? null,
+    status: data.status,
+    startedAt: data.startedAt,
+    updatedAt: data.updatedAt,
+    state: normalizeUndercoverState(data.state ?? {})
+  };
+}
+
+function normalizeUndercoverState(state: any): UndercoverStateView {
+  const assignments: UndercoverAssignmentView[] = Array.isArray(state.assignments)
+    ? state.assignments.map((item: any) => ({
+        playerId: item.playerId,
+        displayName: item.displayName,
+        isAi: Boolean(item.isAi),
+        isAlive: Boolean(item.isAlive),
+        role: item.role ?? null,
+        word: item.word ?? null
+      }))
+    : [];
+  return {
+    phase: state.phase ?? "preparing",
+    round: state.round ?? 1,
+    current_player_id: state.current_player_id ?? null,
+    assignments,
+    speeches: Array.isArray(state.speeches) ? state.speeches : [],
+    voteSummary: state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} },
+    word_pair: state.word_pair ?? {},
+    winner: state.winner ?? undefined
   };
 }
 
@@ -157,7 +202,7 @@ export const useRoomsStore = defineStore("rooms", {
       raw.onerror = () => {
         this.socketConnected = false;
       };
-      raw.onmessage = (event) => {
+      raw.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "system.sync") {
           this.currentRoom = normalizeRoomDetail(data.payload);
@@ -197,6 +242,25 @@ export const useRoomsStore = defineStore("rooms", {
             },
             type: "chat"
           });
+        } else if (data.type === "game.event") {
+          if (data.payload?.room) {
+            const previous = this.currentRoom?.isMember ?? false;
+            this.currentRoom = normalizeRoomDetail(data.payload.room);
+            if (previous && this.currentRoom) {
+              this.currentRoom.isMember = true;
+            }
+          }
+          if (this.currentRoom && data.payload?.session) {
+            this.currentRoom.gameSession = normalizeGameSession(data.payload.session);
+          }
+          if (this.currentRoom) {
+            try {
+              const latest = await getRoomDetail(this.currentRoom.id);
+              this.currentRoom = normalizeRoomDetail(latest);
+            } catch (error) {
+              console.error("刷新房间详情失败", error);
+            }
+          }
         }
       };
       this.socket = socket;
@@ -205,6 +269,17 @@ export const useRoomsStore = defineStore("rooms", {
       const raw = this.socket?.getRawInstance();
       if (raw && raw.readyState === WebSocket.OPEN) {
         raw.send(JSON.stringify({ type: "chat.message", payload: { content } }));
+      }
+    },
+    sendGameEvent(event: string, payload: Record<string, unknown> = {}) {
+      const raw = this.socket?.getRawInstance();
+      if (raw && raw.readyState === WebSocket.OPEN) {
+        raw.send(
+          JSON.stringify({
+            type: "game.event",
+            payload: { event, payload }
+          })
+        );
       }
     },
     disconnectSocket() {

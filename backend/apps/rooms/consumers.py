@@ -11,6 +11,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from apps.gamecore.engine import GameEngineError
+from apps.gamecore.services import handle_room_event
+
 from .models import Room, RoomPlayer
 from .serializers import RoomDetailSerializer
 
@@ -58,6 +61,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await self._handle_chat_message(payload)
         elif message_type == "ping":
             await self.send_json({"type": "pong", "timestamp": timezone.now().isoformat()})
+        elif message_type == "game.event":
+            await self._handle_game_event(payload)
         else:
             await self.send_json({"type": "error", "detail": "未知的消息类型"})
 
@@ -90,6 +95,26 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.group_name,
             {"type": "chat.message", "payload": message},
         )
+
+    async def _handle_game_event(self, payload: dict):
+        event_type = (payload or {}).get("event")
+        event_payload = (payload or {}).get("payload") or {}
+        if not event_type:
+            await self.send_json({"type": "error", "detail": "缺少事件类型"})
+            return
+        membership = await self._get_membership()
+        if not membership:
+            await self.send_json({"type": "error", "detail": "仅限房间成员操作"})
+            return
+        try:
+            await database_sync_to_async(handle_room_event)(
+                room=membership.room,
+                actor=membership,
+                event_type=event_type,
+                payload=event_payload,
+            )
+        except GameEngineError as exc:
+            await self.send_json({"type": "error", "detail": str(exc)})
 
     async def _authenticate(self) -> Optional[User]:
         token = self._extract_token()
