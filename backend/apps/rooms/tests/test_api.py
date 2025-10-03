@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.rooms import services
+from apps.games.models import WordPair
 from apps.rooms.models import Room
 from apps.users.models import User
 
@@ -52,7 +53,7 @@ def test_join_and_leave_room_flow(api_client, user, member):
 
 
 @pytest.mark.django_db
-def test_only_owner_can_start(api_client, user, member):
+def test_only_owner_can_start(api_client, user, member, word_pair):
     room = services.create_room(owner=user, name="开始测试", max_players=4)
     services.join_room(room=room, user=member)
 
@@ -65,3 +66,17 @@ def test_only_owner_can_start(api_client, user, member):
     assert allowed.status_code == 200
     room.refresh_from_db()
     assert room.status == Room.RoomStatus.IN_PROGRESS
+    assert room.phase == Room.RoomPhase.PLAYING
+    body = allowed.json()
+    assert body.get("game_session")
+    assert body["game_session"]["phase"] == "preparing"
+    assert room.players.filter(is_ai=True, is_active=True).count() >= 1
+@pytest.fixture
+def word_pair(db):
+    return WordPair.objects.create(
+        civilian_word="苹果",
+        undercover_word="梨子",
+        topic="水果",
+        difficulty="easy",
+    )
+

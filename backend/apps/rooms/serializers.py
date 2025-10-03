@@ -7,6 +7,8 @@ from typing import Any, Optional
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.gamecore.services import serialize_session_for_user
+
 from .models import Room, RoomPlayer
 
 
@@ -16,6 +18,8 @@ class RoomPlayerSerializer(serializers.ModelSerializer):
     user_id = serializers.SerializerMethodField()
     username = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    word = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = RoomPlayer
@@ -45,6 +49,25 @@ class RoomPlayerSerializer(serializers.ModelSerializer):
         if obj.user:
             return obj.user.username
         return None
+
+    def get_word(self, obj: RoomPlayer) -> str:
+        if self._should_reveal(obj):
+            return obj.word
+        return ""
+
+    def get_role(self, obj: RoomPlayer) -> str:
+        if self._should_reveal(obj):
+            return obj.role
+        return ""
+
+    def _should_reveal(self, obj: RoomPlayer) -> bool:
+        viewer_id = self.context.get("viewer_player_id")
+        phase = self.context.get("game_phase")
+        if phase in {"result", "ended"}:
+            return True
+        if viewer_id and viewer_id == obj.id:
+            return True
+        return False
 
 
 class RoomBaseSerializer(serializers.ModelSerializer):
@@ -107,6 +130,13 @@ class RoomDetailSerializer(RoomBaseSerializer):
     config = serializers.JSONField(read_only=True)
     is_member = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    game_session = serializers.SerializerMethodField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get("instance")
+        if instance is not None and not isinstance(instance, (list, tuple)):
+            self._get_membership(instance)
 
     class Meta(RoomBaseSerializer.Meta):
         fields = RoomBaseSerializer.Meta.fields + (
@@ -114,13 +144,12 @@ class RoomDetailSerializer(RoomBaseSerializer):
             "players",
             "is_member",
             "is_owner",
+            "game_session",
         )
 
     def get_is_member(self, obj: Room) -> bool:
-        user = self._resolve_user()
-        if user is None:
-            return False
-        return obj.players.filter(user=user, is_active=True).exists()
+        membership = self._get_membership(obj)
+        return membership is not None
 
     def get_is_owner(self, obj: Room) -> bool:
         user = self._resolve_user()
@@ -128,11 +157,35 @@ class RoomDetailSerializer(RoomBaseSerializer):
             return False
         return obj.owner_id == user.id
 
+    def get_game_session(self, obj: Room) -> Optional[dict]:
+        session = obj.sessions.filter(status="active").first()
+        if not session:
+            return None
+        user = self._resolve_user()
+        data = serialize_session_for_user(session, user=user)
+        self.context["game_phase"] = data.get("phase")
+        membership = self._get_membership(obj)
+        if membership:
+            self.context["viewer_player_id"] = membership.id
+        return data
+
     def _resolve_user(self):
         request = self.context.get("request")
         if request and not request.user.is_anonymous:
             return request.user
         return self.context.get("user")
+
+    def _get_membership(self, obj: Room):
+        if hasattr(self, "_cached_membership"):
+            return self._cached_membership
+        user = self._resolve_user()
+        membership = None
+        if user is not None:
+            membership = obj.players.filter(user=user, is_active=True).first()
+        self._cached_membership = membership
+        if membership:
+            self.context.setdefault("viewer_player_id", membership.id)
+        return membership
 
 
 class RoomCreateSerializer(serializers.Serializer):

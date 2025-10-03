@@ -1,6 +1,6 @@
 # 前端应用（Vue 3 + Vite + Element Plus）
 
-该目录包含基于 Vue 3 + TypeScript 的前端工程。当前版本已实现登录/注册、房间大厅、房间内实时聊天等核心界面，与后端房间 API 与 WebSocket 完成打通。
+该目录包含基于 Vue 3 + TypeScript 的前端工程。当前版本已实现登录/注册、房间大厅、房间内实时聊天与“谁是卧底”游戏面板，与后端房间 API 与 WebSocket 完成打通。
 
 ## 主要特性
 
@@ -8,7 +8,7 @@
 - 集成 Element Plus，启用按需自动引入（unplugin-auto-import / unplugin-vue-components）。
 - 采用 Vue Router + Pinia 管理认证状态与房间大厅/房间内数据。
 - 封装房间 REST API、房号加入/创建表单以及基于 JWT 的 WebSocket 客户端。
-- 大厅支持搜索、状态筛选、房号加入、创建房间弹窗；房间页展示成员席位、连接状态和实时聊天。
+- 大厅支持搜索、状态筛选、房号加入、创建房间弹窗；房间页升级为游戏面板，展示身份词语、阶段提示、发言记录、投票按钮和实时聊天。
 
 ## 可用脚本
 
@@ -43,17 +43,17 @@ VITE_WS_BASE_URL=ws://localhost:8000/ws
 
 ## 房间模块速览
 
-- `src/store/rooms.ts`：管理大厅分页、房间详情、WebSocket 状态与消息列表，公开 `fetchRooms`、`joinRoom`、`leaveRoom`、`sendChatMessage` 等方法。
+- `src/store/rooms.ts`：管理大厅分页、房间详情、WebSocket 状态、消息列表与游戏会话，公开 `fetchRooms`、`joinRoom`、`leaveRoom`、`sendChat`、`sendGameEvent` 等方法。
 - `src/api/rooms.ts`：封装房间 REST 请求，包含房号加入、房间启动等接口。
-- `src/pages/lobby`、`src/pages/room`：分别对应大厅与房间界面，可在此扩展 UI 与交互。
+- `src/pages/lobby`、`src/pages/RoomPage.vue`：大厅列表与房间游戏面板，实现身份展示、发言/投票交互与聊天。
 - `src/services/gameSocket.ts`：统一维护 WebSocket 连接（包含 `connect`、`disconnect`、`getInstance`），并对外抛出监听器。
 
 ## 本地调试指南
 
 1. **配置身份**：在后端获取 JWT（参见根目录 README 中的功能验证指南），并通过登录页面输入用户名/密码登录。
 2. **大厅验证**：访问 `/lobby`，使用顶部搜索框筛选房间或通过“创建房间”弹窗快速创建新房间。
-3. **加入房间**：点击房间卡片或输入房号加入，房间页将展示成员席位与系统消息面板。
-4. **发送消息**：房间页输入框会通过 `rooms` Store 调用 WebSocket `chat.message`，在多个浏览器窗口间可看到实时广播。
+3. **加入房间**：点击房间卡片或输入房号加入，房间页将展示身份、阶段提示、发言记录与系统消息面板。
+4. **发起游戏**：房主点击“开始游戏”后，房间会自动补齐 AI 并进入准备阶段；可通过房间页的“通知开始发言”“提交发言”“投票”按钮触发 `game.event`，观察实时面板与聊天更新。
 
 ### 常见问题
 
