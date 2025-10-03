@@ -102,3 +102,120 @@ class UndercoverAIStrategy:
             return random.choice(undercovers)
         return random.choice(suspects)
 
+
+class WerewolfAIStrategy:
+    """Heuristics driving simplified Werewolf night/day behaviors."""
+
+    def __init__(self, style: str = "balanced") -> None:
+        self.style = style if style in STYLE_HINTS else "balanced"
+
+    # ------------------------------------------------------------------
+    # Night action helpers
+    # ------------------------------------------------------------------
+    def pick_wolf_target(
+        self,
+        *,
+        wolves: list[int],
+        alive_players: list[int],
+        assignments: Dict[str, Dict],
+    ) -> int:
+        """Select a non-wolf target, prefer loud villagers if available."""
+
+        candidates = [pid for pid in alive_players if pid not in wolves]
+        if not candidates:
+            candidates = alive_players[:]
+        return random.choice(candidates) if candidates else random.choice(alive_players)
+
+    def pick_seer_target(
+        self,
+        *,
+        seer_id: int,
+        alive_players: list[int],
+        known_results: list[Dict[str, int]],
+    ) -> int:
+        """Avoid checking self or repeated players."""
+
+        checked = {result["player_id"] for result in known_results}
+        candidates = [pid for pid in alive_players if pid not in checked and pid != seer_id]
+        if not candidates:
+            candidates = [pid for pid in alive_players if pid != seer_id]
+        return random.choice(candidates) if candidates else seer_id
+
+    def pick_witch_action(
+        self,
+        *,
+        pending_kill: int | None,
+        potions: Dict[str, bool],
+        alive_players: list[int],
+        wolves: list[int],
+    ) -> Dict[str, object]:
+        """Return witch reaction: optionally save target or poison suspect."""
+
+        action = {"use_antidote": False, "use_poison": False, "poison_target": None}
+        if pending_kill and potions.get("antidote"):
+            if pending_kill not in wolves:
+                action["use_antidote"] = True
+                return action
+        if potions.get("poison"):
+            suspects = [pid for pid in alive_players if pid not in wolves and pid != pending_kill]
+            if suspects and random.random() < 0.3:
+                action["use_poison"] = True
+                action["poison_target"] = random.choice(suspects)
+        return action
+
+    # ------------------------------------------------------------------
+    # Day time helpers
+    # ------------------------------------------------------------------
+    def _style_snippet(self) -> tuple[str, str]:
+        hints = STYLE_HINTS[self.style]
+        return random.choice(hints["prefix"]), random.choice(hints["suffix"])
+
+    def generate_day_speech(
+        self,
+        *,
+        role: str,
+        round_number: int,
+        last_result: Dict[str, list[int]],
+        history: List[Dict],
+    ) -> str:
+        prefix, suffix = self._style_snippet()
+        night_losses = last_result.get("nightKilled", [])
+        lynched = last_result.get("lynched", [])
+        clues = []
+        if night_losses:
+            clues.append(f"夜里失去了{len(night_losses)}人")
+        if lynched:
+            clues.append(f"昨天投票离场的是 {lynched}")
+        base = "，".join(clues) if clues else "我们需要更多线索"
+        if role == "werewolf":
+            body = f"先观察下再决定，{base}"
+        elif role == "seer":
+            body = f"我有一些推测，{base}，大家注意言行"
+        elif role == "witch":
+            body = f"女巫会谨慎行事，{base}"
+        else:
+            body = f"我感觉要团结，{base}"
+        if round_number > 1 and history:
+            body += "，上一轮的讨论值得复盘"
+        return f"{prefix}{body}{suffix}"
+
+    def pick_vote(
+        self,
+        *,
+        voter_id: int,
+        alive_players: list[int],
+        wolves: list[int],
+        assignments: Dict[str, Dict],
+    ) -> int:
+        """Vote towards enemy faction with slight randomness."""
+
+        candidates = [pid for pid in alive_players if pid != voter_id]
+        if not candidates:
+            return voter_id
+        if voter_id in wolves:
+            civilians = [pid for pid in candidates if pid not in wolves]
+            return random.choice(civilians) if civilians else random.choice(candidates)
+        else:
+            werewolves = [pid for pid in candidates if pid in wolves]
+            return random.choice(werewolves) if werewolves else random.choice(candidates)
+

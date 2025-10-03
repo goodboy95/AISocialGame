@@ -17,6 +17,7 @@ export interface RoomPlayer {
   role: string;
   word: string;
   isAlive: boolean;
+  hasUsedSkill: boolean;
 }
 
 export interface UndercoverAssignmentView {
@@ -57,6 +58,50 @@ export interface UndercoverStateView {
   winner?: string;
 }
 
+export interface WerewolfAssignmentView {
+  playerId: number;
+  displayName: string;
+  isAi: boolean;
+  isAlive: boolean;
+  role: string | null;
+}
+
+export interface WerewolfPrivateInfo {
+  role?: string | null;
+  wolves?: {
+    allies: { playerId: number; displayName: string; isAlive: boolean; isAi: boolean }[];
+    selectedTarget: number | null;
+  };
+  seer?: {
+    history: { player_id: number; role: string; timestamp: string }[];
+    lastResult: { player_id: number; role: string; timestamp: string } | null;
+  };
+  witch?: {
+    antidoteAvailable: boolean;
+    poisonAvailable: boolean;
+    pendingKill: number | null;
+  };
+}
+
+export interface WerewolfStateView {
+  phase: string;
+  stage: string;
+  round: number;
+  current_player_id: number | null;
+  assignments: WerewolfAssignmentView[];
+  speeches: UndercoverSpeech[];
+  voteSummary: UndercoverVoteSummary;
+  last_result: {
+    nightKilled?: number[];
+    lynched?: number[];
+    saved?: number | null;
+  };
+  private: WerewolfPrivateInfo;
+  winner?: string;
+}
+
+export type GameStateView = UndercoverStateView | WerewolfStateView;
+
 export interface GameSessionSnapshot<TState = Record<string, unknown>> {
   id: number;
   engine: string;
@@ -91,7 +136,7 @@ export interface RoomDetail extends RoomListItem {
   players: RoomPlayer[];
   isMember: boolean;
   isOwner: boolean;
-  gameSession: GameSessionSnapshot<UndercoverStateView> | null;
+  gameSession: GameSessionSnapshot<GameStateView> | null;
 }
 
 export interface ChatMessage {

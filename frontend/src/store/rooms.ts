@@ -2,10 +2,13 @@ import { defineStore } from "pinia";
 import type {
   ChatMessage,
   GameSessionSnapshot,
+  GameStateView,
   RoomDetail,
   RoomListItem,
   UndercoverAssignmentView,
-  UndercoverStateView
+  UndercoverStateView,
+  WerewolfAssignmentView,
+  WerewolfStateView
 } from "../types/rooms";
 import {
   createRoom as createRoomApi,
@@ -42,7 +45,8 @@ function normalizePlayer(player: any) {
     joinedAt: player.joined_at,
     role: player.role,
     word: player.word,
-    isAlive: player.is_alive
+    isAlive: player.is_alive,
+    hasUsedSkill: player.has_used_skill ?? false
   };
 }
 
@@ -80,7 +84,12 @@ function normalizeRoomDetail(data: any): RoomDetail {
   };
 }
 
-function normalizeGameSession(data: any): GameSessionSnapshot<UndercoverStateView> {
+function normalizeGameSession(data: any): GameSessionSnapshot<GameStateView> {
+  const engine = data.engine;
+  const rawState = data.state ?? {};
+  const state: GameStateView = engine === "werewolf"
+    ? normalizeWerewolfState(rawState)
+    : normalizeUndercoverState(rawState);
   return {
     id: data.id,
     engine: data.engine,
@@ -90,7 +99,7 @@ function normalizeGameSession(data: any): GameSessionSnapshot<UndercoverStateVie
     status: data.status,
     startedAt: data.startedAt,
     updatedAt: data.updatedAt,
-    state: normalizeUndercoverState(data.state ?? {})
+    state
   };
 }
 
@@ -113,6 +122,73 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
     speeches: Array.isArray(state.speeches) ? state.speeches : [],
     voteSummary: state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} },
     word_pair: state.word_pair ?? {},
+    winner: state.winner ?? undefined
+  };
+}
+
+function normalizeWerewolfState(state: any): WerewolfStateView {
+  const assignments: WerewolfAssignmentView[] = Array.isArray(state.assignments)
+    ? state.assignments.map((item: any) => ({
+        playerId: item.playerId,
+        displayName: item.displayName,
+        isAi: Boolean(item.isAi),
+        isAlive: Boolean(item.isAlive),
+        role: item.role ?? null
+      }))
+    : [];
+  const voteSummaryRaw = state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} };
+  const tallyEntries = voteSummaryRaw.tally ?? {};
+  const lastResultRaw = state.last_result ?? {};
+  const privateRaw = state.private ?? {};
+  return {
+    phase: state.phase ?? "night",
+    stage: state.stage ?? "night.wolves",
+    round: state.round ?? 1,
+    current_player_id: state.current_player_id ?? null,
+    assignments,
+    speeches: Array.isArray(state.speeches) ? state.speeches : [],
+    voteSummary: {
+      submitted: voteSummaryRaw.submitted ?? 0,
+      required: voteSummaryRaw.required ?? assignments.length,
+      tally: Object.fromEntries(
+        Object.entries(tallyEntries).map(([key, value]) => [Number(key), Number(value)])
+      ),
+      selfTarget: voteSummaryRaw.selfTarget ?? undefined
+    },
+    last_result: {
+      nightKilled: Array.isArray(lastResultRaw.nightKilled) ? lastResultRaw.nightKilled : [],
+      lynched: Array.isArray(lastResultRaw.lynched) ? lastResultRaw.lynched : [],
+      saved: lastResultRaw.saved ?? null
+    },
+    private: {
+      role: privateRaw.role ?? null,
+      wolves: privateRaw.wolves
+        ? {
+            allies: Array.isArray(privateRaw.wolves.allies)
+              ? privateRaw.wolves.allies.map((ally: any) => ({
+                  playerId: ally.playerId,
+                  displayName: ally.displayName,
+                  isAlive: Boolean(ally.isAlive),
+                  isAi: Boolean(ally.isAi)
+                }))
+              : [],
+            selectedTarget: privateRaw.wolves.selectedTarget ?? null
+          }
+        : undefined,
+      seer: privateRaw.seer
+        ? {
+            history: Array.isArray(privateRaw.seer.history) ? privateRaw.seer.history : [],
+            lastResult: privateRaw.seer.lastResult ?? null
+          }
+        : undefined,
+      witch: privateRaw.witch
+        ? {
+            antidoteAvailable: Boolean(privateRaw.witch.antidoteAvailable),
+            poisonAvailable: Boolean(privateRaw.witch.poisonAvailable),
+            pendingKill: privateRaw.witch.pendingKill ?? null
+          }
+        : undefined
+    },
     winner: state.winner ?? undefined
   };
 }
