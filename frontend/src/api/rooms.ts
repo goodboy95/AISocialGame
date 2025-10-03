@@ -25,6 +25,11 @@ export interface PaginatedRooms {
   results: RoomListItem[];
 }
 
+export interface AddAiPayload {
+  style?: string;
+  displayName?: string;
+}
+
 export async function fetchRooms(params: RoomListQuery = {}): Promise<PaginatedRooms> {
   const { data } = await http.get<PaginatedRooms>("/rooms/", {
     params: {
@@ -69,5 +74,13 @@ export async function leaveRoom(roomId: number): Promise<RoomDetail> {
 
 export async function startRoom(roomId: number): Promise<RoomDetail> {
   const { data } = await http.post<RoomDetail>(`/rooms/${roomId}/start/`);
+  return data;
+}
+
+export async function addAiPlayer(roomId: number, payload: AddAiPayload): Promise<RoomDetail> {
+  const { data } = await http.post<RoomDetail>(`/rooms/${roomId}/add-ai/`, {
+    style: payload.style,
+    display_name: payload.displayName,
+  });
   return data;
 }

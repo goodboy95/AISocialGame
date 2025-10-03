@@ -11,6 +11,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from apps.common import ContentPolicyViolation, enforce_content_policy
+from apps.common.metrics import WS_CONNECTION_GAUGE
 from apps.gamecore.engine import GameEngineError
 from apps.gamecore.services import handle_room_event
 
@@ -48,11 +50,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        WS_CONNECTION_GAUGE.labels(room_id=str(self.room_id)).inc()
         await self._send_room_snapshot()
 
     async def disconnect(self, code):  # pragma: no cover - cleanup is best effort
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        if hasattr(self, "room_id"):
+            WS_CONNECTION_GAUGE.labels(room_id=str(self.room_id)).dec()
 
     async def receive_json(self, content: dict, **kwargs):
         message_type = content.get("type")
@@ -80,10 +85,15 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if not content:
             await self.send_json({"type": "error", "detail": "消息内容不能为空"})
             return
+        try:
+            safe_content = enforce_content_policy(content, mode="reject")
+        except ContentPolicyViolation as exc:
+            await self.send_json({"type": "error", "detail": str(exc)})
+            return
         message = {
             "id": str(uuid.uuid4()),
             "room_id": self.room_id,
-            "content": content,
+            "content": safe_content,
             "timestamp": timezone.now().isoformat(),
             "sender": {
                 "id": self.user.id,

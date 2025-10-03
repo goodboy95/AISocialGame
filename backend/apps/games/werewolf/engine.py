@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional
 from django.db import transaction
 from django.utils import timezone
 
-from apps.ai.services import WerewolfAIStrategy
+from apps.ai import WerewolfAIStrategy
+from apps.common import ContentPolicyViolation, enforce_content_policy
 from apps.gamecore.engine import BaseGameEngine, EnginePhase, GameEngineError, GameEvent
 from apps.rooms.models import RoomPlayer
 
@@ -21,7 +22,7 @@ class WerewolfEngine(BaseGameEngine):
 
     def __init__(self, session):
         super().__init__(session)
-        self.strategy = WerewolfAIStrategy(style=self._config().get("ai_style", "balanced"))
+        self._strategy_cache: Dict[str, WerewolfAIStrategy] = {}
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -55,6 +56,12 @@ class WerewolfEngine(BaseGameEngine):
             "witch": witch,
             "villager": villager,
         }
+
+    def _strategy_for_style(self, style: Optional[str]) -> WerewolfAIStrategy:
+        resolved = style or self._config().get("ai_style", "balanced")
+        if resolved not in self._strategy_cache:
+            self._strategy_cache[resolved] = WerewolfAIStrategy(style=resolved)
+        return self._strategy_cache[resolved]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -92,6 +99,7 @@ class WerewolfEngine(BaseGameEngine):
                     "player_id": player.id,
                     "role": role,
                     "is_ai": player.is_ai,
+                    "ai_style": player.ai_style,
                     "display_name": player.resolved_display_name,
                     "is_alive": True,
                     "revealed": False,
@@ -187,7 +195,9 @@ class WerewolfEngine(BaseGameEngine):
                     wolves = [wid for wid in self._wolves() if self._is_alive(wid)]
                     ai_wolves = [wid for wid in wolves if self._assignment(wid)["is_ai"]]
                     if ai_wolves and alive:
-                        target = self.strategy.pick_wolf_target(
+                        wolf_assignment = self._assignment(ai_wolves[0])
+                        strategy = self._strategy_for_style(wolf_assignment.get("ai_style"))
+                        target = strategy.pick_wolf_target(
                             wolves=wolves,
                             alive_players=alive,
                             assignments=self.state["assignments"],
@@ -206,7 +216,8 @@ class WerewolfEngine(BaseGameEngine):
                     changed = True
                     continue
                 if self._assignment(seer)["is_ai"] and self.state.get("night_actions", {}).get("seer_result") is None:
-                    target = self.strategy.pick_seer_target(
+                    strategy = self._strategy_for_style(self._assignment(seer).get("ai_style"))
+                    target = strategy.pick_seer_target(
                         seer_id=seer,
                         alive_players=self._alive_player_ids(),
                         known_results=self.state.get("seer_history", []),
@@ -225,7 +236,8 @@ class WerewolfEngine(BaseGameEngine):
                     self._assignment(witch)["is_ai"]
                     and not actions.get("witch_resolved", False)
                 ):
-                    decision = self.strategy.pick_witch_action(
+                    strategy = self._strategy_for_style(self._assignment(witch).get("ai_style"))
+                    decision = strategy.pick_witch_action(
                         pending_kill=actions.get("wolves_target"),
                         potions=self.state.get("witch_potions", {}),
                         alive_players=self._alive_player_ids(),
@@ -245,7 +257,8 @@ class WerewolfEngine(BaseGameEngine):
                 if current is None:
                     break
                 assignment = self._assignment(current)
-                speech = self.strategy.generate_day_speech(
+                strategy = self._strategy_for_style(assignment.get("ai_style"))
+                speech = strategy.generate_day_speech(
                     role=assignment["role"],
                     round_number=self.state.get("round", 1),
                     last_result=self.state.get("last_result", {}),
@@ -264,7 +277,9 @@ class WerewolfEngine(BaseGameEngine):
                 ]
                 if pending_ai:
                     voter = pending_ai[0]
-                    target = self.strategy.pick_vote(
+                    voter_assignment = self._assignment(voter)
+                    strategy = self._strategy_for_style(voter_assignment.get("ai_style"))
+                    target = strategy.pick_vote(
                         voter_id=voter,
                         alive_players=alive,
                         wolves=self._wolves(),
@@ -298,6 +313,7 @@ class WerewolfEngine(BaseGameEngine):
                 "displayName": meta["display_name"],
                 "isAi": meta["is_ai"],
                 "isAlive": meta.get("is_alive", True),
+                "aiStyle": meta.get("ai_style"),
             }
             if (
                 meta.get("revealed")
@@ -564,7 +580,12 @@ class WerewolfEngine(BaseGameEngine):
         queue = self.state.get("queue", [])
         if not queue or queue[0] != actor_id:
             raise GameEngineError("当前并非该玩家的发言回合")
-        sanitized = content.strip() or ("AI" if is_ai else "")
+        raw = content.strip()
+        try:
+            sanitized = enforce_content_policy(raw, mode="mask" if is_ai else "reject")
+        except ContentPolicyViolation as exc:
+            raise GameEngineError(str(exc)) from exc
+        sanitized = sanitized or ("AI" if is_ai else "")
         if not sanitized:
             raise GameEngineError("发言内容不能为空")
         self.state.setdefault("speeches", []).append(

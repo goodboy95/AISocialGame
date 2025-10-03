@@ -42,12 +42,14 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "apps.common.middleware.CorrelationIdMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.common.middleware.MetricsMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -105,6 +107,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "user": env("THROTTLE_RATE_USER", default="120/min"),
+        "anon": env("THROTTLE_RATE_ANON", default="30/min"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -128,13 +138,32 @@ CHANNEL_LAYERS = {
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "structured": {
+            "()": "apps.common.logging.StructuredJsonFormatter",
+        }
+    },
+    "filters": {
+        "mask_sensitive": {
+            "()": "apps.common.logging.MaskSensitiveFilter",
+        }
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "structured",
+            "filters": ["mask_sensitive"],
         }
     },
     "root": {
         "handlers": ["console"],
         "level": "INFO",
     },
+}
+
+CONTENT_SAFETY = {
+    "banned_words": env.list(
+        "CONTENT_BANNED_WORDS",
+        default=["敏感词", "涉政", "违规"],
+    ),
 }

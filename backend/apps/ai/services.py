@@ -1,9 +1,12 @@
-"""Lightweight AI helpers used by the Undercover engine."""
+"""Lightweight AI helpers used by the game engines."""
 
 from __future__ import annotations
 
 import random
+from time import perf_counter
 from typing import Dict, Iterable, List
+
+from apps.common import record_ai_latency
 
 
 AI_NAME_POOL = [
@@ -21,16 +24,61 @@ STYLE_HINTS = {
     "balanced": {
         "prefix": ["我觉得", "简单聊聊", "我的理解是"],
         "suffix": ["大家怎么看?", "也许有别的解读", "供参考"],
+        "label": "均衡思考者",
+        "description": "兼顾理性与情绪的中庸型发言。",
     },
     "rational": {
         "prefix": ["从线索看", "根据词义", "综合考虑"],
         "suffix": ["逻辑上比较合理", "欢迎补充", "这是我的判断"],
+        "label": "逻辑分析师",
+        "description": "偏向推理解读，强调事实与细节。",
     },
     "humor": {
         "prefix": ["哈哈", "讲个笑话", "别紧张"],
-        "suffix": ["别投我啊", "我先说到这", "别打我"]
+        "suffix": ["别投我啊", "我先说到这", "别打我"],
+        "label": "幽默调节者",
+        "description": "轻松诙谐，负责调动房间气氛。",
+    },
+    "aggressive": {
+        "prefix": ["直说了", "听我一句", "别藏着"],
+        "suffix": ["快表态", "别犹豫", "行动起来"],
+        "label": "强势指挥官",
+        "description": "语气直接，推动大家快速决策。",
     },
 }
+
+
+def available_style_keys() -> list[str]:
+    return list(STYLE_HINTS.keys())
+
+
+def list_ai_styles() -> list[dict[str, str]]:
+    """Return style metadata for API exposure."""
+
+    styles = []
+    for key, meta in STYLE_HINTS.items():
+        styles.append(
+            {
+                "key": key,
+                "label": meta.get("label", key.title()),
+                "description": meta.get("description", ""),
+            }
+        )
+    return styles
+
+
+def resolve_ai_style(style: str | None) -> str:
+    if style and style in STYLE_HINTS:
+        return style
+    return "balanced"
+
+
+def ai_style_label(style: str) -> str:
+    return STYLE_HINTS.get(style, {}).get("label", style)
+
+
+def random_ai_style() -> str:
+    return random.choice(available_style_keys())
 
 
 def generate_ai_display_name(existing: Iterable[str]) -> str:
@@ -49,7 +97,7 @@ class UndercoverAIStrategy:
     """Heuristic based promptless AI fallback."""
 
     def __init__(self, style: str = "balanced") -> None:
-        self.style = style if style in STYLE_HINTS else "balanced"
+        self.style = resolve_ai_style(style)
 
     def _style_snippet(self) -> str:
         hints = STYLE_HINTS[self.style]
@@ -63,6 +111,7 @@ class UndercoverAIStrategy:
         round_number: int,
         history: List[Dict],
     ) -> str:
+        start = perf_counter()
         prefix, suffix = self._style_snippet()
         if not word:
             body = "我这边空白，只能听听大家的方向"
@@ -72,7 +121,9 @@ class UndercoverAIStrategy:
             body = f"我的词比较倾向『{word}』，先抛个共识看看"
         if round_number > 1 and history:
             body += "，上一轮的讨论我还在回味"
-        return f"{prefix}{body}{suffix}"
+        result = f"{prefix}{body}{suffix}"
+        record_ai_latency(perf_counter() - start)
+        return result
 
     def pick_vote(
         self,
@@ -107,7 +158,7 @@ class WerewolfAIStrategy:
     """Heuristics driving simplified Werewolf night/day behaviors."""
 
     def __init__(self, style: str = "balanced") -> None:
-        self.style = style if style in STYLE_HINTS else "balanced"
+        self.style = resolve_ai_style(style)
 
     # ------------------------------------------------------------------
     # Night action helpers
@@ -178,6 +229,7 @@ class WerewolfAIStrategy:
         last_result: Dict[str, list[int]],
         history: List[Dict],
     ) -> str:
+        start = perf_counter()
         prefix, suffix = self._style_snippet()
         night_losses = last_result.get("nightKilled", [])
         lynched = last_result.get("lynched", [])
@@ -197,7 +249,9 @@ class WerewolfAIStrategy:
             body = f"我感觉要团结，{base}"
         if round_number > 1 and history:
             body += "，上一轮的讨论值得复盘"
-        return f"{prefix}{body}{suffix}"
+        result = f"{prefix}{body}{suffix}"
+        record_ai_latency(perf_counter() - start)
+        return result
 
     def pick_vote(
         self,

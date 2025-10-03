@@ -1,3 +1,11 @@
-"""URL patterns placeholder for ai app."""
+"""API routes for AI metadata."""
 
-urlpatterns: list = []
+from django.urls import path
+
+from .views import AIStyleListView
+
+app_name = "ai"
+
+urlpatterns = [
+    path("styles/", AIStyleListView.as_view(), name="styles"),
+]

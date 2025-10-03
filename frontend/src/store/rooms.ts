@@ -17,9 +17,11 @@ import {
   joinRoom as joinRoomApi,
   joinRoomByCode,
   leaveRoom as leaveRoomApi,
-  startRoom as startRoomApi
+  startRoom as startRoomApi,
+  addAiPlayer as addAiPlayerApi,
 } from "../api/rooms";
 import { GameSocket } from "../services/websocket";
+import { i18n } from "../i18n";
 import { useAuthStore } from "./user";
 
 interface RoomState {
@@ -46,7 +48,8 @@ function normalizePlayer(player: any) {
     role: player.role,
     word: player.word,
     isAlive: player.is_alive,
-    hasUsedSkill: player.has_used_skill ?? false
+    hasUsedSkill: player.has_used_skill ?? false,
+    aiStyle: player.ai_style ?? null
   };
 }
 
@@ -111,7 +114,8 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
         isAi: Boolean(item.isAi),
         isAlive: Boolean(item.isAlive),
         role: item.role ?? null,
-        word: item.word ?? null
+        word: item.word ?? null,
+        aiStyle: item.aiStyle ?? null
       }))
     : [];
   return {
@@ -133,7 +137,8 @@ function normalizeWerewolfState(state: any): WerewolfStateView {
         displayName: item.displayName,
         isAi: Boolean(item.isAi),
         isAlive: Boolean(item.isAlive),
-        role: item.role ?? null
+        role: item.role ?? null,
+        aiStyle: item.aiStyle ?? null
       }))
     : [];
   const voteSummaryRaw = state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} };
@@ -193,14 +198,19 @@ function normalizeWerewolfState(state: any): WerewolfStateView {
   };
 }
 
-function systemMessage(message: string, event?: string): ChatMessage {
+function translate(key: string, values?: Record<string, unknown>): string {
+  return i18n.global.t(key, values) as string;
+}
+
+function systemMessage(message: string, event?: string, context?: Record<string, unknown>): ChatMessage {
   return {
     id: crypto.randomUUID(),
     content: message,
     timestamp: new Date().toISOString(),
     sender: null,
     type: "system",
-    event
+    event,
+    context
   };
 }
 
@@ -254,7 +264,13 @@ export const useRoomsStore = defineStore("rooms", {
     async startRoom(roomId: number) {
       const detail = await startRoomApi(roomId);
       this.currentRoom = normalizeRoomDetail(detail);
-      this.messages.push(systemMessage("房主发起了游戏", "room_started"));
+      this.messages.push(systemMessage(translate("room.systemJoined"), "room_started"));
+      return this.currentRoom;
+    },
+    async addAiPlayer(roomId: number, payload: { style?: string; displayName?: string }) {
+      const detail = await addAiPlayerApi(roomId, payload);
+      this.currentRoom = normalizeRoomDetail(detail);
+      this.messages.push(systemMessage(translate("room.messages.aiAdded"), "ai_player_added"));
       return this.currentRoom;
     },
     appendChatMessage(message: ChatMessage) {
@@ -263,7 +279,7 @@ export const useRoomsStore = defineStore("rooms", {
     connectSocket(roomId: number) {
       const auth = useAuthStore();
       if (!auth.accessToken) {
-        throw new Error("需要登录后才可以建立实时连接");
+        throw new Error(translate("room.messages.loginRequired"));
       }
       this.disconnectSocket();
       const wsBase = import.meta.env.VITE_WS_BASE_URL ?? "ws://localhost:8000/ws";
@@ -303,7 +319,8 @@ export const useRoomsStore = defineStore("rooms", {
                   }
                 : null,
               type: "system",
-              event: data.payload.event
+              event: data.payload.event,
+              context: data.payload.context ?? undefined
             });
           }
         } else if (data.type === "chat.message") {
@@ -334,7 +351,7 @@ export const useRoomsStore = defineStore("rooms", {
               const latest = await getRoomDetail(this.currentRoom.id);
               this.currentRoom = normalizeRoomDetail(latest);
             } catch (error) {
-              console.error("刷新房间详情失败", error);
+              console.error("Failed to refresh room detail", error);
             }
           }
         }

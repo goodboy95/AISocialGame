@@ -15,7 +15,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
 
-from apps.ai import generate_ai_display_name
+from apps.ai import ai_style_label, generate_ai_display_name, random_ai_style, resolve_ai_style
 from apps.gamecore.engine import GameEngineError
 from apps.gamecore.services import serialize_session_for_user, start_room_game
 
@@ -118,12 +118,74 @@ def _ensure_ai_players(room: Room) -> list[RoomPlayer]:
                 seat_number=seat,
                 is_host=False,
                 is_ai=True,
+                ai_style=random_ai_style(),
                 is_active=True,
                 display_name=display_name,
             )
         )
     LOGGER.info("Room %s auto-filled %s AI players", room.code, len(created))
     return created
+
+
+def add_ai_player(*, room: Room, user, style: str | None = None, display_name: str | None = None) -> RoomOperationResult:
+    try:
+        membership = room.players.get(user=user, is_active=True)
+    except RoomPlayer.DoesNotExist as exc:
+        raise RoomServiceError("只有房主可以添加 AI 玩家") from exc
+    if not membership.is_host:
+        raise RoomServiceError("只有房主可以添加 AI 玩家")
+
+    with transaction.atomic():
+        locked_room = Room.objects.select_for_update().get(pk=room.pk)
+        active_count = locked_room.players.filter(is_active=True).count()
+        if active_count >= locked_room.max_players:
+            raise RoomFullError("房间已满员，无法继续添加 AI")
+        seat = _next_available_seat(locked_room)
+        existing_names = {player.resolved_display_name for player in locked_room.players.filter(is_active=True)}
+        resolved_style = resolve_ai_style(style)
+        resolved_name = display_name.strip() if display_name else generate_ai_display_name(existing_names)
+        ai_player = RoomPlayer.objects.create(
+            room=locked_room,
+            user=None,
+            seat_number=seat,
+            is_host=False,
+            is_ai=True,
+            ai_style=resolved_style,
+            is_active=True,
+            display_name=resolved_name,
+        )
+
+    room.refresh_from_db()
+    message = f"新增 AI 玩家 {ai_player.resolved_display_name}（{ai_style_label(resolved_style)}）加入房间"
+    payload = {
+        "room": _serialize_room(room),
+        "actor": {
+            "id": membership.user_id,
+            "display_name": membership.resolved_display_name,
+            "username": membership.user.username if membership.user else None,
+        },
+        "message": message,
+        "timestamp": timezone.now().isoformat(),
+        "event": "ai_player_added",
+        "status_code": status.HTTP_200_OK,
+        "context": {
+            "aiPlayer": {
+                "id": ai_player.id,
+                "displayName": ai_player.resolved_display_name,
+                "style": resolved_style,
+                "styleLabel": ai_style_label(resolved_style),
+            }
+        },
+    }
+    _broadcast("system.broadcast", payload)
+    LOGGER.info(
+        "Room %s host %s added AI player %s with style %s",
+        room.code,
+        membership.resolved_display_name,
+        ai_player.resolved_display_name,
+        resolved_style,
+    )
+    return RoomOperationResult(room=room, actor=ai_player, event="ai_player_added", message=message)
 
 
 def _resolve_engine_slug(room: Room) -> str:

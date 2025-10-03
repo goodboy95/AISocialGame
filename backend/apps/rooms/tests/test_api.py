@@ -1,4 +1,5 @@
 import pytest
+import pytest
 from rest_framework.test import APIClient
 
 from apps.rooms import services
@@ -71,6 +72,36 @@ def test_only_owner_can_start(api_client, user, member, word_pair):
     assert body.get("game_session")
     assert body["game_session"]["phase"] == "preparing"
     assert room.players.filter(is_ai=True, is_active=True).count() >= 1
+
+
+@pytest.mark.django_db
+def test_owner_can_add_ai_player(api_client, user):
+    room = services.create_room(owner=user, name="AI房间", max_players=6)
+    api_client.force_authenticate(user)
+
+    response = api_client.post(
+        f"/api/rooms/{room.id}/add-ai/",
+        {"style": "humor", "display_name": "搞笑机器人"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    ai_players = [player for player in payload["players"] if player["is_ai"]]
+    assert ai_players
+    assert any(player["ai_style"] == "humor" for player in ai_players)
+
+
+@pytest.mark.django_db
+def test_non_host_cannot_add_ai(api_client, user, member):
+    room = services.create_room(owner=user, name="受限房间", max_players=5)
+    services.join_room(room=room, user=member)
+
+    api_client.force_authenticate(member)
+    response = api_client.post(f"/api/rooms/{room.id}/add-ai/", {"style": "aggressive"}, format="json")
+
+    assert response.status_code == 400
+    assert "房主" in response.json()["detail"]
 @pytest.fixture
 def word_pair(db):
     return WordPair.objects.create(

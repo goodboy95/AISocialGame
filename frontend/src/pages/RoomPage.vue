@@ -3,40 +3,59 @@
     <header class="room__header">
       <div>
         <h2>{{ room.name }}</h2>
-        <p>房间号：<strong>{{ room.code }}</strong> · 房主：{{ room.owner.displayName }}</p>
+        <p>
+          {{ t("room.ui.roomCode") }}: <strong>{{ room.code }}</strong>
+          · {{ t("room.ui.owner") }}: {{ room.owner.displayName }}
+        </p>
       </div>
       <div class="room__actions">
-        <el-tag :type="socketConnected ? 'success' : 'info'">{{ socketConnected ? "实时在线" : "离线" }}</el-tag>
+        <el-tag :type="socketConnected ? 'success' : 'info'">
+          {{ socketConnected ? t("room.ui.online") : t("room.ui.offline") }}
+        </el-tag>
         <el-tag type="warning">{{ phaseDisplay }}</el-tag>
-        <el-button v-if="room.status === 'waiting' && room.isOwner" type="primary" @click="handleStart">开始游戏</el-button>
-        <el-button @click="handleLeave">离开房间</el-button>
+        <el-button
+          v-if="room.status === 'waiting' && room.isOwner"
+          type="primary"
+          @click="handleStart"
+        >
+          {{ t("room.ui.startGame") }}
+        </el-button>
+        <el-button @click="handleLeave">{{ t("room.ui.leaveRoom") }}</el-button>
       </div>
     </header>
     <el-row :gutter="16" class="room__layout">
       <el-col :span="6" class="room__sidebar">
         <el-card class="room__panel room__panel--info">
           <template #header>
-            <span>我的身份</span>
+            <span>{{ t("room.ui.myIdentity") }}</span>
           </template>
-          <p>身份：<strong>{{ selfRoleDisplay }}</strong></p>
+          <p>{{ t("room.ui.role") }}: <strong>{{ selfRoleDisplay }}</strong></p>
           <template v-if="isUndercover">
-            <p>词语：<strong>{{ selfWordDisplay }}</strong></p>
-            <p v-if="undercoverState?.word_pair?.topic">主题：{{ undercoverState.word_pair.topic }}</p>
+            <p>{{ t("room.ui.word") }}: <strong>{{ selfWordDisplay }}</strong></p>
+            <p v-if="undercoverState?.word_pair?.topic">
+              {{ t("room.ui.topic") }}: {{ undercoverState.word_pair.topic }}
+            </p>
           </template>
           <template v-else-if="isWerewolf">
-            <p v-if="werewolfPrivateRoleName">阵营提示：<strong>{{ werewolfPrivateRoleName }}</strong></p>
-            <p v-if="isWolf && werewolfAllyNames">同伴：{{ werewolfAllyNames }}</p>
-            <p v-if="isSeerRole && seerLastResult">最新查验：{{ seerLastResult }}</p>
-            <p v-if="isWitchRole">解药：{{ werewolfAntidoteAvailable ? "可用" : "已用尽" }} · 毒药：{{ werewolfPoisonAvailable ? "可用" : "已用尽" }}</p>
-            <p v-if="werewolfPendingKillName">当前夜袭目标：{{ werewolfPendingKillName }}</p>
+            <p v-if="werewolfPrivateRoleName">
+              {{ t("room.ui.factionHint") }}: <strong>{{ werewolfPrivateRoleName }}</strong>
+            </p>
+            <p v-if="isWolf && werewolfAllyNames">{{ t("room.ui.allies") }}: {{ werewolfAllyNames }}</p>
+            <p v-if="isSeerRole && seerLastResult">{{ t("room.ui.lastInspection") }}: {{ seerLastResult }}</p>
+            <p v-if="isWitchRole">
+              {{ t("room.ui.antidote") }}: {{ werewolfAntidoteAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
+              · {{ t("room.ui.poison") }}:
+              {{ werewolfPoisonAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
+            </p>
+            <p v-if="werewolfPendingKillName">{{ t("room.ui.pendingTarget") }}: {{ werewolfPendingKillName }}</p>
           </template>
           <el-alert v-if="winnerDescription" :title="winnerDescription" type="success" show-icon />
         </el-card>
         <el-card class="room__panel room__panel--players">
           <template #header>
             <div class="room__panel-header">
-              <span>成员列表</span>
-              <span>第 {{ gameSession?.round ?? room.currentRound }} 轮</span>
+              <span>{{ t("room.ui.members") }}</span>
+              <span>{{ t("room.ui.roundLabel", { round: gameSession?.round ?? room.currentRound }) }}</span>
             </div>
           </template>
           <ul class="room__members">
@@ -52,9 +71,9 @@
               </div>
               <div class="room__member-meta">
                 <el-tag size="small" :type="playerStatusMap.get(player.id)?.isAlive ? 'success' : 'danger'">
-                  {{ playerStatusMap.get(player.id)?.isAlive ? "存活" : "淘汰" }}
+                  {{ playerStatusMap.get(player.id)?.isAlive ? t("room.ui.alive") : t("room.ui.eliminated") }}
                 </el-tag>
-                <small>座位 {{ player.seatNumber }}</small>
+                <small>{{ t("room.ui.seat") }} {{ player.seatNumber }}</small>
               </div>
             </li>
           </ul>
@@ -64,7 +83,7 @@
         <el-card class="room__panel room__panel--stage">
           <template #header>
             <div class="room__panel-header">
-              <span>游戏阶段</span>
+              <span>{{ t("room.ui.phase") }}</span>
               <el-tag type="info">{{ phaseDisplay }}</el-tag>
             </div>
           </template>
@@ -79,11 +98,16 @@
           <template v-else>
             <template v-if="isUndercover">
               <div v-if="currentPhase === 'preparing'" class="room__phase-block">
-                <el-button v-if="room.isOwner" type="primary" @click="handleReady">通知开始发言</el-button>
-                <el-alert v-else title="等待房主发起首轮发言" type="info" show-icon />
+                <el-button v-if="room.isOwner" type="primary" @click="handleReady">
+                  {{ t("room.ui.notifyStart") }}
+                </el-button>
+                <el-alert v-else :title="t('room.ui.waitHost')" type="info" show-icon />
               </div>
               <div v-else-if="currentPhase === 'speaking'" class="room__phase-block">
-                <p>当前发言：<strong>{{ currentSpeakerName }}</strong></p>
+                <p>
+                  {{ t("room.ui.currentSpeaker") }}:
+                  <strong>{{ currentSpeakerName }}</strong>
+                </p>
                 <div v-if="canSpeak" class="room__speak-form">
                   <el-input
                     v-model="speechInput"
@@ -91,14 +115,16 @@
                     :rows="3"
                     maxlength="120"
                     show-word-limit
-                    placeholder="描述你的词语特征，帮助队友找到卧底"
+                    :placeholder="t('room.ui.speakPlaceholder')"
                   />
-                  <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">提交发言</el-button>
+                  <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">
+                    {{ t("room.ui.submitSpeech") }}
+                  </el-button>
                 </div>
-                <el-alert v-else title="等待当前玩家完成发言" type="info" show-icon />
+                <el-alert v-else :title="t('room.ui.waitSpeech')" type="info" show-icon />
               </div>
               <div v-else-if="currentPhase === 'voting'" class="room__phase-block">
-                <p>请选择你怀疑的玩家：</p>
+                <p>{{ t("room.ui.selectSuspect") }}</p>
                 <div class="room__vote-grid">
                   <el-button
                     v-for="assignment in aliveAssignments"
@@ -110,15 +136,19 @@
                     {{ assignment.displayName }}
                   </el-button>
                 </div>
-                <p class="room__vote-summary">投票进度：{{ (gameState as any)?.voteSummary?.submitted ?? 0 }} / {{ (gameState as any)?.voteSummary?.required ?? aliveAssignments.length }}</p>
+                <p class="room__vote-summary">
+                  {{ t("room.ui.voteProgress") }}
+                  {{ (gameState as any)?.voteSummary?.submitted ?? 0 }} /
+                  {{ (gameState as any)?.voteSummary?.required ?? aliveAssignments.length }}
+                </p>
               </div>
               <div v-else-if="currentPhase === 'result'" class="room__phase-block">
-                <el-alert title="本轮已结束，请等待房主开启下一轮（即将上线）" type="success" show-icon />
+                <el-alert :title="t('room.ui.roundCompleted')" type="success" show-icon />
               </div>
             </template>
             <template v-else-if="isWerewolf">
               <div v-if="werewolfStage === 'night.wolves'" class="room__phase-block">
-                <p>狼人请密谋选择夜袭目标。</p>
+                <p>{{ t("room.ui.wolfInstruction") }}</p>
                 <div v-if="isWolf">
                   <el-button
                     v-for="assignment in werewolfKillOptions"
@@ -128,12 +158,15 @@
                   >
                     {{ assignment.displayName }}
                   </el-button>
-                  <p class="room__phase-tip">当前选择：{{ werewolfPendingKillName || "暂未指定" }}</p>
+                  <p class="room__phase-tip">
+                    {{ t("room.ui.currentSelection") }}:
+                    {{ werewolfPendingKillName || t("room.ui.none") }}
+                  </p>
                 </div>
-                <el-alert v-else title="夜晚进行中，请等待狼人行动" type="info" show-icon />
+                <el-alert v-else :title="t('room.ui.waitWolf')" type="info" show-icon />
               </div>
               <div v-else-if="werewolfStage === 'night.seer'" class="room__phase-block">
-                <p>预言家可查验一名玩家身份。</p>
+                <p>{{ t("room.ui.seerInstruction") }}</p>
                 <div v-if="isSeerRole">
                   <el-button
                     v-for="assignment in werewolfInspectOptions"
@@ -143,10 +176,10 @@
                     {{ assignment.displayName }}
                   </el-button>
                 </div>
-                <el-alert v-else title="夜晚进行中，请等待预言家行动" type="info" show-icon />
+                <el-alert v-else :title="t('room.ui.waitSeer')" type="info" show-icon />
               </div>
               <div v-else-if="werewolfStage === 'night.witch'" class="room__phase-block">
-                <p>女巫可选择使用解药或毒药。</p>
+                <p>{{ t("room.ui.witchInstruction") }}</p>
                 <div v-if="isWitchRole">
                   <div class="room__witch-actions">
                     <el-button
@@ -154,12 +187,16 @@
                       type="primary"
                       @click="handleWitchSave"
                     >
-                      使用解药拯救 {{ werewolfPendingKillName || '目标' }}
+                      {{
+                        t("room.ui.antidoteAction", {
+                          target: werewolfPendingKillName || t("room.ui.none"),
+                        })
+                      }}
                     </el-button>
                     <div class="room__witch-poison">
                       <el-select
                         v-model="witchPoisonTarget"
-                        placeholder="选择投毒目标"
+                        :placeholder="t('room.ui.poisonPlaceholder')"
                         :disabled="!werewolfPoisonAvailable || werewolfPoisonOptions.length === 0"
                         style="width: 160px"
                       >
@@ -175,16 +212,19 @@
                         :disabled="!werewolfPoisonAvailable || !witchPoisonTarget"
                         @click="handleWitchPoison"
                       >
-                        投毒
+                        {{ t("room.ui.poisonAction") }}
                       </el-button>
                     </div>
                   </div>
-                  <el-button type="info" plain @click="handleWitchSkip">本轮跳过</el-button>
+                  <el-button type="info" plain @click="handleWitchSkip">{{ t("room.ui.skip") }}</el-button>
                 </div>
-                <el-alert v-else title="夜晚进行中，请等待女巫行动" type="info" show-icon />
+                <el-alert v-else :title="t('room.ui.waitWitch')" type="info" show-icon />
               </div>
               <div v-else-if="werewolfStage === 'day.discussion'" class="room__phase-block">
-                <p>当前发言：<strong>{{ currentSpeakerName }}</strong></p>
+                <p>
+                  {{ t("room.ui.currentSpeaker") }}:
+                  <strong>{{ currentSpeakerName }}</strong>
+                </p>
                 <div v-if="canSpeak" class="room__speak-form">
                   <el-input
                     v-model="speechInput"
@@ -192,14 +232,16 @@
                     :rows="3"
                     maxlength="160"
                     show-word-limit
-                    placeholder="请根据夜间信息发言，推动阵营胜利"
+                    :placeholder="t('room.ui.daySpeakPlaceholder')"
                   />
-                  <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">提交发言</el-button>
+                  <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">
+                    {{ t("room.ui.submitSpeech") }}
+                  </el-button>
                 </div>
-                <el-alert v-else title="等待当前玩家完成发言" type="info" show-icon />
+                <el-alert v-else :title="t('room.ui.waitSpeech')" type="info" show-icon />
               </div>
               <div v-else-if="werewolfStage === 'day.vote'" class="room__phase-block">
-                <p>请选择你要投出的玩家：</p>
+                <p>{{ t("room.ui.voteInstruction") }}</p>
                 <div class="room__vote-grid">
                   <el-button
                     v-for="assignment in aliveAssignments"
@@ -211,15 +253,19 @@
                     {{ assignment.displayName }}
                   </el-button>
                 </div>
-                <p class="room__vote-summary">投票进度：{{ (werewolfState?.voteSummary?.submitted ?? 0) }} / {{ werewolfState?.voteSummary?.required ?? aliveAssignments.length }}</p>
+                <p class="room__vote-summary">
+                  {{ t("room.ui.voteProgress") }}
+                  {{ werewolfState?.voteSummary?.submitted ?? 0 }} /
+                  {{ werewolfState?.voteSummary?.required ?? aliveAssignments.length }}
+                </p>
               </div>
               <div v-else class="room__phase-block">
-                <el-alert title="请关注系统提示，等待下一阶段" type="info" show-icon />
+                <el-alert :title="t('room.ui.waitNextStage')" type="info" show-icon />
               </div>
             </template>
           </template>
           <div v-if="speeches.length" class="room__speeches">
-            <h4>发言记录</h4>
+            <h4>{{ t("room.ui.speechLog") }}</h4>
             <el-timeline>
               <el-timeline-item
                 v-for="speech in speeches"
@@ -236,18 +282,53 @@
         <el-card class="room__chat">
           <template #header>
             <div class="room__panel-header">
-              <span>实时聊天</span>
+              <span>{{ t("room.chatTitle") }}</span>
             </div>
           </template>
+          <div v-if="room?.isOwner" class="room__chat-tools">
+            <el-form inline :model="aiForm" class="room__chat-form">
+              <el-form-item :label="t('room.aiStyle')">
+                <el-select v-model="aiForm.style" :placeholder="t('room.selectStyle')" clearable size="small">
+                  <el-option v-for="style in aiStyles" :key="style.key" :label="style.label" :value="style.key" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-input
+                  v-model="aiForm.displayName"
+                  size="small"
+                  :placeholder="t('room.addAi')"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button size="small" type="success" :loading="addingAi" @click="handleAddAi">
+                  {{ t("room.addAi") }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
           <div ref="chatContainer" class="room__chat-history">
-            <div v-for="message in messages" :key="message.id" :class="['room__chat-message', `room__chat-message--${message.type}`]">
+            <div
+              v-for="message in messages"
+              :key="message.id"
+              :class="['room__chat-message', `room__chat-message--${message.type}`]"
+            >
               <template v-if="message.type === 'chat'">
-                <strong>{{ message.sender?.displayName }}</strong>
-                <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
-                <p>{{ message.content }}</p>
+                <div class="room__chat-avatar">
+                  {{ message.sender?.displayName?.slice(0, 1) ?? '?' }}
+                </div>
+                <div class="room__chat-bubble">
+                  <div class="room__chat-meta">
+                    <span class="room__chat-name">{{ message.sender?.displayName }}</span>
+                    <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                  </div>
+                  <p class="room__chat-text">{{ message.content }}</p>
+                </div>
               </template>
               <template v-else>
-                <span class="room__chat-system">{{ message.content }}</span>
+                <div class="room__chat-system">
+                  <span>{{ translateSystemMessage(message) }}</span>
+                  <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                </div>
               </template>
             </div>
           </div>
@@ -256,26 +337,30 @@
               v-model="messageInput"
               type="textarea"
               :rows="2"
-              placeholder="输入聊天内容，按下 Enter 发送"
+              :placeholder="t('room.chatPlaceholder')"
               @keyup.enter.exact.prevent="handleSend"
             />
-            <el-button type="primary" :disabled="!messageInput.trim()" @click="handleSend">发送</el-button>
+            <el-button type="primary" :disabled="!messageInput.trim()" @click="handleSend">
+              {{ t("room.send") }}
+            </el-button>
           </div>
         </el-card>
       </el-col>
     </el-row>
   </section>
-  <el-empty description="正在加载房间信息" v-else />
+  <el-empty :description="t('room.ui.loadingRoom')" v-else />
 </template>
 
 <script setup lang="ts">
 import { Trophy } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
 
 import type {
+  ChatMessage,
   UndercoverAssignmentView,
   UndercoverStateView,
   WerewolfAssignmentView,
@@ -284,17 +369,22 @@ import type {
 } from "../types/rooms";
 import { useRoomsStore } from "../store/rooms";
 import { useAuthStore } from "../store/user";
+import { useMetaStore } from "../store/meta";
 
 const route = useRoute();
 const router = useRouter();
 const roomsStore = useRoomsStore();
 const authStore = useAuthStore();
+const metaStore = useMetaStore();
+const { t } = useI18n();
 
 const { currentRoom, messages, socketConnected } = storeToRefs(roomsStore);
 const messageInput = ref("");
 const chatContainer = ref<HTMLDivElement | null>(null);
 const speechInput = ref("");
 const witchPoisonTarget = ref<number | null>(null);
+const aiForm = reactive({ style: "", displayName: "" });
+const addingAi = ref(false);
 
 const room = computed(() => currentRoom.value);
 const gameSession = computed(() => room.value?.gameSession ?? null);
@@ -343,77 +433,94 @@ const aliveAssignments = computed(() => assignments.value.filter((assignment) =>
 const speeches = computed(() => (gameState.value && Array.isArray((gameState.value as any).speeches) ? (gameState.value as any).speeches : []));
 const hasVoted = computed(() => Boolean((gameState.value as any)?.voteSummary?.selfTarget));
 const voteTarget = computed(() => (gameState.value as any)?.voteSummary?.selfTarget ?? null);
+const aiStyles = computed(() => metaStore.aiStyles);
 
-const phaseMap: Record<string, string> = {
-  preparing: "准备阶段",
-  speaking: "发言阶段",
-  voting: "投票阶段",
-  result: "结果结算",
-  ended: "游戏结束",
-  night: "夜晚阶段",
-  day: "白天阶段"
-};
+const phaseMap = computed(() => ({
+  preparing: t("room.phases.preparing"),
+  speaking: t("room.phases.speaking"),
+  voting: t("room.phases.voting"),
+  result: t("room.phases.result"),
+  ended: t("room.phases.ended"),
+  night: t("room.phases.night"),
+  day: t("room.phases.day"),
+}));
 
-const werewolfStageMap: Record<string, string> = {
-  "night.wolves": "夜晚 · 狼人行动",
-  "night.seer": "夜晚 · 预言家查验",
-  "night.witch": "夜晚 · 女巫抉择",
-  "day.discussion": "白天 · 发言讨论",
-  "day.vote": "白天 · 公投决议",
-  "day.result": "白天 · 结算"
-};
+const werewolfStageMap = computed(() => ({
+  "night.wolves": t("room.werewolfStages.nightWolves"),
+  "night.seer": t("room.werewolfStages.nightSeer"),
+  "night.witch": t("room.werewolfStages.nightWitch"),
+  "day.discussion": t("room.werewolfStages.dayDiscussion"),
+  "day.vote": t("room.werewolfStages.dayVote"),
+  "day.result": t("room.werewolfStages.dayResult"),
+}));
 
 const phaseDisplay = computed(() => {
   if (room.value?.status === "waiting") {
-    return "等待开始";
+    return t("room.waiting");
   }
   if (isUndercover.value) {
-    return phaseMap[currentPhase.value] ?? "游戏进行中";
+    return phaseMap.value[currentPhase.value] ?? t("room.inProgress");
   }
   if (isWerewolf.value) {
-    return werewolfStageMap[werewolfStage.value] ?? (phaseMap[currentPhase.value] ?? "游戏进行中");
+    return (
+      werewolfStageMap.value[werewolfStage.value] ??
+      (phaseMap.value[currentPhase.value] ?? t("room.inProgress"))
+    );
   }
-  return "未开始";
+  return t("room.notStarted");
 });
 
 const phaseDescription = computed(() => {
   if (isUndercover.value) {
     switch (currentPhase.value) {
       case "speaking":
-        return "请按顺序描述你的词语，不要暴露身份";
+        return t("room.descriptions.undercover.speaking");
       case "voting":
-        return "根据所有发言，选择你怀疑的卧底";
+        return t("room.descriptions.undercover.voting");
       case "result":
-        return "系统正在结算本轮结果";
+        return t("room.descriptions.undercover.result");
       case "preparing":
-        return "等待房主开启第一轮发言";
+        return t("room.descriptions.undercover.preparing");
       default:
-        return "游戏流程进行中";
+        return t("room.descriptions.generic");
     }
   }
   if (isWerewolf.value) {
     switch (werewolfStage.value) {
       case "night.wolves":
-        return isWolf.value ? "请选择一名目标，夜里发动袭击" : "夜晚进行中，请留意白天公告";
+        return isWolf.value
+          ? t("room.descriptions.werewolf.wolvesSelf")
+          : t("room.descriptions.werewolf.wolvesOthers");
       case "night.seer":
-        return isSeerRole.value ? "查验一名玩家身份，注意保密" : "请等待预言家完成查验";
+        return isSeerRole.value
+          ? t("room.descriptions.werewolf.seerSelf")
+          : t("room.descriptions.werewolf.seerOthers");
       case "night.witch":
-        return isWitchRole.value ? "你可选择救人或投毒，谨慎决策" : "请等待女巫的操作";
+        return isWitchRole.value
+          ? t("room.descriptions.werewolf.witchSelf")
+          : t("room.descriptions.werewolf.witchOthers");
       case "day.discussion":
-        return "请依次发言，根据夜晚线索推理身份";
+        return t("room.descriptions.werewolf.dayDiscussion");
       case "day.vote":
-        return "公开投票淘汰可疑玩家";
+        return t("room.descriptions.werewolf.dayVote");
       default:
-        return currentPhase.value === "night" ? "夜幕笼罩，静待天明" : "白天行动阶段";
+        return currentPhase.value === "night"
+          ? t("room.descriptions.werewolf.nightFallback")
+          : t("room.descriptions.werewolf.dayFallback");
     }
   }
-  return "游戏流程进行中";
+  return t("room.descriptions.generic");
 });
 
 const currentSpeakerName = computed(() => {
-  if (!activeSpeakerId.value) return "待定";
+  if (!activeSpeakerId.value) {
+    return t("room.ui.pendingSpeaker");
+  }
   const found = assignments.value.find((item) => item.playerId === activeSpeakerId.value);
-  return found?.displayName ?? `玩家 #${activeSpeakerId.value}`;
+  return (
+    found?.displayName ??
+    t("room.ui.playerFallback", { id: activeSpeakerId.value })
+  );
 });
 
 const isSpeakingStage = computed(() =>
@@ -429,33 +536,36 @@ const selfAssignment = computed(() =>
   assignments.value.find((assignment) => assignment.playerId === selfPlayer.value?.id) ?? null
 );
 
-const roleNameMap = new Map([
-  ["civilian", "平民"],
-  ["undercover", "卧底"],
-  ["blank", "白板"],
-  ["villager", "村民"],
-  ["werewolf", "狼人"],
-  ["seer", "预言家"],
-  ["witch", "女巫"]
-]);
+function translateRole(role?: string | null) {
+  if (!role) {
+    return "";
+  }
+  const key = `room.roles.${role}`;
+  const translated = t(key);
+  return translated === key ? role : translated;
+}
 
 const selfRoleDisplay = computed(() => {
   if (!selfAssignment.value) {
-    return "未分配";
+    return t("room.roles.unknown");
   }
   if (!selfAssignment.value.role) {
-    return "保密";
+    return t("room.roles.secret");
   }
-  return roleNameMap.get(selfAssignment.value.role) ?? selfAssignment.value.role;
+  return translateRole(selfAssignment.value.role);
 });
 
-const selfWordDisplay = computed(() => (isUndercover.value ? (selfAssignment.value as UndercoverAssignmentView | null)?.word ?? "等待分发" : "--"));
+const selfWordDisplay = computed(() =>
+  isUndercover.value
+    ? (selfAssignment.value as UndercoverAssignmentView | null)?.word ?? t("room.word.waiting")
+    : t("room.word.placeholder")
+);
 
 const werewolfPrivate = computed<WerewolfPrivateInfo>(() => (werewolfState.value?.private as WerewolfPrivateInfo) ?? { role: null });
 const werewolfPrivateRoleName = computed(() => {
   const role = werewolfPrivate.value.role;
   if (!role) return "";
-  return roleNameMap.get(role) ?? role;
+  return translateRole(role);
 });
 const werewolfAllies = computed(() => werewolfPrivate.value.wolves?.allies ?? []);
 const werewolfOtherWolves = computed(() =>
@@ -482,9 +592,9 @@ const seerLastResult = computed(() => {
   }
   const raw = werewolfPrivate.value.seer.lastResult as Record<string, any>;
   const playerId = raw.player_id ?? raw.playerId;
-  const role = raw.role ?? "未知";
-  const name = playerId ? resolvePlayerName(playerId) : "未知";
-  return `${name} → ${roleNameMap.get(role) ?? role}`;
+  const role = raw.role ?? "unknown";
+  const name = playerId ? resolvePlayerName(playerId) : t("room.roles.unknown");
+  return `${name} → ${translateRole(role) || t("room.roles.unknown")}`;
 });
 
 const isWolf = computed(() => werewolfPrivate.value.role === "werewolf");
@@ -507,10 +617,14 @@ const winnerTitle = computed(() => {
   const winner = (gameState.value as any)?.winner;
   if (!winner) return "";
   if (isUndercover.value) {
-    return winner === "civilian" ? "平民获胜" : "卧底反杀";
+    return winner === "civilian"
+      ? t("room.winner.undercover.civilian")
+      : t("room.winner.undercover.undercover");
   }
   if (isWerewolf.value) {
-    return winner === "villager" ? "好人阵营胜利" : "狼人阵营胜利";
+    return winner === "villager"
+      ? t("room.winner.werewolf.villager")
+      : t("room.winner.werewolf.werewolf");
   }
   return "";
 });
@@ -519,10 +633,14 @@ const winnerDescription = computed(() => {
   const winner = (gameState.value as any)?.winner;
   if (!winner) return "";
   if (isUndercover.value) {
-    return winner === "civilian" ? "卧底全部出局，本局胜利！" : "卧底人数已反超，平民失败。";
+    return winner === "civilian"
+      ? t("room.winnerDescriptions.undercover.civilian")
+      : t("room.winnerDescriptions.undercover.undercover");
   }
   if (isWerewolf.value) {
-    return winner === "villager" ? "好人阵营成功守护了村庄。" : "狼人占据上风，黑夜降临。";
+    return winner === "villager"
+      ? t("room.winnerDescriptions.werewolf.villager")
+      : t("room.winnerDescriptions.werewolf.werewolf");
   }
   return "";
 });
@@ -530,16 +648,17 @@ const winnerDescription = computed(() => {
 onMounted(async () => {
   const roomId = Number(route.params.id);
   if (Number.isNaN(roomId)) {
-    ElMessage.error("房间地址不正确");
+    ElMessage.error(t("room.messages.invalidRoom"));
     router.push({ name: "lobby" });
     return;
   }
   if (!authStore.accessToken) {
-    ElMessage.warning("请先登录后再访问房间");
+    ElMessage.warning(t("room.messages.loginRequired"));
     router.push({ name: "login" });
     return;
   }
   try {
+    await metaStore.loadAiStyles();
     const detail = await roomsStore.loadRoomDetail(roomId);
     if (!detail.isMember) {
       await roomsStore.joinRoom(roomId);
@@ -548,7 +667,7 @@ onMounted(async () => {
     roomsStore.connectSocket(roomId);
   } catch (error) {
     console.error(error);
-    ElMessage.error("房间不存在或暂时不可用");
+    ElMessage.error(t("room.messages.joinFailed"));
     router.push({ name: "lobby" });
   }
 });
@@ -583,7 +702,38 @@ watch(werewolfStage, (stage) => {
 });
 
 function formatTime(timestamp: string) {
-  return new Date(timestamp).toLocaleTimeString();
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function translateSystemMessage(message: ChatMessage) {
+  const actorName = message.sender?.displayName ?? t("room.messages.unknownPlayer");
+  switch (message.event) {
+    case "room_started":
+      return t("room.systemJoined");
+    case "player_joined":
+      return t("room.messages.playerJoined", { name: actorName });
+    case "player_left":
+      return t("room.messages.playerLeft", { name: actorName });
+    case "room_dissolved":
+      return t("room.messages.roomDissolved");
+    case "ai_player_added": {
+      const aiContext = (message.context as any)?.aiPlayer;
+      if (aiContext?.displayName) {
+        return t("room.messages.aiAddedDetailed", {
+          host: actorName,
+          name: aiContext.displayName,
+          style: aiContext.styleLabel ?? aiContext.style ?? "",
+        });
+      }
+      return t("room.messages.aiAdded");
+    }
+    default:
+      return message.content;
+  }
 }
 
 async function handleSend() {
@@ -595,12 +745,36 @@ async function handleSend() {
   messageInput.value = "";
 }
 
+async function handleAddAi() {
+  if (!room.value) {
+    return;
+  }
+  addingAi.value = true;
+  try {
+    await roomsStore.addAiPlayer(room.value.id, {
+      style: aiForm.style || undefined,
+      displayName: aiForm.displayName.trim() || undefined,
+    });
+    ElMessage.success(t("room.messages.aiAdded"));
+    aiForm.displayName = "";
+  } catch (error) {
+    console.error(error);
+    ElMessage.error(t("room.messages.addAiFailed"));
+  } finally {
+    addingAi.value = false;
+  }
+}
+
 async function handleLeave() {
   if (!room.value) {
     return;
   }
   try {
-    await ElMessageBox.confirm("确定要离开当前房间吗？", "提示", { type: "warning" });
+    await ElMessageBox.confirm(t("room.messages.leaveConfirm"), t("room.chatTitle"), {
+      confirmButtonText: t("common.confirm"),
+      cancelButtonText: t("common.cancel"),
+      type: "warning",
+    });
   } catch {
     return;
   }
@@ -608,10 +782,10 @@ async function handleLeave() {
     await roomsStore.leaveRoom(room.value.id);
     roomsStore.disconnectSocket();
     router.push({ name: "lobby" });
-    ElMessage.success("已离开房间");
+    ElMessage.success(t("room.messages.leaveSuccess"));
   } catch (error) {
     console.error(error);
-    ElMessage.error("离开房间失败，请稍后再试");
+    ElMessage.error(t("room.messages.leaveFailed"));
   }
 }
 
@@ -621,10 +795,10 @@ async function handleStart() {
   }
   try {
     await roomsStore.startRoom(room.value.id);
-    ElMessage.success("已开始游戏，正在分配身份");
+    ElMessage.success(t("room.messages.startSuccess"));
   } catch (error) {
     console.error(error);
-    ElMessage.error("当前无法开始游戏");
+    ElMessage.error(t("room.messages.startFailed"));
   }
 }
 
@@ -635,7 +809,7 @@ function handleReady() {
 function handleSubmitSpeech() {
   const content = speechInput.value.trim();
   if (!content) {
-    ElMessage.warning("请先输入发言内容");
+    ElMessage.warning(t("room.messages.speechRequired"));
     return;
   }
   roomsStore.sendGameEvent("submit_speech", { content });
@@ -644,7 +818,7 @@ function handleSubmitSpeech() {
 
 function handleVote(targetId: number) {
   if (hasVoted.value) {
-    ElMessage.info("已完成投票，等待其他玩家");
+    ElMessage.info(t("room.messages.voteDone"));
     return;
   }
   roomsStore.sendGameEvent("submit_vote", { target_id: targetId });
@@ -660,7 +834,7 @@ function handleSeerTarget(targetId: number) {
 
 function handleWitchSave() {
   if (!werewolfPendingKill.value) {
-    ElMessage.info("当前没有需要拯救的目标");
+    ElMessage.info(t("room.ui.rescueNone"));
     return;
   }
   roomsStore.sendGameEvent("submit_witch_action", { use_antidote: true });
@@ -668,7 +842,7 @@ function handleWitchSave() {
 
 function handleWitchPoison() {
   if (!witchPoisonTarget.value) {
-    ElMessage.warning("请选择投毒目标");
+    ElMessage.warning(t("room.ui.needPoisonTarget"));
     return;
   }
   roomsStore.sendGameEvent("submit_witch_action", { use_poison: true, target_id: witchPoisonTarget.value });
@@ -685,7 +859,10 @@ function resolvePlayerName(playerId: number) {
     return assignment.displayName;
   }
   const fallback = room.value?.players.find((player) => player.id === playerId);
-  return fallback?.displayName ?? `玩家 #${playerId}`;
+  return (
+    fallback?.displayName ??
+    t("room.ui.playerFallback", { id: playerId })
+  );
 }
 </script>
 
@@ -806,6 +983,16 @@ function resolvePlayerName(playerId: number) {
   height: 100%;
 }
 
+.room__chat-tools {
+  margin-bottom: 12px;
+}
+
+.room__chat-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
 .room__chat-history {
   max-height: 420px;
   overflow-y: auto;
@@ -814,8 +1001,10 @@ function resolvePlayerName(playerId: number) {
 }
 
 .room__chat-message {
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f2f3f5;
 }
 
 .room__chat-message:last-child {
@@ -823,12 +1012,60 @@ function resolvePlayerName(playerId: number) {
 }
 
 .room__chat-message--system {
+  justify-content: center;
   color: var(--el-text-color-secondary);
   font-size: 13px;
 }
 
+.room__chat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.room__chat-bubble {
+  flex: 1;
+  background: #f7f9fc;
+  border-radius: 12px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+.room__chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.room__chat-name {
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.room__chat-text {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.room__chat-system {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff7e6;
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
 .room__chat-time {
-  margin-left: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }

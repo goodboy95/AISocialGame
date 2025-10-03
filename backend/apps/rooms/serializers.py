@@ -31,6 +31,7 @@ class RoomPlayerSerializer(serializers.ModelSerializer):
             "seat_number",
             "is_host",
             "is_ai",
+            "ai_style",
             "is_active",
             "joined_at",
             "role",
@@ -202,6 +203,22 @@ class RoomJoinByCodeSerializer(serializers.Serializer):
     """Validate payload to join a room via public code."""
 
     code = serializers.CharField(max_length=12)
+
+
+class RoomAddAISerializer(serializers.Serializer):
+    """Validate host-triggered AI creation payload."""
+
+    style = serializers.CharField(required=False, allow_blank=True)
+    display_name = serializers.CharField(required=False, allow_blank=True, max_length=64)
+
+    def validate_style(self, value: str) -> str:
+        from apps.ai import available_style_keys
+
+        if not value:
+            return ""
+        if value not in available_style_keys():
+            raise serializers.ValidationError("不支持的 AI 风格")
+        return value
 
 
 class ChatMessageSerializer(serializers.Serializer):
