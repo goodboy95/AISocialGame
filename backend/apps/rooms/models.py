@@ -79,6 +79,7 @@ class RoomPlayer(models.Model):
     role = models.CharField(max_length=40, blank=True)
     word = models.CharField(max_length=120, blank=True)
     is_alive = models.BooleanField(default=True)
+    has_used_skill = models.BooleanField(default=False)
 
     class Meta:
         ordering = ("seat_number", "joined_at")

@@ -24,6 +24,8 @@ class EnginePhase(str, Enum):
     VOTING = "voting"
     RESULT = "result"
     ENDED = "ended"
+    NIGHT = "night"
+    DAY = "day"
 
 
 @dataclass

@@ -126,6 +126,22 @@ def _ensure_ai_players(room: Room) -> list[RoomPlayer]:
     return created
 
 
+def _resolve_engine_slug(room: Room) -> str:
+    """Determine which game engine should be used for the room."""
+
+    config = room.config or {}
+    if isinstance(config, dict):
+        game_cfg = config.get("game")
+        if isinstance(game_cfg, dict):
+            engine = game_cfg.get("engine") or game_cfg.get("mode")
+            if isinstance(engine, str) and engine:
+                return engine
+        engine = config.get("engine")
+        if isinstance(engine, str) and engine:
+            return engine
+    return "undercover"
+
+
 def create_room(*, owner, name: str, max_players: int = 8, is_private: bool = False, config: Optional[dict] = None) -> Room:
     if max_players < 2:
         raise RoomServiceError("房间人数下限为 2 人")
@@ -289,7 +305,8 @@ def start_room(*, room: Room, user) -> Room:
         locked_room.save(update_fields=["status", "phase", "current_round", "updated_at"])
 
     try:
-        session = start_room_game(room)
+        engine_slug = _resolve_engine_slug(locked_room)
+        session = start_room_game(room, engine_slug=engine_slug)
     except GameEngineError as exc:
         room.status = Room.RoomStatus.WAITING
         room.phase = Room.RoomPhase.LOBBY

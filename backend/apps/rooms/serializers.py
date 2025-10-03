@@ -36,6 +36,7 @@ class RoomPlayerSerializer(serializers.ModelSerializer):
             "role",
             "word",
             "is_alive",
+            "has_used_skill",
         )
         read_only_fields = fields
 

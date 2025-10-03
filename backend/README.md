@@ -1,6 +1,6 @@
 # 后端服务（Django + DRF + Channels）
 
-本目录包含 Django 后端工程代码，负责提供 REST API、WebSocket 实时通信以及未来的 AI 能力集成。当前已落地房间管理、实时聊天等核心模块，可直接供前端大厅与房间页面联调使用。
+本目录包含 Django 后端工程代码，负责提供 REST API、WebSocket 实时通信以及未来的 AI 能力集成。当前已落地房间管理、实时聊天、"谁是卧底" 与 "狼人杀" 两大玩法，可直接供前端大厅与房间页面联调使用。
 
 ## 目录结构
 
@@ -45,7 +45,7 @@ Dockerfile          # Docker 构建文件
 - `GET /api/rooms/{id}/`：查看房间详情（含成员列表、房主标识、房态与当前游戏会话）。
   - `POST /api/rooms/{id}/join/`、`POST /api/rooms/{id}/leave/`：加入/退出房间。
   - `POST /api/rooms/join-by-code/`：通过房号加入房间。
-- `POST /api/rooms/{id}/start/`：房主发起游戏流程，自动补齐 AI 玩家并启动“谁是卧底”引擎。
+- `POST /api/rooms/{id}/start/`：房主发起游戏流程，自动补齐 AI 玩家并根据房间配置选择“谁是卧底”或“狼人杀”引擎。
   - `DELETE /api/rooms/{id}/`：房主解散房间。
 - 健康检查：`GET /api/health/`。
 
@@ -62,7 +62,9 @@ WebSocket 入口为 `ws://<host>/ws/rooms/<room_id>/?token=<jwt>`，仅允许房
 - `apps/gamecore/services.py`：维护 `GameSession`，负责启动/更新引擎并通过 `game.event` 向前端推送状态。
 - `apps/games/models.py`：提供 `WordPair` 词库模型，支持按主题/难度随机抽词。
 - `apps/games/undercover/engine.py`：实现“谁是卧底”状态机，涵盖发言轮转、投票计票、平局重投、胜负判定及 AI 自动行为。
-- `apps/ai/services.py`：封装 AI 玩家昵称生成与简单策略（发言、投票决策）。
+- `apps/games/werewolf/engine.py`：实现“狼人杀”多阶段状态机，处理夜间行动（狼人击杀、预言家查验、女巫解救/投毒）、白天发言与投票、胜负判定及私密信息透出。
+- `apps/ai/services.py`：封装 AI 玩家昵称生成、“谁是卧底”与“狼人杀”两套启发式策略（发言、投票、夜间行动决策）。
+- `apps/rooms/models.RoomPlayer`：新增 `has_used_skill` 字段，用于记录一次性技能使用情况，便于引擎协同。
 - `apps/rooms/consumers.py`：WebSocket 协议统一使用 `type` + `payload`，支持聊天、系统广播、游戏事件与 `ping/pong` 心跳。
 - `apps/.../tests/`：`pytest` + `pytest-django` 覆盖 REST、WS 与游戏引擎核心流程，可作为新增功能的测试范例。
 
@@ -79,7 +81,7 @@ python manage.py runserver
 pytest
 ```
 
-测试配置基于 `config.settings.test`，使用 SQLite 与 InMemory Channel Layer，`pytest` 用例覆盖了房间创建/加入/退出、房主权限校验以及 WebSocket 消息广播。
+测试配置基于 `config.settings.test`，使用 SQLite 与 InMemory Channel Layer，`pytest` 用例覆盖房间创建/加入/退出、房主权限校验、WebSocket 消息广播以及“谁是卧底”“狼人杀”核心回合逻辑。
 
 ### 本地 Channels 调试小贴士
 

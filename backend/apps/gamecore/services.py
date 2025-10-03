@@ -19,6 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 ENGINE_REGISTRY: Dict[str, str] = {
     "undercover": "apps.games.undercover.engine.UndercoverEngine",
+    "werewolf": "apps.games.werewolf.engine.WerewolfEngine",
 }
 
 
