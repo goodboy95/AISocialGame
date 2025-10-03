@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional
 from django.db import transaction
 from django.utils import timezone
 
-from apps.ai.services import UndercoverAIStrategy
+from apps.ai import UndercoverAIStrategy
+from apps.common import ContentPolicyViolation, enforce_content_policy
 from apps.gamecore.engine import BaseGameEngine, EnginePhase, GameEngineError
 from apps.rooms.models import RoomPlayer
 
@@ -23,7 +24,7 @@ class UndercoverEngine(BaseGameEngine):
 
     def __init__(self, session):
         super().__init__(session)
-        self.strategy = UndercoverAIStrategy(style=self._config().get("ai_style", "balanced"))
+        self._strategy_cache: Dict[str, UndercoverAIStrategy] = {}
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -38,6 +39,12 @@ class UndercoverEngine(BaseGameEngine):
             "topic": cfg.get("topic"),
             "difficulty": cfg.get("difficulty"),
         }
+
+    def _strategy_for_style(self, style: Optional[str]) -> UndercoverAIStrategy:
+        resolved = style or self._config().get("ai_style", "balanced")
+        if resolved not in self._strategy_cache:
+            self._strategy_cache[resolved] = UndercoverAIStrategy(style=resolved)
+        return self._strategy_cache[resolved]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -86,6 +93,7 @@ class UndercoverEngine(BaseGameEngine):
                     "role": role,
                     "word": word,
                     "is_ai": player.is_ai,
+                    "ai_style": player.ai_style,
                     "display_name": player.resolved_display_name,
                     "is_alive": True,
                 }
@@ -150,7 +158,8 @@ class UndercoverEngine(BaseGameEngine):
                 if speaker_id is None:
                     break
                 assignment = self._assignment(speaker_id)
-                speech = self.strategy.generate_speech(
+                strategy = self._strategy_for_style(assignment.get("ai_style"))
+                speech = strategy.generate_speech(
                     role=assignment["role"],
                     word=assignment["word"],
                     round_number=self.state.get("round", 1),
@@ -168,7 +177,8 @@ class UndercoverEngine(BaseGameEngine):
                 ]
                 if pending:
                     voter = pending[0]
-                    target = self.strategy.pick_vote(
+                    voter_strategy = self._strategy_for_style(self._assignment(voter).get("ai_style"))
+                    target = voter_strategy.pick_vote(
                         voter_id=voter,
                         alive_players=self._eligible_vote_targets(),
                         assignments=self.state["assignments"],
@@ -203,6 +213,7 @@ class UndercoverEngine(BaseGameEngine):
                 "displayName": meta["display_name"],
                 "isAi": meta["is_ai"],
                 "isAlive": meta.get("is_alive", True),
+                "aiStyle": meta.get("ai_style"),
             }
             if viewer_player_id is None or pid == viewer_player_id or self.phase in {EnginePhase.RESULT, EnginePhase.ENDED}:
                 entry["role"] = meta.get("role")
@@ -280,7 +291,12 @@ class UndercoverEngine(BaseGameEngine):
         queue = self.state.get("queue", [])
         if not queue or queue[0] != actor_id:
             raise GameEngineError("当前并非该玩家的发言回合")
-        sanitized = content.strip() or ("AI" if is_ai else "")
+        raw = content.strip()
+        try:
+            sanitized = enforce_content_policy(raw, mode="mask" if is_ai else "reject")
+        except ContentPolicyViolation as exc:
+            raise GameEngineError(str(exc)) from exc
+        sanitized = sanitized or ("AI" if is_ai else "")
         if not sanitized:
             raise GameEngineError("发言内容不能为空")
         self.state.setdefault("speeches", []).append(

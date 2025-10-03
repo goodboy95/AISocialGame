@@ -7,6 +7,16 @@ export const http = axios.create({
   withCredentials: false
 });
 
+http.interceptors.request.use((config) => {
+  const headers = config.headers ?? (config.headers = {});
+  const requestId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  headers["X-Request-ID"] = requestId;
+  return config;
+});
+
 http.interceptors.response.use(
   (response) => response,
   (error) => {

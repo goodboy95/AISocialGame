@@ -18,6 +18,7 @@ export interface RoomPlayer {
   word: string;
   isAlive: boolean;
   hasUsedSkill: boolean;
+  aiStyle?: string | null;
 }
 
 export interface UndercoverAssignmentView {
@@ -27,6 +28,7 @@ export interface UndercoverAssignmentView {
   isAlive: boolean;
   role: string | null;
   word: string | null;
+  aiStyle?: string | null;
 }
 
 export interface UndercoverSpeech {
@@ -64,6 +66,7 @@ export interface WerewolfAssignmentView {
   isAi: boolean;
   isAlive: boolean;
   role: string | null;
+  aiStyle?: string | null;
 }
 
 export interface WerewolfPrivateInfo {
@@ -150,4 +153,5 @@ export interface ChatMessage {
   } | null;
   type: "chat" | "system";
   event?: string;
+  context?: Record<string, unknown>;
 }

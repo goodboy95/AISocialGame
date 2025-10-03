@@ -15,6 +15,7 @@ from .serializers import (
     RoomDetailSerializer,
     RoomJoinByCodeSerializer,
     RoomListSerializer,
+    RoomAddAISerializer,
 )
 
 
@@ -108,6 +109,23 @@ class RoomViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.Retriev
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         serializer = RoomDetailSerializer(room, context={"request": request})
         return Response(serializer.data)
+
+    @action(methods=["post"], detail=True, url_path="add-ai")
+    def add_ai(self, request, pk=None):
+        room = self.get_object()
+        serializer = RoomAddAISerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        try:
+            services.add_ai_player(
+                room=room,
+                user=request.user,
+                style=serializer.validated_data.get("style") or None,
+                display_name=serializer.validated_data.get("display_name") or None,
+            )
+        except services.RoomServiceError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        output = RoomDetailSerializer(room, context={"request": request})
+        return Response(output.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
         room = self.get_object()

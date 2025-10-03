@@ -74,6 +74,7 @@ class RoomPlayer(models.Model):
     seat_number = models.PositiveIntegerField()
     is_host = models.BooleanField(default=False)
     is_ai = models.BooleanField(default=False)
+    ai_style = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     role = models.CharField(max_length=40, blank=True)
