@@ -24,7 +24,9 @@ Dockerfile          # Docker 构建文件
 - `SECRET_KEY`：Django 密钥。
 - `DATABASE_URL`：默认指向 `mysql://ai_social_game:ai_social_game@db:3306/ai_social_game`。
 - `REDIS_URL`：Channels 使用的 Redis 连接。
-- `CORS_ALLOWED_ORIGINS`：允许的前端域名，默认 `http://localhost:5173`。
+- `CORS_ALLOW_ALL_ORIGINS`：是否放开 CORS 限制，默认 `True`。
+- `CORS_ALLOWED_ORIGINS`：当未放开限制时允许的前端域名列表，默认 `http://localhost:5173`。
+- `CORS_ALLOW_CREDENTIALS`：是否允许跨域携带认证信息，放开限制时默认 `False`，其他情况下默认 `True`。
 
 ## 关键依赖
 
