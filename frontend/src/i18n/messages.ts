@@ -9,6 +9,7 @@ export const messages = {
       register: "注册",
       lobby: "大厅",
       stats: "战绩",
+      logout: "退出登录",
     },
     room: {
       chatTitle: "实时聊天",
@@ -201,6 +202,7 @@ export const messages = {
       register: "Sign Up",
       lobby: "Lobby",
       stats: "Stats",
+      logout: "Log out",
     },
     room: {
       chatTitle: "Live Chat",
