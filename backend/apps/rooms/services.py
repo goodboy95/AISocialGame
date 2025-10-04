@@ -265,39 +265,56 @@ def join_room(*, room: Room, user) -> RoomOperationResult:
 
     with transaction.atomic():
         locked_room = Room.objects.select_for_update().get(pk=room.pk)
-        active_count = locked_room.players.filter(is_active=True).count()
-        if active_count >= locked_room.max_players:
-            raise RoomFullError("房间已满员")
-        membership, created = RoomPlayer.objects.get_or_create(
-            room=locked_room,
-            user=user,
-            defaults={
-                "seat_number": _next_available_seat(locked_room),
-                "display_name": user.display_name or user.username,
-                "is_ai": False,
-            },
+        membership = (
+            locked_room.players.select_for_update()
+            .filter(user=user)
+            .select_related("user")
+            .first()
         )
-        if not created and membership.is_active:
-            raise RoomServiceError("用户已经在房间中")
-        if not created and not membership.is_active:
-            membership.is_active = True
-            membership.save(update_fields=["is_active"])
 
-    message = f"{membership.resolved_display_name} 加入了房间"
-    payload = {
-        "room": _serialize_room(locked_room),
-        "actor": {
-            "id": membership.user_id,
-            "display_name": membership.resolved_display_name,
-            "username": membership.user.username if membership.user else None,
-        },
-        "message": message,
-        "timestamp": timezone.now().isoformat(),
-        "event": "player_joined",
-        "status_code": status.HTTP_200_OK,
-    }
-    _broadcast("system.broadcast", payload)
-    return RoomOperationResult(room=locked_room, actor=membership, event="player_joined", message=message)
+        state_changed = False
+        if membership:
+            if not membership.is_active:
+                membership.is_active = True
+                membership.save(update_fields=["is_active"])
+                state_changed = True
+        else:
+            active_count = locked_room.players.filter(is_active=True).count()
+            if active_count >= locked_room.max_players:
+                raise RoomFullError("房间已满员")
+            membership = RoomPlayer.objects.create(
+                room=locked_room,
+                user=user,
+                seat_number=_next_available_seat(locked_room),
+                display_name=user.display_name or user.username,
+                is_ai=False,
+            )
+            state_changed = True
+
+    event = "player_joined" if state_changed else "player_reconnected"
+    message = ""
+    if state_changed:
+        message = f"{membership.resolved_display_name} 加入了房间"
+        payload = {
+            "room": _serialize_room(locked_room),
+            "actor": {
+                "id": membership.user_id,
+                "display_name": membership.resolved_display_name,
+                "username": membership.user.username if membership.user else None,
+            },
+            "message": message,
+            "timestamp": timezone.now().isoformat(),
+            "event": event,
+            "status_code": status.HTTP_200_OK,
+        }
+        _broadcast("system.broadcast", payload)
+
+    return RoomOperationResult(
+        room=locked_room,
+        actor=membership,
+        event=event,
+        message=message,
+    )
 
 
 def leave_room(*, room: Room, user) -> RoomOperationResult:

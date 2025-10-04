@@ -1,15 +1,26 @@
 <template>
   <el-card class="auth-card">
     <h2>欢迎回来</h2>
-    <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
+    <el-form
+      :model="form"
+      :rules="rules"
+      ref="formRef"
+      label-position="top"
+      @submit.prevent="handleSubmit"
+    >
       <el-form-item label="用户名" prop="username">
         <el-input v-model="form.username" autocomplete="username" />
       </el-form-item>
       <el-form-item label="密码" prop="password">
-        <el-input v-model="form.password" type="password" autocomplete="current-password" />
+        <el-input
+          v-model="form.password"
+          type="password"
+          autocomplete="current-password"
+          @keyup.enter="handleSubmit"
+        />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">登录</el-button>
+        <el-button type="primary" :loading="loading" native-type="submit">登录</el-button>
         <el-button link type="primary" @click="goRegister">还没有账号？注册</el-button>
       </el-form-item>
     </el-form>

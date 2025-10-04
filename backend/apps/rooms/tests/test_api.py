@@ -1,5 +1,4 @@
 import pytest
-import pytest
 from rest_framework.test import APIClient
 
 from apps.rooms import services
@@ -51,6 +50,31 @@ def test_join_and_leave_room_flow(api_client, user, member):
     updated = leave_response.json()
     assert updated["player_count"] == 1
     assert Room.objects.get(pk=room.pk).status == Room.RoomStatus.WAITING
+
+
+@pytest.mark.django_db
+def test_join_room_allows_existing_owner(api_client, user):
+    room = services.create_room(owner=user, name="房主房间", max_players=4)
+
+    api_client.force_authenticate(user)
+    response = api_client.post(f"/api/rooms/{room.id}/join/", format="json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["player_count"] == 1
+
+
+@pytest.mark.django_db
+def test_join_room_is_idempotent_for_active_member(api_client, user, member):
+    room = services.create_room(owner=user, name="重复加入房间", max_players=4)
+    services.join_room(room=room, user=member)
+
+    api_client.force_authenticate(member)
+    response = api_client.post(f"/api/rooms/{room.id}/join/", format="json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["player_count"] == 2
 
 
 @pytest.mark.django_db
