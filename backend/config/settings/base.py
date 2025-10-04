@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import timedelta
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -132,6 +133,10 @@ else:
     CORS_ALLOWED_ORIGINS = env.list(
         "CORS_ALLOWED_ORIGINS", default=["http://localhost:5173"]
     )
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-request-id",
+]
 
 CHANNEL_LAYERS = {
     "default": {
