@@ -667,7 +667,6 @@ onMounted(async () => {
     roomsStore.connectSocket(roomId);
   } catch (error) {
     console.error(error);
-    ElMessage.error(t("room.messages.joinFailed"));
     router.push({ name: "lobby" });
   }
 });
@@ -759,7 +758,6 @@ async function handleAddAi() {
     aiForm.displayName = "";
   } catch (error) {
     console.error(error);
-    ElMessage.error(t("room.messages.addAiFailed"));
   } finally {
     addingAi.value = false;
   }
@@ -774,6 +772,8 @@ async function handleLeave() {
       confirmButtonText: t("common.confirm"),
       cancelButtonText: t("common.cancel"),
       type: "warning",
+      customClass: "leave-room-confirm",
+      center: true,
     });
   } catch {
     return;
@@ -785,7 +785,6 @@ async function handleLeave() {
     ElMessage.success(t("room.messages.leaveSuccess"));
   } catch (error) {
     console.error(error);
-    ElMessage.error(t("room.messages.leaveFailed"));
   }
 }
 
@@ -798,7 +797,6 @@ async function handleStart() {
     ElMessage.success(t("room.messages.startSuccess"));
   } catch (error) {
     console.error(error);
-    ElMessage.error(t("room.messages.startFailed"));
   }
 }
 
@@ -1095,5 +1093,15 @@ function resolvePlayerName(playerId: number) {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+:global(.leave-room-confirm.el-message-box) {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background-color: #fff !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16) !important;
 }
 </style>
