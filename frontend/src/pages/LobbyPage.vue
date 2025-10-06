@@ -133,7 +133,6 @@ async function submitCreate() {
     await enterRoom(room.id);
   } catch (error) {
     console.error(error);
-    ElMessage.error("创建房间失败，请稍后重试");
   } finally {
     creating.value = false;
   }
@@ -150,7 +149,6 @@ async function enterRoom(roomId: number) {
     router.push({ name: "room-detail", params: { id: roomId } });
   } catch (error) {
     console.error(error);
-    ElMessage.error("加入房间失败，可能房间已满或不存在");
   }
 }
 
@@ -169,7 +167,6 @@ async function handleJoinByCode() {
     joinCode.value = "";
   } catch (error) {
     console.error(error);
-    ElMessage.error("未找到对应房间或房间不可加入");
   }
 }
 </script>

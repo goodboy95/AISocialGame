@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ElMessage } from "element-plus";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -17,9 +18,51 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+function extractErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const response = error.response;
+    if (response?.data) {
+      const data = response.data as Record<string, unknown>;
+      if (typeof data.detail === "string") {
+        return data.detail;
+      }
+      if (typeof data.message === "string") {
+        return data.message;
+      }
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        const first = data.errors[0];
+        if (typeof first === "string") {
+          return first;
+        }
+        if (typeof first?.message === "string") {
+          return first.message;
+        }
+      }
+    }
+    if (typeof response?.status === "number") {
+      return `请求失败，状态码：${response.status}`;
+    }
+    return error.message || "请求失败，请稍后重试";
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "请求失败，请稍后重试";
+}
+
 http.interceptors.response.use(
   (response) => response,
   (error) => {
+    const message = extractErrorMessage(error);
+    ElMessage.closeAll();
+    ElMessage({
+      type: "error",
+      message,
+      duration: 3000,
+      showClose: true,
+      offset: 20,
+      grouping: true,
+    });
     console.error("API error", error);
     return Promise.reject(error);
   }
