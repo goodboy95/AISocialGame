@@ -88,6 +88,18 @@
             </div>
           </template>
           <p class="room__phase-desc">{{ phaseDescription }}</p>
+          <div v-if="sessionTimer" class="room__timer">
+            <div class="room__timer-header">
+              <el-tag type="danger" effect="dark" class="room__timer-badge">
+                <el-icon><Clock /></el-icon>
+                <span>{{ formattedTimer }}</span>
+              </el-tag>
+              <span class="room__timer-desc">{{ timerDescription }}</span>
+            </div>
+            <p v-if="timerAutoDescription" class="room__timer-auto">
+              {{ t('room.ui.timerAutoLabel') }}：{{ timerAutoDescription }}
+            </p>
+          </div>
           <div v-if="gameState?.winner" class="room__winner">
             <el-result :icon="winnerIcon" :title="winnerTitle">
               <template #sub-title>
@@ -306,38 +318,146 @@
               </el-form-item>
             </el-form>
           </div>
-          <div ref="chatContainer" class="room__chat-history">
-            <div
-              v-for="message in messages"
-              :key="message.id"
-              :class="['room__chat-message', `room__chat-message--${message.type}`]"
+          <el-tabs v-model="chatTab" class="room__chat-tabs">
+            <el-tab-pane name="public">
+              <template #label>
+                <span class="room__chat-tab-label">
+                  {{ t('room.chatTabs.public') }}
+                  <span class="room__chat-tab-count">{{ messages.length }}</span>
+                </span>
+              </template>
+            </el-tab-pane>
+            <el-tab-pane name="private" :disabled="!canSendPrivate">
+              <template #label>
+                <span class="room__chat-tab-label">
+                  {{ t('room.chatTabs.private') }}
+                  <span class="room__chat-tab-count">{{ privateMessagesList.length }}</span>
+                </span>
+              </template>
+            </el-tab-pane>
+            <el-tab-pane name="faction" :disabled="!canUseFactionChannel">
+              <template #label>
+                <span class="room__chat-tab-label">
+                  {{ t('room.chatTabs.faction') }}
+                  <span class="room__chat-tab-count">{{ factionMessagesList.length }}</span>
+                </span>
+              </template>
+            </el-tab-pane>
+          </el-tabs>
+          <div v-if="chatTab === 'private'" class="room__chat-channel">
+            <el-select
+              v-model="privateTarget"
+              size="small"
+              filterable
+              class="room__chat-select"
+              :placeholder="t('room.chatTargetPlaceholder')"
             >
-              <template v-if="message.type === 'chat'">
-                <div class="room__chat-avatar">
-                  {{ message.sender?.displayName?.slice(0, 1) ?? '?' }}
-                </div>
-                <div class="room__chat-bubble">
-                  <div class="room__chat-meta">
-                    <span class="room__chat-name">{{ message.sender?.displayName }}</span>
+              <el-option
+                v-for="target in privateTargets"
+                :key="target.id"
+                :label="target.displayName"
+                :value="target.id"
+              />
+            </el-select>
+            <span v-if="!privateTargets.length" class="room__chat-channel-tip">
+              {{ t('room.chat.noPrivateTargets') }}
+            </span>
+          </div>
+          <div v-if="chatTab === 'faction' && !canUseFactionChannel" class="room__chat-channel-tip">
+            {{ t('room.chat.factionUnavailable') }}
+          </div>
+          <div ref="chatContainer" class="room__chat-history">
+            <template v-if="chatTab === 'public'">
+              <div
+                v-for="message in messages"
+                :key="message.id"
+                :class="['room__chat-message', `room__chat-message--${message.type}`]"
+              >
+                <template v-if="message.type === 'chat'">
+                  <div class="room__chat-avatar">
+                    {{ message.sender?.displayName?.slice(0, 1) ?? '?' }}
+                  </div>
+                  <div class="room__chat-bubble">
+                    <div class="room__chat-meta">
+                      <span class="room__chat-name">{{ message.sender?.displayName }}</span>
+                      <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                    </div>
+                    <p class="room__chat-text">{{ message.content }}</p>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="room__chat-system">
+                    <span>{{ translateSystemMessage(message) }}</span>
                     <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
                   </div>
-                  <p class="room__chat-text">{{ message.content }}</p>
+                </template>
+              </div>
+              <p v-if="!messages.length" class="room__chat-empty">{{ t('room.chat.empty') }}</p>
+            </template>
+            <template v-else-if="chatTab === 'private'">
+              <template v-if="canSendPrivate && privateTarget">
+                <div class="room__chat-private-title">
+                  {{ t('room.chat.privateTitle', { name: privateTargetName }) }}
                 </div>
-              </template>
-              <template v-else>
-                <div class="room__chat-system">
-                  <span>{{ translateSystemMessage(message) }}</span>
-                  <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                <div
+                  v-for="message in privateConversation"
+                  :key="message.id"
+                  :class="[
+                    'room__chat-message',
+                    'room__chat-message--private',
+                    { 'room__chat-message--self': message.sender.id === selfPlayer?.id }
+                  ]"
+                >
+                  <div class="room__chat-avatar">
+                    {{ message.sender.displayName.slice(0, 1) }}
+                  </div>
+                  <div class="room__chat-bubble">
+                    <div class="room__chat-meta">
+                      <span class="room__chat-name">{{ message.sender.displayName }}</span>
+                      <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                    </div>
+                    <p class="room__chat-text">{{ message.content }}</p>
+                    <span class="room__chat-meta-target">
+                      {{ describeDirectMessage(message) }}
+                    </span>
+                  </div>
                 </div>
+                <p v-if="!privateConversation.length" class="room__chat-empty">{{ t('room.chat.empty') }}</p>
               </template>
-            </div>
+              <p v-else class="room__chat-empty">{{ t('room.chat.noPrivateTargets') }}</p>
+            </template>
+            <template v-else>
+              <template v-if="canUseFactionChannel">
+                <div class="room__chat-private-title">
+                  {{ t('room.chat.factionTitle', { faction: factionLabel }) }}
+                </div>
+                <div
+                  v-for="message in factionMessagesList"
+                  :key="message.id"
+                  :class="['room__chat-message', 'room__chat-message--faction', { 'room__chat-message--self': message.sender.id === selfPlayer?.id }]"
+                >
+                  <div class="room__chat-avatar">
+                    {{ message.sender.displayName.slice(0, 1) }}
+                  </div>
+                  <div class="room__chat-bubble">
+                    <div class="room__chat-meta">
+                      <span class="room__chat-name">{{ message.sender.displayName }}</span>
+                      <span class="room__chat-time">{{ formatTime(message.timestamp) }}</span>
+                    </div>
+                    <p class="room__chat-text">{{ message.content }}</p>
+                  </div>
+                </div>
+                <p v-if="!factionMessagesList.length" class="room__chat-empty">{{ t('room.chat.empty') }}</p>
+              </template>
+              <p v-else class="room__chat-empty">{{ t('room.chat.factionUnavailable') }}</p>
+            </template>
           </div>
           <div class="room__chat-input">
             <el-input
               v-model="messageInput"
               type="textarea"
               :rows="2"
-              :placeholder="t('room.chatPlaceholder')"
+              :placeholder="chatPlaceholder"
               @keyup.enter.exact.prevent="handleSend"
             />
             <el-button type="primary" :disabled="!messageInput.trim()" @click="handleSend">
@@ -352,7 +472,7 @@
 </template>
 
 <script setup lang="ts">
-import { Trophy } from "@element-plus/icons-vue";
+import { Clock, Trophy } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -361,6 +481,8 @@ import { useI18n } from "vue-i18n";
 
 import type {
   ChatMessage,
+  DirectMessage,
+  SessionTimer,
   UndercoverAssignmentView,
   UndercoverStateView,
   WerewolfAssignmentView,
@@ -379,7 +501,16 @@ const authStore = useAuthStore();
 const metaStore = useMetaStore();
 const { t } = useI18n();
 
-const { currentRoom, messages, socketConnected } = storeToRefs(roomsStore);
+const TIMER_DESCRIPTION_MAP: Record<string, string> = {
+  auto_start: "room.timer.descriptions.autoStart",
+  auto_speech: "room.timer.descriptions.autoSpeech",
+  auto_vote: "room.timer.descriptions.autoVote",
+  auto_wolf_attack: "room.timer.descriptions.autoWolf",
+  auto_seer: "room.timer.descriptions.autoSeer",
+  auto_witch: "room.timer.descriptions.autoWitch",
+};
+
+const { currentRoom, messages, directMessages, socketConnected } = storeToRefs(roomsStore);
 const messageInput = ref("");
 const chatContainer = ref<HTMLDivElement | null>(null);
 const speechInput = ref("");
@@ -400,6 +531,10 @@ const werewolfState = computed<WerewolfStateView | null>(() =>
   isWerewolf.value ? ((gameSession.value?.state as WerewolfStateView | undefined) ?? null) : null
 );
 const gameState = computed(() => undercoverState.value ?? werewolfState.value ?? null);
+
+const sessionTimer = computed(() => room.value?.gameSession?.timer ?? null);
+const timerRemaining = ref<number | null>(null);
+const timerIntervalId = ref<number | null>(null);
 
 const currentPhase = computed(() => gameState.value?.phase ?? "preparing");
 const werewolfStage = computed(() => (isWerewolf.value ? werewolfState.value?.stage ?? "" : ""));
@@ -428,6 +563,108 @@ const playerStatusMap = computed(() => {
     map.set(assignment.playerId, { isAlive: assignment.isAlive });
   });
   return map;
+});
+
+const chatTab = ref<"public" | "private" | "faction">("public");
+const privateTarget = ref<number | null>(null);
+const privateTargets = computed(() =>
+  room.value?.players.filter((player) => player.id !== selfPlayer.value?.id) ?? []
+);
+const canSendPrivate = computed(() => privateTargets.value.length > 0);
+const privateTargetName = computed(() =>
+  privateTarget.value ? resolvePlayerName(privateTarget.value) : ""
+);
+
+const selfAssignment = computed(() =>
+  assignments.value.find((assignment) => assignment.playerId === selfPlayer.value?.id) ?? null
+);
+
+const factionKey = computed(() => {
+  const role = (selfAssignment.value as any)?.role ?? selfPlayer.value?.role ?? null;
+  if (role === "undercover" || role === "werewolf") {
+    return role as "undercover" | "werewolf";
+  }
+  return null;
+});
+
+const canUseFactionChannel = computed(() => Boolean(factionKey.value));
+const factionLabel = computed(() => {
+  if (!factionKey.value) {
+    return "";
+  }
+  const mapping: Record<string, string> = {
+    undercover: t("room.factions.undercover"),
+    werewolf: t("room.factions.werewolf"),
+  };
+  return mapping[factionKey.value] ?? factionKey.value;
+});
+
+const privateMessagesList = computed(() => {
+  const selfId = selfPlayer.value?.id;
+  if (!selfId) {
+    return [] as typeof directMessages.value;
+  }
+  return directMessages.value.filter(
+    (message) =>
+      message.channel === "private" &&
+      (message.sender.id === selfId || message.targetPlayerId === selfId)
+  );
+});
+
+watch(privateTargets, (targets) => {
+  if (!targets.length) {
+    privateTarget.value = null;
+  } else if (!targets.some((target) => target.id === privateTarget.value)) {
+    privateTarget.value = targets[0].id;
+  }
+});
+
+watch(canSendPrivate, (available) => {
+  if (!available && chatTab.value === "private") {
+    chatTab.value = canUseFactionChannel.value ? "faction" : "public";
+  }
+});
+
+watch(canUseFactionChannel, (available) => {
+  if (!available && chatTab.value === "faction") {
+    chatTab.value = canSendPrivate.value ? "private" : "public";
+  }
+});
+
+const privateConversation = computed(() => {
+  const selfId = selfPlayer.value?.id;
+  const targetId = privateTarget.value;
+  if (!selfId || !targetId) {
+    return [] as DirectMessage[];
+  }
+  return privateMessagesList.value.filter(
+    (message) =>
+      (message.sender.id === selfId && message.targetPlayerId === targetId) ||
+      (message.sender.id === targetId && message.targetPlayerId === selfId)
+  );
+});
+
+const factionMessagesList = computed(() => {
+  const selfId = selfPlayer.value?.id;
+  if (!selfId) {
+    return [] as typeof directMessages.value;
+  }
+  return directMessages.value.filter(
+    (message) =>
+      message.channel === "faction" &&
+      (!message.recipients || message.recipients.includes(selfId))
+  );
+});
+
+const chatPlaceholder = computed(() => {
+  if (chatTab.value === "private" && privateTargetName.value) {
+    return t("room.chatPlaceholderPrivate", { name: privateTargetName.value });
+  }
+  if (chatTab.value === "faction") {
+    const factionName = factionLabel.value || t("room.chat.factionDefault");
+    return t("room.chatPlaceholderFaction", { faction: factionName });
+  }
+  return t("room.chatPlaceholder");
 });
 
 const aliveAssignments = computed(() => assignments.value.filter((assignment) => assignment.isAlive));
@@ -513,6 +750,36 @@ const phaseDescription = computed(() => {
   return t("room.descriptions.generic");
 });
 
+const timerDescription = computed(() => {
+  const timer = sessionTimer.value;
+  if (!timer) {
+    return t("room.ui.timerDefault");
+  }
+  const actionType = timer.defaultAction?.type;
+  if (actionType) {
+    const key = TIMER_DESCRIPTION_MAP[actionType];
+    if (key) {
+      const translated = t(key);
+      if (translated) {
+        return translated;
+      }
+    }
+  }
+  if (timer.description) {
+    return timer.description;
+  }
+  return t("room.ui.timerDefault");
+});
+const formattedTimer = computed(() => {
+  if (timerRemaining.value === null) {
+    return "--:--";
+  }
+  const minutes = Math.floor(timerRemaining.value / 60);
+  const seconds = timerRemaining.value % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+});
+const timerAutoDescription = computed(() => describeDefaultAction(sessionTimer.value));
+
 const currentSpeakerName = computed(() => {
   if (!activeSpeakerId.value) {
     return t("room.ui.pendingSpeaker");
@@ -531,10 +798,6 @@ const isSpeakingStage = computed(() =>
 
 const canSpeak = computed(() =>
   isSpeakingStage.value && selfPlayer.value && selfPlayer.value.id === activeSpeakerId.value
-);
-
-const selfAssignment = computed(() =>
-  assignments.value.find((assignment) => assignment.playerId === selfPlayer.value?.id) ?? null
 );
 
 function translateRole(role?: string | null) {
@@ -674,20 +937,53 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  if (timerIntervalId.value !== null) {
+    window.clearInterval(timerIntervalId.value);
+    timerIntervalId.value = null;
+  }
   roomsStore.disconnectSocket();
   roomsStore.resetMessages();
 });
 
 watch(
-  messages,
+  sessionTimer,
+  (timer) => {
+    if (timerIntervalId.value !== null) {
+      window.clearInterval(timerIntervalId.value);
+      timerIntervalId.value = null;
+    }
+    if (timer && timer.expiresAt) {
+      const update = () => {
+        const diff = new Date(timer.expiresAt).getTime() - Date.now();
+        timerRemaining.value = diff > 0 ? Math.floor(diff / 1000) : 0;
+        if (timerRemaining.value === 0 && timerIntervalId.value !== null) {
+          window.clearInterval(timerIntervalId.value);
+          timerIntervalId.value = null;
+        }
+      };
+      update();
+      timerIntervalId.value = window.setInterval(update, 1000);
+    } else {
+      timerRemaining.value = null;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    tab: chatTab.value,
+    public: messages.value.length,
+    private: privateConversation.value.length,
+    faction: factionMessagesList.value.length,
+  }),
   async () => {
     await nextTick();
     const container = chatContainer.value;
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
-  },
-  { deep: true }
+  }
 );
 
 watch(isSpeakingStage, (speaking) => {
@@ -742,7 +1038,21 @@ async function handleSend() {
   if (!content) {
     return;
   }
-  roomsStore.sendChat(content);
+  if (chatTab.value === "private") {
+    if (!canSendPrivate.value || !privateTarget.value) {
+      ElMessage.warning(t("room.messages.privateTargetRequired"));
+      return;
+    }
+    roomsStore.sendPrivateMessage(privateTarget.value, content);
+  } else if (chatTab.value === "faction") {
+    if (!canUseFactionChannel.value) {
+      ElMessage.warning(t("room.messages.factionChannelUnavailable"));
+      return;
+    }
+    roomsStore.sendFactionMessage(content, factionKey.value ?? undefined);
+  } else {
+    roomsStore.sendChat(content);
+  }
   messageInput.value = "";
 }
 
@@ -853,6 +1163,52 @@ function handleWitchSkip() {
   roomsStore.sendGameEvent("submit_witch_action", {});
 }
 
+function describeDefaultAction(timer: SessionTimer | null): string {
+  if (!timer || !timer.defaultAction) {
+    return "";
+  }
+  const action = timer.defaultAction as Record<string, unknown>;
+  const type = typeof action.type === "string" ? action.type : "";
+  const metadata = timer.metadata ?? {};
+  switch (type) {
+    case "auto_start":
+      return t("room.timer.autoStart");
+    case "auto_speech": {
+      const candidate = Number((action as any).player_id ?? (metadata as any).current ?? 0);
+      if (Number.isFinite(candidate) && candidate > 0) {
+        return t("room.timer.autoSpeechWithName", { name: resolvePlayerName(candidate) });
+      }
+      return t("room.timer.autoSpeech");
+    }
+    case "auto_vote": {
+      const pending = Array.isArray((metadata as any).pending) ? (metadata as any).pending : [];
+      if (pending.length > 0) {
+        return t("room.timer.autoVotePending", { count: pending.length });
+      }
+      return t("room.timer.autoVote");
+    }
+    case "auto_wolf_attack":
+      return t("room.timer.autoWolf");
+    case "auto_seer":
+      return t("room.timer.autoSeer");
+    case "auto_witch":
+      return t("room.timer.autoWitch");
+    default:
+      return t("room.timer.autoDefault");
+  }
+}
+
+function describeDirectMessage(message: DirectMessage): string {
+  const selfId = selfPlayer.value?.id;
+  if (selfId && message.sender.id === selfId) {
+    if (message.targetPlayerId) {
+      return t("room.chat.directTo", { name: resolvePlayerName(message.targetPlayerId) });
+    }
+    return t("room.chat.directSelf");
+  }
+  return t("room.chat.directFrom", { name: message.sender.displayName });
+}
+
 function resolvePlayerName(playerId: number) {
   const assignment = assignments.value.find((item) => item.playerId === playerId);
   if (assignment) {
@@ -950,6 +1306,41 @@ function resolvePlayerName(playerId: number) {
   color: var(--el-text-color-secondary);
 }
 
+.room__timer {
+  margin-bottom: 16px;
+  background: rgba(64, 158, 255, 0.08);
+  border: 1px dashed rgba(64, 158, 255, 0.35);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.room__timer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room__timer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.room__timer-desc {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.room__timer-auto {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 .room__phase-block {
   display: flex;
   flex-direction: column;
@@ -983,6 +1374,39 @@ function resolvePlayerName(playerId: number) {
   height: 100%;
 }
 
+.room__chat-tabs {
+  margin-bottom: 12px;
+}
+
+.room__chat-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.room__chat-tab-count {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.room__chat-channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.room__chat-select {
+  flex: 1;
+}
+
+.room__chat-channel-tip {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 8px;
+}
+
 .room__chat-tools {
   margin-bottom: 12px;
 }
@@ -998,6 +1422,11 @@ function resolvePlayerName(playerId: number) {
   overflow-y: auto;
   margin-bottom: 12px;
   padding-right: 4px;
+}
+
+.room__chat-private-title {
+  font-weight: 600;
+  margin-bottom: 8px;
 }
 
 .room__chat-message {
@@ -1030,6 +1459,10 @@ function resolvePlayerName(playerId: number) {
   flex-shrink: 0;
 }
 
+.room__chat-message--self .room__chat-avatar {
+  background: var(--el-color-success);
+}
+
 .room__chat-bubble {
   flex: 1;
   background: #f7f9fc;
@@ -1056,6 +1489,13 @@ function resolvePlayerName(playerId: number) {
   line-height: 1.5;
 }
 
+.room__chat-meta-target {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .room__chat-system {
   display: flex;
   align-items: center;
@@ -1063,6 +1503,13 @@ function resolvePlayerName(playerId: number) {
   background: #fff7e6;
   border-radius: 8px;
   padding: 6px 12px;
+}
+
+.room__chat-empty {
+  text-align: center;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin: 24px 0;
 }
 
 .room__chat-time {

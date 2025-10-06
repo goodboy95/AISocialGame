@@ -114,7 +114,18 @@ export interface GameSessionSnapshot<TState = Record<string, unknown>> {
   status: string;
   startedAt: string;
   updatedAt: string;
+  deadlineAt: string | null;
+  timer: SessionTimer | null;
   state: TState;
+}
+
+export interface SessionTimer {
+  phase: string;
+  duration: number;
+  expiresAt: string;
+  defaultAction?: Record<string, unknown>;
+  description?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RoomListItem {
@@ -152,6 +163,23 @@ export interface ChatMessage {
     displayName: string;
   } | null;
   type: "chat" | "system";
+  channel?: "public" | "private" | "faction";
   event?: string;
   context?: Record<string, unknown>;
+}
+
+export interface DirectMessage {
+  id: string;
+  roomId: number;
+  sessionId: number | null;
+  channel: "private" | "faction";
+  content: string;
+  timestamp: string;
+  sender: {
+    id: number;
+    displayName: string;
+  };
+  targetPlayerId?: number;
+  faction?: string;
+  recipients?: number[];
 }

@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.ai import UndercoverAIStrategy
+from apps.ai.llm import get_llm_client
 from apps.common import ContentPolicyViolation, enforce_content_policy
 from apps.gamecore.engine import BaseGameEngine, EnginePhase, GameEngineError
 from apps.rooms.models import RoomPlayer
@@ -25,6 +26,8 @@ class UndercoverEngine(BaseGameEngine):
     def __init__(self, session):
         super().__init__(session)
         self._strategy_cache: Dict[str, UndercoverAIStrategy] = {}
+        self._llm_enabled = bool(self._config().get("use_llm"))
+        self._llm_client = None
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -32,6 +35,18 @@ class UndercoverEngine(BaseGameEngine):
     def _config(self) -> Dict[str, Any]:
         config = self.room.config or {}
         return config.get("undercover", config.get("game", {}).get("undercover", {}))
+
+    def _timer_config(self) -> Dict[str, Any]:
+        cfg = self._config()
+        timers = cfg.get("timers", {})
+        return timers if isinstance(timers, dict) else {}
+
+    def _phase_duration(self, key: str, default: int) -> int:
+        value = self._timer_config().get(key)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     def _word_preferences(self) -> Dict[str, Optional[str]]:
         cfg = self._config()
@@ -42,9 +57,15 @@ class UndercoverEngine(BaseGameEngine):
 
     def _strategy_for_style(self, style: Optional[str]) -> UndercoverAIStrategy:
         resolved = style or self._config().get("ai_style", "balanced")
-        if resolved not in self._strategy_cache:
-            self._strategy_cache[resolved] = UndercoverAIStrategy(style=resolved)
-        return self._strategy_cache[resolved]
+        client = None
+        if self._llm_enabled:
+            if self._llm_client is None:
+                self._llm_client = get_llm_client()
+            client = self._llm_client
+        cache_key = f"{resolved}:{'llm' if client else 'fallback'}"
+        if cache_key not in self._strategy_cache:
+            self._strategy_cache[cache_key] = UndercoverAIStrategy(style=resolved, llm_client=client)
+        return self._strategy_cache[cache_key]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -118,6 +139,12 @@ class UndercoverEngine(BaseGameEngine):
             },
         }
         self._queue_reset()
+        self.enter_phase(
+            EnginePhase.PREPARING,
+            duration=self._phase_duration("preparing", 30),
+            default_action={"type": "auto_start"},
+            description="超时后系统将自动开始发言阶段",
+        )
 
     # ------------------------------------------------------------------
     # Event handling
@@ -125,9 +152,7 @@ class UndercoverEngine(BaseGameEngine):
     def handle_event(self, event) -> None:
         if event.type == "ready":
             self._ensure_phase(EnginePhase.PREPARING)
-            self.phase = EnginePhase.SPEAKING
-            self.state["phase"] = self.phase.value
-            self._queue_reset()
+            self._transition_to_speaking(auto=False)
             return
 
         if event.type == "submit_speech":
@@ -143,6 +168,11 @@ class UndercoverEngine(BaseGameEngine):
         if event.type == "force_result":
             self.phase = EnginePhase.RESULT
             self.state["phase"] = self.phase.value
+            self.clear_timer()
+            return
+
+        if event.type == "timeout":
+            self._handle_timeout(event.payload or {})
             return
 
         raise GameEngineError(f"未知的事件类型: {event.type}")
@@ -262,6 +292,8 @@ class UndercoverEngine(BaseGameEngine):
         self.state["alive_players"] = alive
         self.state["queue"] = list(alive)
         self.state["current_player_id"] = alive[0] if alive else None
+        if self.phase == EnginePhase.SPEAKING:
+            self._arm_speaking_timer()
 
     def _advance_queue(self):
         queue = self.state.get("queue", [])
@@ -271,6 +303,8 @@ class UndercoverEngine(BaseGameEngine):
             self.state["current_player_id"] = queue[0]
         else:
             self.state["current_player_id"] = None
+        if self.phase == EnginePhase.SPEAKING:
+            self._arm_speaking_timer()
 
     def _alive_player_ids(self) -> List[int]:
         return [pid for pid in self.state.get("players_order", []) if self._assignment(pid)["is_alive"]]
@@ -314,6 +348,7 @@ class UndercoverEngine(BaseGameEngine):
             self.state["votes"] = {}
             self.state["vote_round"] = self.state.get("vote_round", 1)
             self.state["revote_candidates"] = []
+            self._arm_voting_timer()
 
     def _process_vote(self, actor_id: Optional[int], target_id: Optional[int], *, is_ai: bool = False) -> None:
         if actor_id is None:
@@ -349,6 +384,7 @@ class UndercoverEngine(BaseGameEngine):
             self.state["revote_candidates"] = leaders
             self.state["votes"] = {}
             self.state["vote_round"] = self.state.get("vote_round", 1) + 1
+            self._arm_voting_timer()
             return
 
         eliminated = leaders[0]
@@ -359,6 +395,7 @@ class UndercoverEngine(BaseGameEngine):
             self.state["phase"] = self.phase.value
             self.state["winner"] = winner
             self.state["current_player_id"] = None
+            self.clear_timer()
             return
 
         # Next round
@@ -385,4 +422,88 @@ class UndercoverEngine(BaseGameEngine):
         if len(undercovers) >= len(civilians):
             return "undercover"
         return None
+
+    # ------------------------------------------------------------------
+    # Timeout helpers
+    # ------------------------------------------------------------------
+    def _arm_speaking_timer(self, *, auto: bool = False) -> None:
+        if self.phase != EnginePhase.SPEAKING:
+            return
+        current = self.state.get("current_player_id")
+        if current is None:
+            self.clear_timer()
+            return
+        self.enter_phase(
+            EnginePhase.SPEAKING,
+            duration=self._phase_duration("speaking", 60),
+            default_action={"type": "auto_speech", "player_id": current},
+            description="超时将自动跳过当前玩家的发言",
+            metadata={"auto": auto, "current": current},
+        )
+
+    def _arm_voting_timer(self) -> None:
+        if self.phase != EnginePhase.VOTING:
+            return
+        pending = [pid for pid in self._alive_player_ids() if str(pid) not in self.state.get("votes", {})]
+        if not pending:
+            self.clear_timer()
+            return
+        self.enter_phase(
+            EnginePhase.VOTING,
+            duration=self._phase_duration("voting", 45),
+            default_action={"type": "auto_vote"},
+            description="超时后未投票玩家将由系统自动投票",
+            metadata={"pending": pending},
+        )
+
+    def _transition_to_speaking(self, *, auto: bool) -> None:
+        self.phase = EnginePhase.SPEAKING
+        self.state["phase"] = self.phase.value
+        self._queue_reset()
+        self._arm_speaking_timer(auto=auto)
+
+    def _record_timeout(self, *, phase: EnginePhase, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self.state.setdefault("history", []).append(
+            {
+                "type": "timeout",
+                "phase": phase.value,
+                "round": self.state.get("round", 1),
+                "timestamp": timezone.now().isoformat(),
+                "metadata": metadata or {},
+            }
+        )
+
+    def _handle_timeout(self, payload: Dict[str, Any]) -> None:
+        metadata = payload.get("timer") or self.state.get("timer") or {}
+        self._record_timeout(phase=self.phase, metadata=metadata)
+        if self.phase == EnginePhase.PREPARING:
+            self._transition_to_speaking(auto=True)
+            return
+        if self.phase == EnginePhase.SPEAKING:
+            current = self.state.get("current_player_id")
+            if current is None:
+                self._arm_voting_timer()
+                return
+            defaults = self.state.setdefault("default_actions", {})
+            defaults[str(current)] = defaults.get(str(current), 0) + 1
+            default_content = payload.get("default_content") or "（系统）玩家超时未发言"
+            self._process_speech(current, default_content, is_ai=True)
+            return
+        if self.phase == EnginePhase.VOTING:
+            pending = [
+                pid
+                for pid in self._alive_player_ids()
+                if str(pid) not in self.state.get("votes", {})
+            ]
+            for voter in pending:
+                defaults = self.state.setdefault("default_actions", {})
+                defaults[str(voter)] = defaults.get(str(voter), 0) + 1
+                target = self._pick_default_vote(voter)
+                self._process_vote(voter, target, is_ai=True)
+
+    def _pick_default_vote(self, voter: int) -> int:
+        candidates = [pid for pid in self._eligible_vote_targets() if pid != voter]
+        if not candidates:
+            return voter
+        return random.choice(candidates)
 

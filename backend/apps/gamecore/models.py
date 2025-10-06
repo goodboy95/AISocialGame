@@ -19,6 +19,8 @@ class GameSession(models.Model):
     current_phase = models.CharField(max_length=32, default="preparing")
     current_player_id = models.PositiveIntegerField(null=True, blank=True)
     round_number = models.PositiveIntegerField(default=1)
+    deadline_at = models.DateTimeField(null=True, blank=True)
+    timer_context = models.JSONField(default=dict, blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     ended_at = models.DateTimeField(null=True, blank=True)

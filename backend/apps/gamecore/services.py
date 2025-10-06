@@ -10,10 +10,12 @@ from channels.layers import get_channel_layer
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
+from apps.analytics import services as analytics_services
 from apps.rooms.models import Room, RoomPlayer
 
 from .engine import BaseGameEngine, EnginePhase, GameEngineError, GameEvent
 from .models import GameSession
+from .tasks import schedule_session_timer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +57,8 @@ def serialize_session_for_user(session: GameSession, *, user=None) -> Dict[str, 
         "status": session.status,
         "startedAt": session.started_at.isoformat(),
         "updatedAt": session.updated_at.isoformat(),
+        "deadlineAt": session.deadline_at.isoformat() if session.deadline_at else None,
+        "timer": session.timer_context or {},
         "state": engine.get_public_state(for_user=user),
     }
 
@@ -90,13 +94,20 @@ def start_room_game(room: Room, *, engine_slug: str = "undercover") -> GameSessi
     session.current_phase = fields["current_phase"]
     session.current_player_id = fields["current_player_id"]
     session.round_number = fields["round_number"]
+    session.deadline_at = fields.get("deadline_at")
+    session.timer_context = fields.get("timer_context") or {}
     session.save(update_fields=[
         "state",
         "current_phase",
         "current_player_id",
         "round_number",
+        "deadline_at",
+        "timer_context",
         "updated_at",
     ])
+    analytics_services.ensure_record_for_session(session)
+    analytics_services.update_record_from_session(session)
+    schedule_session_timer(session)
     LOGGER.info("Room %s started game session %s", room.code, session.id)
     public_session = serialize_session_for_user(session)
     from apps.rooms.serializers import RoomDetailSerializer  # local import
@@ -135,6 +146,8 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
     session.current_phase = fields["current_phase"]
     session.current_player_id = fields["current_player_id"]
     session.round_number = fields["round_number"]
+    session.deadline_at = fields.get("deadline_at")
+    session.timer_context = fields.get("timer_context") or {}
     if engine.phase == EnginePhase.ENDED or fields["state"].get("winner"):
         session.status = GameSession.SessionStatus.COMPLETED
         session.ended_at = timezone.now()
@@ -143,10 +156,28 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
         "current_phase",
         "current_player_id",
         "round_number",
+        "deadline_at",
+        "timer_context",
         "status",
         "ended_at",
         "updated_at",
     ])
+
+    analytics_services.log_round_event(
+        session=session,
+        event_type=event_type,
+        payload=payload,
+        actor_id=actor.id if actor else None,
+    )
+    defaults_snapshot = fields["state"].get("default_actions", {}) if isinstance(fields.get("state"), dict) else {}
+    formatted_defaults = {
+        key: {"defaults": value}
+        for key, value in defaults_snapshot.items()
+    }
+    if session.status == GameSession.SessionStatus.COMPLETED:
+        analytics_services.finalize_record(session, defaults=formatted_defaults)
+    else:
+        analytics_services.update_record_from_session(session)
 
     public_session = serialize_session_for_user(session)
     from apps.rooms.serializers import RoomDetailSerializer  # local import to avoid circular
@@ -162,6 +193,7 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
             "room": room_snapshot,
         },
     )
+    schedule_session_timer(session)
     if changed:
         LOGGER.debug("Engine auto actions executed after %s", event_type)
     return public_session
