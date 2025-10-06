@@ -1,10 +1,12 @@
 import { defineStore } from "pinia";
 import type {
   ChatMessage,
+  DirectMessage,
   GameSessionSnapshot,
   GameStateView,
   RoomDetail,
   RoomListItem,
+  SessionTimer,
   UndercoverAssignmentView,
   UndercoverStateView,
   WerewolfAssignmentView,
@@ -30,6 +32,7 @@ interface RoomState {
   loading: boolean;
   currentRoom: RoomDetail | null;
   messages: ChatMessage[];
+  directMessages: DirectMessage[];
   socket: GameSocket | null;
   socketConnected: boolean;
 }
@@ -102,7 +105,23 @@ function normalizeGameSession(data: any): GameSessionSnapshot<GameStateView> {
     status: data.status,
     startedAt: data.startedAt,
     updatedAt: data.updatedAt,
+    deadlineAt: data.deadlineAt ?? null,
+    timer: normalizeSessionTimer(data.timer),
     state
+  };
+}
+
+function normalizeSessionTimer(timer: any): SessionTimer | null {
+  if (!timer || typeof timer !== "object") {
+    return null;
+  }
+  return {
+    phase: String(timer.phase ?? ""),
+    duration: Number(timer.duration ?? 0),
+    expiresAt: timer.expiresAt ?? "",
+    defaultAction: timer.defaultAction ?? undefined,
+    description: timer.description ?? undefined,
+    metadata: timer.metadata ?? undefined
   };
 }
 
@@ -209,6 +228,7 @@ function systemMessage(message: string, event?: string, context?: Record<string,
     timestamp: new Date().toISOString(),
     sender: null,
     type: "system",
+    channel: "public",
     event,
     context
   };
@@ -221,6 +241,7 @@ export const useRoomsStore = defineStore("rooms", {
     loading: false,
     currentRoom: null,
     messages: [],
+    directMessages: [],
     socket: null,
     socketConnected: false
   }),
@@ -239,6 +260,7 @@ export const useRoomsStore = defineStore("rooms", {
       const detail = await createRoomApi(payload);
       this.currentRoom = normalizeRoomDetail(detail);
       this.messages = [];
+      this.directMessages = [];
       return this.currentRoom;
     },
     async loadRoomDetail(roomId: number) {
@@ -274,7 +296,10 @@ export const useRoomsStore = defineStore("rooms", {
       return this.currentRoom;
     },
     appendChatMessage(message: ChatMessage) {
-      this.messages.push(message);
+      this.messages.push({ ...message, channel: message.channel ?? "public" });
+    },
+    appendDirectMessage(message: DirectMessage) {
+      this.directMessages.push(message);
     },
     connectSocket(roomId: number) {
       const auth = useAuthStore();
@@ -333,7 +358,25 @@ export const useRoomsStore = defineStore("rooms", {
               username: data.payload.sender.username,
               displayName: data.payload.sender.display_name
             },
-            type: "chat"
+            type: "chat",
+            channel: "public"
+          });
+        } else if (data.type === "chat.direct") {
+          const payload = data.payload ?? {};
+          this.appendDirectMessage({
+            id: payload.id ?? crypto.randomUUID(),
+            roomId: this.currentRoom?.id ?? 0,
+            sessionId: payload.sessionId ?? null,
+            channel: payload.channel ?? "private",
+            content: payload.content ?? "",
+            timestamp: payload.timestamp ?? new Date().toISOString(),
+            sender: {
+              id: payload.sender?.id ?? 0,
+              displayName: payload.sender?.displayName ?? payload.sender?.display_name ?? ""
+            },
+            targetPlayerId: payload.targetPlayerId ?? undefined,
+            faction: payload.faction ?? undefined,
+            recipients: payload.recipients ?? undefined
           });
         } else if (data.type === "game.event") {
           if (data.payload?.room) {
@@ -364,6 +407,28 @@ export const useRoomsStore = defineStore("rooms", {
         raw.send(JSON.stringify({ type: "chat.message", payload: { content } }));
       }
     },
+    sendPrivateMessage(targetPlayerId: number, content: string) {
+      const raw = this.socket?.getRawInstance();
+      if (raw && raw.readyState === WebSocket.OPEN) {
+        raw.send(
+          JSON.stringify({
+            type: "chat.private",
+            payload: { content, targetPlayerId }
+          })
+        );
+      }
+    },
+    sendFactionMessage(content: string, faction?: string) {
+      const raw = this.socket?.getRawInstance();
+      if (raw && raw.readyState === WebSocket.OPEN) {
+        raw.send(
+          JSON.stringify({
+            type: "chat.faction",
+            payload: { content, faction }
+          })
+        );
+      }
+    },
     sendGameEvent(event: string, payload: Record<string, unknown> = {}) {
       const raw = this.socket?.getRawInstance();
       if (raw && raw.readyState === WebSocket.OPEN) {
@@ -382,6 +447,7 @@ export const useRoomsStore = defineStore("rooms", {
     },
     resetMessages() {
       this.messages = [];
+      this.directMessages = [];
     }
   }
 });

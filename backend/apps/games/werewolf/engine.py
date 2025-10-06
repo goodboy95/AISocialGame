@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.ai import WerewolfAIStrategy
+from apps.ai.llm import get_llm_client
 from apps.common import ContentPolicyViolation, enforce_content_policy
 from apps.gamecore.engine import BaseGameEngine, EnginePhase, GameEngineError, GameEvent
 from apps.rooms.models import RoomPlayer
@@ -23,6 +24,9 @@ class WerewolfEngine(BaseGameEngine):
     def __init__(self, session):
         super().__init__(session)
         self._strategy_cache: Dict[str, WerewolfAIStrategy] = {}
+        cfg = self._config()
+        self._llm_enabled = bool(cfg.get("use_llm")) if isinstance(cfg, dict) else False
+        self._llm_client = None
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -35,6 +39,18 @@ class WerewolfEngine(BaseGameEngine):
     def _witch_config(self) -> Dict[str, Any]:
         cfg = self._config()
         return cfg.get("witch", {}) if isinstance(cfg, dict) else {}
+
+    def _timer_config(self) -> Dict[str, Any]:
+        cfg = self._config()
+        timers = cfg.get("timers", {}) if isinstance(cfg, dict) else {}
+        return timers if isinstance(timers, dict) else {}
+
+    def _stage_duration(self, key: str, default: int) -> int:
+        value = self._timer_config().get(key)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     def _role_counts(self, player_count: int) -> Dict[str, int]:
         cfg = self._config()
@@ -59,9 +75,15 @@ class WerewolfEngine(BaseGameEngine):
 
     def _strategy_for_style(self, style: Optional[str]) -> WerewolfAIStrategy:
         resolved = style or self._config().get("ai_style", "balanced")
-        if resolved not in self._strategy_cache:
-            self._strategy_cache[resolved] = WerewolfAIStrategy(style=resolved)
-        return self._strategy_cache[resolved]
+        client = None
+        if self._llm_enabled:
+            if self._llm_client is None:
+                self._llm_client = get_llm_client()
+            client = self._llm_client
+        cache_key = f"{resolved}:{'llm' if client else 'fallback'}"
+        if cache_key not in self._strategy_cache:
+            self._strategy_cache[cache_key] = WerewolfAIStrategy(style=resolved, llm_client=client)
+        return self._strategy_cache[cache_key]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -145,6 +167,7 @@ class WerewolfEngine(BaseGameEngine):
             "winner": None,
         }
         self.state["current_player_id"] = None
+        self._arm_stage_timer("night.wolves")
 
     # ------------------------------------------------------------------
     # Event handling
@@ -179,6 +202,10 @@ class WerewolfEngine(BaseGameEngine):
         if event.type == "force_result":
             self.phase = EnginePhase.ENDED
             self.state["phase"] = self.phase.value
+            self.clear_timer()
+            return
+        if event.type == "timeout":
+            self._handle_timeout(event.payload or {})
             return
         raise GameEngineError(f"未知的事件类型: {event.type}")
 
@@ -417,6 +444,7 @@ class WerewolfEngine(BaseGameEngine):
 
     def _set_stage(self, stage: str) -> None:
         self.state["stage"] = stage
+        self._arm_stage_timer(stage)
 
     # Night actions -----------------------------------------------------
     def _handle_wolf_target(self, actor_id: Optional[int], target_id: Optional[int], *, is_ai: bool = False) -> None:
@@ -566,6 +594,8 @@ class WerewolfEngine(BaseGameEngine):
         self.state["alive_players"] = alive
         self.state["queue"] = list(alive)
         self.state["current_player_id"] = alive[0] if alive else None
+        if self.state.get("stage") == "day.discussion":
+            self._arm_discussion_timer()
 
     def _advance_queue(self) -> None:
         queue = self.state.get("queue", [])
@@ -573,6 +603,8 @@ class WerewolfEngine(BaseGameEngine):
             queue.pop(0)
         self.state["queue"] = queue
         self.state["current_player_id"] = queue[0] if queue else None
+        if self.state.get("stage") == "day.discussion":
+            self._arm_discussion_timer()
 
     def _process_speech(self, actor_id: Optional[int], content: str, *, is_ai: bool = False) -> None:
         if actor_id is None:
@@ -602,6 +634,7 @@ class WerewolfEngine(BaseGameEngine):
             self.state["votes"] = {}
             self.state["vote_round"] = 1
             self.state["revote_candidates"] = []
+            self._arm_vote_timer()
 
     def _process_vote(self, actor_id: Optional[int], target_id: Optional[int], *, is_ai: bool = False) -> None:
         if actor_id is None:
@@ -617,6 +650,7 @@ class WerewolfEngine(BaseGameEngine):
         if str(actor_id) in votes:
             raise GameEngineError("已完成投票，无法重复操作")
         votes[str(actor_id)] = int(target_id)
+        self._arm_vote_timer()
         if len(votes) >= len(self._alive_player_ids()):
             self._finalize_votes()
 
@@ -642,6 +676,7 @@ class WerewolfEngine(BaseGameEngine):
             self.state["revote_candidates"] = leaders
             self.state["votes"] = {}
             self.state["vote_round"] = self.state.get("vote_round", 1) + 1
+            self._arm_vote_timer()
             return
         eliminated = leaders[0]
         self._eliminate_player(eliminated, reveal=True)
@@ -658,6 +693,7 @@ class WerewolfEngine(BaseGameEngine):
             self._reveal_all()
             self._set_stage("end")
             self.state["current_player_id"] = None
+            self.clear_timer()
             return
         self.state["round"] = self.state.get("round", 1) + 1
         self.phase = EnginePhase.NIGHT
@@ -699,3 +735,149 @@ class WerewolfEngine(BaseGameEngine):
         if len(wolves) >= len(villagers):
             return "werewolf"
         return None
+
+    # ------------------------------------------------------------------
+    # Timer helpers
+    # ------------------------------------------------------------------
+    def _arm_stage_timer(self, stage: str) -> None:
+        if stage == "end":
+            self.clear_timer()
+            return
+        if stage.startswith("night"):
+            durations = {
+                "night.wolves": self._stage_duration("night_wolves", 45),
+                "night.seer": self._stage_duration("night_seer", 30),
+                "night.witch": self._stage_duration("night_witch", 30),
+            }
+            duration = durations.get(stage, 0)
+            if duration <= 0:
+                self.clear_timer()
+                return
+            default_action = {
+                "night.wolves": {"type": "auto_wolf_attack"},
+                "night.seer": {"type": "auto_seer"},
+                "night.witch": {"type": "auto_witch"},
+            }.get(stage, {})
+            descriptions = {
+                "night.wolves": "超时将由系统为狼人选择击杀目标",
+                "night.seer": "超时后预言家将自动查看一名玩家",
+                "night.witch": "超时后女巫将默认跳过",
+            }
+            self.enter_phase(
+                self.phase,
+                duration=duration,
+                default_action=default_action,
+                description=descriptions.get(stage),
+                metadata={"stage": stage},
+            )
+            return
+        if stage == "day.discussion":
+            self._arm_discussion_timer()
+            return
+        if stage == "day.vote":
+            self._arm_vote_timer()
+            return
+        self.clear_timer()
+
+    def _arm_discussion_timer(self) -> None:
+        if self.state.get("stage") != "day.discussion":
+            return
+        current = self.state.get("current_player_id")
+        if current is None:
+            self.clear_timer()
+            return
+        self.enter_phase(
+            self.phase,
+            duration=self._stage_duration("day_discussion", 90),
+            default_action={"type": "auto_speech", "player_id": current},
+            description="超时将自动跳过当前玩家的发言",
+            metadata={"stage": "day.discussion", "current": current},
+        )
+
+    def _pending_vote_players(self) -> List[int]:
+        votes = self.state.get("votes", {})
+        return [pid for pid in self._alive_player_ids() if str(pid) not in votes]
+
+    def _arm_vote_timer(self) -> None:
+        if self.state.get("stage") != "day.vote":
+            return
+        pending = self._pending_vote_players()
+        if not pending:
+            self.clear_timer()
+            return
+        self.enter_phase(
+            self.phase,
+            duration=self._stage_duration("day_vote", 45),
+            default_action={"type": "auto_vote"},
+            description="超时后未投票玩家将由系统自动投票",
+            metadata={"stage": "day.vote", "pending": pending},
+        )
+
+    def _record_timeout(self, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self.state.setdefault("history", []).append(
+            {
+                "type": "timeout",
+                "stage": self.state.get("stage"),
+                "phase": self.phase.value,
+                "round": self.state.get("round", 1),
+                "timestamp": timezone.now().isoformat(),
+                "metadata": metadata or {},
+            }
+        )
+
+    def _handle_timeout(self, payload: Dict[str, Any]) -> None:
+        metadata = payload.get("timer") or self.state.get("timer") or {}
+        self._record_timeout(metadata)
+        stage = self.state.get("stage")
+        defaults = self.state.setdefault("default_actions", {})
+        if stage == "night.wolves":
+            wolves = [wid for wid in self._wolves() if self._is_alive(wid)]
+            alive = [pid for pid in self._alive_player_ids() if pid not in wolves]
+            target_pool = alive or self._alive_player_ids()
+            if not target_pool:
+                self._advance_after_wolves()
+                return
+            for wolf in wolves:
+                defaults[str(wolf)] = defaults.get(str(wolf), 0) + 1
+            target = random.choice(target_pool)
+            actor = wolves[0] if wolves else None
+            self._handle_wolf_target(actor, target, is_ai=True)
+            return
+        if stage == "night.seer":
+            seer = self._seer()
+            if not seer or not self._is_alive(seer):
+                self._advance_after_seer()
+                return
+            defaults[str(seer)] = defaults.get(str(seer), 0) + 1
+            candidates = [pid for pid in self._alive_player_ids() if pid != seer]
+            target = random.choice(candidates) if candidates else seer
+            self._handle_seer_target(seer, target, is_ai=True)
+            return
+        if stage == "night.witch":
+            witch = self._witch()
+            if not witch or not self._is_alive(witch):
+                self._resolve_night()
+                return
+            defaults[str(witch)] = defaults.get(str(witch), 0) + 1
+            self._handle_witch_action(witch, use_antidote=False, use_poison=False, poison_target=None, is_ai=True)
+            return
+        if stage == "day.discussion":
+            current = self.state.get("current_player_id")
+            if current is None:
+                self._arm_vote_timer()
+                return
+            defaults[str(current)] = defaults.get(str(current), 0) + 1
+            self._process_speech(current, "（系统）玩家超时未发言", is_ai=True)
+            return
+        if stage == "day.vote":
+            for voter in self._pending_vote_players():
+                defaults[str(voter)] = defaults.get(str(voter), 0) + 1
+                target = self._default_vote_target(voter)
+                self._process_vote(voter, target, is_ai=True)
+
+    def _default_vote_target(self, voter: int) -> int:
+        alive = self._alive_player_ids()
+        candidates = [pid for pid in alive if pid != voter]
+        if not candidates:
+            return voter
+        return random.choice(candidates)

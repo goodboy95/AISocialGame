@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "channels",
+    "apps.analytics",
     "apps.users",
     "apps.rooms",
     "apps.gamecore",
@@ -178,4 +179,22 @@ CONTENT_SAFETY = {
         "CONTENT_BANNED_WORDS",
         default=["敏感词", "涉政", "违规"],
     ),
+}
+
+
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=env("REDIS_URL"))
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
+CELERY_TASK_DEFAULT_QUEUE = env("CELERY_DEFAULT_QUEUE", default="default")
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=120)
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=90)
+CELERY_TASK_TRACK_STARTED = True
+CELERY_ENABLE_UTC = True
+
+
+LLM_CONFIG = {
+    "provider": env("LLM_PROVIDER", default="openai"),
+    "api_base": env("LLM_API_BASE", default=""),
+    "api_key": env("LLM_API_KEY", default=""),
+    "model": env("LLM_MODEL", default="gpt-4o-mini"),
+    "timeout": env.float("LLM_TIMEOUT", default=30.0),
 }

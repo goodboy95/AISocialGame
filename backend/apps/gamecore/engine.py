@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -47,6 +48,13 @@ class BaseGameEngine:
         self.room = session.room
         self.state: Dict[str, Any] = copy.deepcopy(session.state or {})
         self.phase = EnginePhase(self.state.get("phase", session.current_phase or EnginePhase.PREPARING.value))
+        self._deadline_at: Optional[datetime] = session.deadline_at
+        self._timer_context: Dict[str, Any] = copy.deepcopy(session.timer_context or {})
+        if self._timer_context:
+            self.state.setdefault("timer", copy.deepcopy(self._timer_context))
+        else:
+            self.state.pop("timer", None)
+        self._timer_dirty = False
 
     # ------------------------------------------------------------------
     # Lifecycle hooks
@@ -65,6 +73,51 @@ class BaseGameEngine:
         """Allow engines to enqueue automatic behaviors (AI turns, timers)."""
 
         return False
+
+    # ------------------------------------------------------------------
+    # Timer helpers
+    # ------------------------------------------------------------------
+    def enter_phase(
+        self,
+        phase: EnginePhase,
+        *,
+        duration: Optional[int] = None,
+        default_action: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Switch to a new phase and optionally arm a countdown timer."""
+
+        self.phase = phase
+        self.state["phase"] = self.phase.value
+        if duration is not None and duration > 0:
+            deadline = timezone.now() + timedelta(seconds=int(duration))
+            timer_payload: Dict[str, Any] = {
+                "phase": self.phase.value,
+                "duration": int(duration),
+                "expiresAt": deadline.isoformat(),
+                "defaultAction": default_action or {},
+            }
+            if description:
+                timer_payload["description"] = description
+            if metadata:
+                timer_payload["metadata"] = metadata
+            self.state["timer"] = timer_payload
+            self._deadline_at = deadline
+            self._timer_context = copy.deepcopy(timer_payload)
+        else:
+            self.state.pop("timer", None)
+            self._deadline_at = None
+            self._timer_context = {}
+        self._timer_dirty = True
+
+    def clear_timer(self) -> None:
+        """Remove any active timer from the session."""
+
+        self.state.pop("timer", None)
+        self._deadline_at = None
+        self._timer_context = {}
+        self._timer_dirty = True
 
     # ------------------------------------------------------------------
     # State helpers
@@ -90,6 +143,8 @@ class BaseGameEngine:
             "current_phase": state.get("phase", EnginePhase.PREPARING.value),
             "current_player_id": state.get("current_player_id"),
             "round_number": state.get("round", self.session.round_number or 1),
+            "deadline_at": self._deadline_at,
+            "timer_context": self._timer_context,
             "updated_at": timezone.now(),
         }
 

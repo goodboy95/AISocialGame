@@ -20,5 +20,6 @@ urlpatterns = [
     path("api/metrics/", lambda _request: HttpResponse(generate_latest(), content_type=CONTENT_TYPE_LATEST)),
     path("api/auth/", include("apps.users.urls")),
     path("api/meta/", include("apps.ai.urls")),
+    path("api/analytics/", include("apps.analytics.urls")),
     path("api/", include("apps.rooms.urls")),
 ]
