@@ -1,5 +1,6 @@
 <template>
   <div class="layout" :class="`locale-${language}`">
+    <GlobalNotifications />
     <el-container class="app-container">
       <el-header height="64px">
         <div class="brand">
@@ -55,6 +56,7 @@ import { ArrowDown } from "@element-plus/icons-vue";
 
 import { setLocale, type SupportedLocale } from "./i18n";
 import { useAuthStore } from "./store/user";
+import GlobalNotifications from "./components/GlobalNotifications.vue";
 
 const authStore = useAuthStore();
 const { profile } = storeToRefs(authStore);

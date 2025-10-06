@@ -5,12 +5,13 @@ from __future__ import annotations
 import logging
 import secrets
 import string
+import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable, TypeVar
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
@@ -22,6 +23,8 @@ from apps.gamecore.services import serialize_session_for_user, start_room_game
 from .models import Room, RoomPlayer
 
 LOGGER = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class RoomServiceError(Exception):
@@ -71,6 +74,25 @@ def _broadcast(event_type: str, payload: dict) -> None:
             "payload": payload,
         },
     )
+
+
+def _execute_with_retry(func: Callable[[], T], *, retries: int = 3, delay: float = 0.1) -> T:
+    """Run ``func`` and retry when SQLite reports a database lock."""
+
+    for attempt in range(retries):
+        try:
+            return func()
+        except OperationalError as exc:  # pragma: no cover - depends on sqlite timing
+            message = str(exc).lower()
+            if "locked" not in message or attempt == retries - 1:
+                raise
+            sleep_for = delay * (attempt + 1)
+            LOGGER.warning(
+                "Database locked while executing room operation, retrying in %.2fs", sleep_for
+            )
+            time.sleep(sleep_for)
+
+    raise RuntimeError("Exceeded retry attempts")
 
 
 def _serialize_room(room: Room) -> dict:
@@ -318,31 +340,43 @@ def join_room(*, room: Room, user) -> RoomOperationResult:
 
 
 def leave_room(*, room: Room, user) -> RoomOperationResult:
-    with transaction.atomic():
-        locked_room = Room.objects.select_for_update().get(pk=room.pk)
-        try:
-            membership = locked_room.players.get(user=user)
-        except RoomPlayer.DoesNotExist as exc:  # pragma: no cover - defensive
-            raise RoomServiceError("用户不在房间内") from exc
+    def _leave() -> tuple[Room, RoomPlayer, bool]:
+        with transaction.atomic():
+            locked_room = Room.objects.select_for_update().get(pk=room.pk)
+            try:
+                membership = (
+                    locked_room.players.select_for_update()
+                    .select_related("user")
+                    .get(user=user)
+                )
+            except RoomPlayer.DoesNotExist as exc:  # pragma: no cover - defensive
+                raise RoomServiceError("用户不在房间内") from exc
 
-        membership.is_active = False
-        membership.is_host = False
-        membership.save(update_fields=["is_active", "is_host"])
+            was_host = membership.is_host
+            membership.is_active = False
+            membership.is_host = False
+            membership.save(update_fields=["is_active", "is_host"])
 
-        remaining_members = list(
-            locked_room.players.filter(is_active=True).order_by("seat_number", "joined_at")
-        )
-        if not remaining_members:
-            locked_room.status = Room.RoomStatus.CLOSED
-            locked_room.phase = Room.RoomPhase.LOBBY
-            locked_room.save(update_fields=["status", "phase"])
-        elif membership.is_host:
-            new_host = remaining_members[0]
-            new_host.is_host = True
-            new_host.save(update_fields=["is_host"])
-            locked_room.owner = new_host.user or locked_room.owner
-            locked_room.save(update_fields=["owner"])
-            LOGGER.info("Room %s host transferred to %s", locked_room.code, new_host)
+            remaining_members = list(
+                locked_room.players.filter(is_active=True).order_by("seat_number", "joined_at")
+            )
+            if not remaining_members:
+                locked_room.status = Room.RoomStatus.CLOSED
+                locked_room.phase = Room.RoomPhase.LOBBY
+                locked_room.save(update_fields=["status", "phase"])
+            elif was_host:
+                new_host = remaining_members[0]
+                if not new_host.is_host:
+                    new_host.is_host = True
+                    new_host.save(update_fields=["is_host"])
+                if new_host.user:
+                    locked_room.owner = new_host.user
+                    locked_room.save(update_fields=["owner"])
+                LOGGER.info("Room %s host transferred to %s", locked_room.code, new_host)
+
+            return locked_room, membership, was_host
+
+    locked_room, membership, _ = _execute_with_retry(_leave)
 
     message = f"{membership.resolved_display_name} 离开了房间"
     payload = {
