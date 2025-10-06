@@ -370,6 +370,7 @@ import type {
 import { useRoomsStore } from "../store/rooms";
 import { useAuthStore } from "../store/user";
 import { useMetaStore } from "../store/meta";
+import { notifyError } from "../services/notifications";
 
 const route = useRoute();
 const router = useRouter();
@@ -648,7 +649,7 @@ const winnerDescription = computed(() => {
 onMounted(async () => {
   const roomId = Number(route.params.id);
   if (Number.isNaN(roomId)) {
-    ElMessage.error(t("room.messages.invalidRoom"));
+    notifyError(t("room.messages.invalidRoom"));
     router.push({ name: "lobby" });
     return;
   }
@@ -667,6 +668,7 @@ onMounted(async () => {
     roomsStore.connectSocket(roomId);
   } catch (error) {
     console.error(error);
+    notifyError(t("room.messages.joinFailed"));
     router.push({ name: "lobby" });
   }
 });

@@ -79,6 +79,7 @@ import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage } from "element-plus";
+import { notifyError } from "../services/notifications";
 
 import { useRoomsStore } from "../store/rooms";
 import { useAuthStore } from "../store/user";
@@ -122,7 +123,7 @@ function openCreateDialog() {
 
 async function submitCreate() {
   if (!createForm.name.trim()) {
-    ElMessage.error("房间名称不能为空");
+    notifyError("房间名称不能为空");
     return;
   }
   creating.value = true;

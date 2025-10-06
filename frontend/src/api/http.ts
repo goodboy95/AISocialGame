@@ -1,7 +1,19 @@
 import axios from "axios";
-import { ElMessage } from "element-plus";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
+
+type NotificationHandler = (message: string) => void;
+
+let notifyError: NotificationHandler | null = null;
+
+async function loadNotifier(): Promise<NotificationHandler> {
+  if (notifyError) {
+    return notifyError;
+  }
+  const module = await import("../services/notifications");
+  notifyError = module.notifyError;
+  return notifyError!;
+}
 
 export const http = axios.create({
   baseURL,
@@ -52,17 +64,14 @@ function extractErrorMessage(error: unknown): string {
 
 http.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const message = extractErrorMessage(error);
-    ElMessage.closeAll();
-    ElMessage({
-      type: "error",
-      message,
-      duration: 3000,
-      showClose: true,
-      offset: 20,
-      grouping: true,
-    });
+    try {
+      const notifier = await loadNotifier();
+      notifier(message);
+    } catch (notifyError) {
+      console.error("Failed to notify error", notifyError);
+    }
     console.error("API error", error);
     return Promise.reject(error);
   }
