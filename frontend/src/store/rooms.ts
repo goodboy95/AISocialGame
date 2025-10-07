@@ -320,17 +320,28 @@ export const useRoomsStore = defineStore("rooms", {
         throw new Error(translate("room.messages.loginRequired"));
       }
       this.disconnectSocket();
-      const wsBase = import.meta.env.VITE_WS_BASE_URL ?? "ws://localhost:8000/ws";
+      this.socketConnected = false;
+      const wsBase = import.meta.env.VITE_WS_BASE_URL as string | undefined;
       const socket = new GameSocket({ token: auth.accessToken, url: wsBase });
-      const raw = socket.connect(`/rooms/${roomId}/`);
+      let raw: WebSocket;
+      try {
+        raw = socket.connect(`/rooms/${roomId}/`);
+      } catch (error) {
+        console.error("Failed to establish room websocket connection", error);
+        throw error;
+      }
       raw.onopen = () => {
         this.socketConnected = true;
       };
-      raw.onclose = () => {
+      raw.onclose = (event) => {
         this.socketConnected = false;
+        if (event.code !== 1000) {
+          console.warn("Room websocket closed abnormally", event);
+        }
       };
-      raw.onerror = () => {
+      raw.onerror = (event) => {
         this.socketConnected = false;
+        console.error("Room websocket error", event);
       };
       raw.onmessage = async (event) => {
         const data = JSON.parse(event.data);
