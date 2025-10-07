@@ -47,13 +47,21 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore(pinia);
-  if (to.meta.requiresAuth && !authStore.profile) {
-    next({ name: "login", query: { redirect: to.fullPath } });
-    return;
+  await authStore.initialize();
+
+  if (authStore.refreshToken) {
+    const refreshed = await authStore.refreshSession();
+    if (!refreshed && to.meta.requiresAuth) {
+      return { name: "login", query: { redirect: to.fullPath } };
+    }
   }
-  next();
+
+  if (to.meta.requiresAuth && !authStore.profile) {
+    return { name: "login", query: { redirect: to.fullPath } };
+  }
+  return true;
 });
 
 export default router;

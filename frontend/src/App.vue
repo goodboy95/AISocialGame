@@ -94,8 +94,8 @@ function handleLocaleChange(value: SupportedLocale) {
   setLocale(value);
 }
 
-function handleLogout() {
-  authStore.logout();
+async function handleLogout() {
+  await authStore.logout();
   router.push({ name: "login" });
 }
 </script>

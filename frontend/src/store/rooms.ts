@@ -333,9 +333,13 @@ export const useRoomsStore = defineStore("rooms", {
     appendDirectMessage(message: DirectMessage) {
       this.directMessages.push(message);
     },
-    connectSocket(roomId: number) {
+    async connectSocket(roomId: number) {
       const auth = useAuthStore();
       if (!auth.accessToken) {
+        throw new Error(translate("room.messages.loginRequired"));
+      }
+      const refreshed = await auth.refreshSession();
+      if (!refreshed || !auth.accessToken) {
         throw new Error(translate("room.messages.loginRequired"));
       }
       this.disconnectSocket();

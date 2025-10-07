@@ -77,7 +77,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements/dev.txt
 python manage.py migrate
-python manage.py runserver
+daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 # 运行自动化测试
 pytest
@@ -88,7 +88,8 @@ pytest
 ### 本地 Channels 调试小贴士
 
 - 需要 Redis 支撑多实例时，可使用 `docker compose up redis` 或本地安装 `redis-server` 后在 `.env` 中设置 `REDIS_URL=redis://127.0.0.1:6379/0`。
-- `python manage.py runserver` 已启用 ASGI，可直接用于 WS 调试；若需要压测或与前端联调，可改用 `daphne config.asgi:application --port 8000`。
+- **务必使用 ASGI 服务器启动（Daphne / Uvicorn）**：若使用 Django 自带的 `runserver` 或 WSGI 服务器（如 Gunicorn）将导致 WebSocket 握手返回 `404`，因为 HTTP 请求不会被路由到 `RoomConsumer`。
+- 推荐开发命令：`daphne -b 0.0.0.0 -p 8000 config.asgi:application`。如需启用自动重载，可使用 `uvicorn --reload config.asgi:application --host 0.0.0.0 --port 8000`。
 - `python manage.py shell_plus` 中可调用 `apps.rooms.services.start_room`、`apps.gamecore.services.handle_room_event` 模拟发言/投票流程。
 - `apps/games/models.WordPair` 提供词库维护能力，可用于导入或调试新的词条。
 

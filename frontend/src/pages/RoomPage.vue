@@ -998,7 +998,7 @@ onMounted(async () => {
       await roomsStore.joinRoom(roomId);
     }
     roomsStore.resetMessages();
-    roomsStore.connectSocket(roomId);
+    await roomsStore.connectSocket(roomId);
   } catch (error) {
     console.error(error);
     notifyError(t("room.messages.joinFailed"));

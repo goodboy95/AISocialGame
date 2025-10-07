@@ -55,7 +55,7 @@ source .venv/bin/activate
 pip install -r requirements/base.txt
 cp .env.example .env
 python manage.py migrate
-python manage.py runserver
+daphne -b 0.0.0.0 -p 8000 config.asgi:application
 ```
 
 ### 直接运行前端（可选）
@@ -67,6 +67,8 @@ npm run dev
 ```
 
 > 提示：若未在 `.env` 中显式设置 `VITE_WS_BASE_URL`，前端会优先基于 `VITE_API_BASE_URL` 自动推导 WebSocket 基础地址（例如 `http://localhost:8000/api` 会映射到 `ws://localhost:8000/ws`），若未配置 API 地址，则回退到当前访问域名的 `/ws`。
+>
+> **注意**：请使用 ASGI 服务器（如 Daphne/Uvicorn）启动后端，否则 WebSocket 握手会落到 Django WSGI 路由并返回 `404`。
 
 ## 功能验证指南
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Optional
 
@@ -22,6 +23,7 @@ from .models import Room, RoomPlayer
 from .serializers import RoomDetailSerializer
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class RoomConsumer(AsyncJsonWebsocketConsumer):
@@ -32,21 +34,45 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     user: User
 
     async def connect(self):
+        path = self.scope.get("path")
+        token_present = bool(self._extract_token())
+        logger.info(
+            "WebSocket connect attempt path=%s channel=%s token_present=%s",
+            path,
+            self.channel_name,
+            token_present,
+        )
         try:
             self.room_id = int(self.scope["url_route"]["kwargs"]["room_id"])
         except (KeyError, ValueError):  # pragma: no cover - routing guard
+            logger.warning(
+                "WebSocket rejected: invalid room id path=%s channel=%s",
+                path,
+                self.channel_name,
+            )
             await self.close(code=4000)
             return
         self.group_name = f"room_{self.room_id}"
 
         user = await self._authenticate()
         if not user:
+            logger.warning(
+                "WebSocket rejected: authentication failed room_id=%s channel=%s",
+                self.room_id,
+                self.channel_name,
+            )
             await self.close(code=4001)
             return
         self.user = user
 
         membership = await self._get_membership()
         if not membership:
+            logger.warning(
+                "WebSocket rejected: no active membership room_id=%s user_id=%s channel=%s",
+                self.room_id,
+                self.user.id,
+                self.channel_name,
+            )
             await self.close(code=4003)
             return
         self.player_id = membership.id
@@ -54,10 +80,25 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.channel_layer.group_add(self._player_group(self.player_id), self.channel_name)
         await self.accept()
+        logger.info(
+            "WebSocket connected room_id=%s user_id=%s player_id=%s channel=%s",
+            self.room_id,
+            self.user.id,
+            self.player_id,
+            self.channel_name,
+        )
         WS_CONNECTION_GAUGE.labels(room_id=str(self.room_id)).inc()
         await self._send_room_snapshot()
 
     async def disconnect(self, code):  # pragma: no cover - cleanup is best effort
+        logger.info(
+            "WebSocket disconnect room_id=%s user_id=%s player_id=%s code=%s channel=%s",
+            getattr(self, "room_id", None),
+            getattr(getattr(self, "user", None), "id", None),
+            getattr(self, "player_id", None),
+            code,
+            self.channel_name,
+        )
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
         if hasattr(self, "player_id"):
@@ -68,6 +109,12 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, content: dict, **kwargs):
         message_type = content.get("type")
         payload = content.get("payload", {})
+        logger.debug(
+            "WebSocket message received room_id=%s user_id=%s type=%s",
+            getattr(self, "room_id", None),
+            getattr(getattr(self, "user", None), "id", None),
+            message_type,
+        )
         if message_type == "chat.message":
             await self._handle_chat_message(payload)
         elif message_type == "chat.private":
@@ -308,4 +355,3 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         return await database_sync_to_async(
             lambda: RoomPlayer.objects.filter(room_id=self.room_id, pk=player_id, is_active=True).first()
         )()
-

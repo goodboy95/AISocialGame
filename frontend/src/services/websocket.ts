@@ -5,25 +5,34 @@ export interface WebSocketOptions {
 
 function resolveBaseUrl(custom?: string): string {
   const sanitize = (value: string) => value.replace(/\/$/, "");
-  if (custom) {
+  const directCandidates: Array<{ value?: string; source: string }> = [
+    { value: custom, source: "options.url" },
+    { value: import.meta.env.VITE_WS_BASE_URL as string | undefined, source: "VITE_WS_BASE_URL" }
+  ];
+
+  for (const candidate of directCandidates) {
+    if (!candidate.value) {
+      continue;
+    }
     try {
-      const parsed = new URL(custom);
+      const parsed = new URL(candidate.value);
       return sanitize(parsed.toString());
     } catch (error) {
-      console.warn("Invalid WebSocket base URL provided, falling back to auto detection.", error);
+      console.warn(`Invalid WebSocket base URL provided via ${candidate.source}, falling back to auto detection.`, error);
     }
   }
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (apiBase) {
-    try {
-      const parsed = new URL(apiBase);
-      parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-      const pathname = parsed.pathname.replace(/\/$/, "");
-      parsed.pathname = pathname.endsWith("/api") ? `${pathname.replace(/\/api$/, "")}/ws` : `${pathname}/ws`;
-      return sanitize(parsed.toString());
-    } catch (error) {
-      console.warn("Failed to derive WebSocket base URL from API base, using default.", error);
+  const apiBaseEnv = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  const apiBase = apiBaseEnv && apiBaseEnv.trim() ? apiBaseEnv : "http://localhost:8000/api";
+  try {
+    const parsed = new URL(apiBase);
+    parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+    const pathname = parsed.pathname.replace(/\/$/, "");
+    parsed.pathname = pathname.endsWith("/api") ? `${pathname.replace(/\/api$/, "")}/ws` : `${pathname}/ws`;
+    return sanitize(parsed.toString());
+  } catch (error) {
+    if (apiBaseEnv) {
+      console.warn("Failed to derive WebSocket base URL from API base, using default detection.", error);
     }
   }
 

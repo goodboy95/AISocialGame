@@ -4,7 +4,8 @@ import {
   fetchProfile,
   loginWithPassword,
   registerAccount,
-  refreshToken as refreshTokenApi
+  refreshToken as refreshTokenApi,
+  logout as logoutApi
 } from "../api/auth";
 import http from "../api/http";
 import type { AxiosError } from "axios";
@@ -13,6 +14,8 @@ interface AuthState {
   profile: UserProfile | null;
   accessToken: string | null;
   refreshToken: string | null;
+  initialized: boolean;
+  lastRefreshedAt: number | null;
 }
 
 const STORAGE_KEY = "aisocialgame.auth.v1";
@@ -68,6 +71,8 @@ function isUnauthorizedError(error: unknown): boolean {
 }
 
 const persistedTokens = loadPersistedAuth();
+let initializePromise: Promise<void> | null = null;
+const REFRESH_COOLDOWN_MS = 1000;
 
 if (persistedTokens.accessToken) {
   http.defaults.headers.common.Authorization = `Bearer ${persistedTokens.accessToken}`;
@@ -77,39 +82,66 @@ export const useAuthStore = defineStore("auth", {
   state: (): AuthState => ({
     profile: null,
     accessToken: persistedTokens.accessToken,
-    refreshToken: persistedTokens.refreshToken
+    refreshToken: persistedTokens.refreshToken,
+    initialized: false,
+    lastRefreshedAt: null
   }),
   actions: {
-    setTokens(accessToken: string | null, refreshToken: string | null) {
-      this.accessToken = accessToken;
-      this.refreshToken = refreshToken;
-      if (accessToken) {
-        http.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+    setTokens(accessToken: string | null | undefined, refreshToken: string | null | undefined) {
+      const normalizedAccess = accessToken ?? null;
+      const normalizedRefresh = refreshToken ?? null;
+      this.accessToken = normalizedAccess;
+      this.refreshToken = normalizedRefresh;
+      if (normalizedAccess) {
+        http.defaults.headers.common.Authorization = `Bearer ${normalizedAccess}`;
+        this.lastRefreshedAt = Date.now();
       } else {
         delete http.defaults.headers.common.Authorization;
+        this.lastRefreshedAt = null;
       }
-      persistTokens({ accessToken, refreshToken });
+      persistTokens({ accessToken: normalizedAccess, refreshToken: normalizedRefresh });
     },
     async initialize() {
-      if (!this.accessToken) {
-        this.profile = null;
+      if (this.initialized) {
         return;
       }
-      http.defaults.headers.common.Authorization = `Bearer ${this.accessToken}`;
-      try {
-        this.profile = await fetchProfile(this.accessToken);
+      if (initializePromise) {
+        await initializePromise;
         return;
-      } catch (error) {
-        if (!isUnauthorizedError(error)) {
-          console.error("Failed to restore profile", error);
+      }
+      initializePromise = (async () => {
+        if (!this.refreshToken) {
+          this.profile = null;
+          this.setTokens(null, null);
           return;
         }
-        const refreshed = await this.refreshSession();
+        const refreshed = await this.refreshSession({ force: true });
         if (!refreshed || !this.accessToken) {
-          this.logout();
+          this.profile = null;
+          this.setTokens(null, null);
           return;
         }
-        this.profile = await fetchProfile(this.accessToken);
+        try {
+          this.profile = await fetchProfile(this.accessToken);
+        } catch (error) {
+          if (!isUnauthorizedError(error)) {
+            console.error("Failed to restore profile", error);
+            return;
+          }
+          const retried = await this.refreshSession({ force: true });
+          if (!retried || !this.accessToken) {
+            this.profile = null;
+            this.setTokens(null, null);
+            return;
+          }
+          this.profile = await fetchProfile(this.accessToken);
+        }
+      })();
+      try {
+        await initializePromise;
+      } finally {
+        this.initialized = true;
+        initializePromise = null;
       }
     },
     async login(username: string, password: string) {
@@ -139,22 +171,43 @@ export const useAuthStore = defineStore("auth", {
         this.profile = await fetchProfile(this.accessToken);
       }
     },
-    async refreshSession(): Promise<boolean> {
+    async refreshSession(options: { force?: boolean } = {}): Promise<boolean> {
       if (!this.refreshToken) {
         return false;
       }
       try {
-        const { access, refresh } = await refreshTokenApi(this.refreshToken);
-        this.setTokens(access, refresh);
+        const now = Date.now();
+        if (
+          !options.force &&
+          this.lastRefreshedAt !== null &&
+          now - this.lastRefreshedAt < REFRESH_COOLDOWN_MS
+        ) {
+          return true;
+        }
+        const currentRefreshToken = this.refreshToken;
+        const { access, refresh } = await refreshTokenApi(currentRefreshToken);
+        const nextRefresh =
+          typeof refresh === "string" && refresh.length > 0 ? refresh : currentRefreshToken;
+        this.setTokens(access, nextRefresh);
         return true;
       } catch (error) {
+        this.profile = null;
         this.setTokens(null, null);
         return false;
       }
     },
-    logout() {
+    async logout() {
+      const refresh = this.refreshToken;
+      if (refresh) {
+        try {
+          await logoutApi(refresh);
+        } catch (error) {
+          console.warn("Failed to revoke refresh token on logout", error);
+        }
+      }
       this.profile = null;
       this.setTokens(null, null);
+      this.initialized = false;
     }
   }
 });

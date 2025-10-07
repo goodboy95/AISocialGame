@@ -9,6 +9,8 @@ from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.rooms.models import Room, RoomPlayer
 
@@ -97,3 +99,37 @@ class ProfileExportView(APIView):
             "ownedRooms": len(data["ownedRooms"]),
         }
         return Response(data)
+
+
+class LogoutView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response({"detail": "缺少刷新令牌"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            token = RefreshToken(refresh_token)
+        except TokenError:
+            return Response({"detail": "刷新令牌无效或已过期"}, status=status.HTTP_400_BAD_REQUEST)
+
+        token_user_id = str(token.get("user_id"))
+        if token_user_id != str(request.user.id):
+            LOGGER.warning(
+                "Refresh token user mismatch during logout user_id=%s token_user_id=%s",
+                request.user.id,
+                token_user_id,
+            )
+            return Response({"detail": "刷新令牌与当前用户不匹配"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            token.blacklist()
+        except AttributeError as error:  # pragma: no cover - defensive guard
+            LOGGER.error("Token blacklist app not available: %s", error)
+            return Response({"detail": "服务暂不可用，请稍后再试"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except TokenError:
+            return Response({"detail": "刷新令牌重复注销"}, status=status.HTTP_400_BAD_REQUEST)
+
+        LOGGER.info("User %s logged out and refresh token revoked", request.user.id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
