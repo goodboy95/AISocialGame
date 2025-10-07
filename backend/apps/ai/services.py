@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import random
+import re
+from dataclasses import dataclass
 from time import perf_counter
 from typing import Dict, Iterable, List, Optional
 
 from apps.common import record_ai_latency
 
 from .llm import LLMClient, LLMError, get_llm_client
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 AI_NAME_POOL = [
@@ -93,6 +100,12 @@ def generate_ai_display_name(existing: Iterable[str]) -> str:
         if name not in existing:
             return name
     return f"AI玩家{random.randint(100, 999)}"
+
+
+@dataclass
+class VoteDecision:
+    target: int
+    reason: Optional[str] = None
 
 
 class UndercoverAIStrategy:
@@ -180,6 +193,82 @@ class UndercoverAIStrategy:
         record_ai_latency(perf_counter() - start)
         return result
 
+    def _llm_vote_prompt(
+        self,
+        *,
+        voter_id: int,
+        word: str,
+        alive_players: List[int],
+        assignments: Dict[str, Dict],
+        history: List[Dict],
+    ) -> str:
+        history_lines = []
+        for entry in history[-6:]:
+            history_lines.append(
+                f"玩家{entry.get('player_id')}：{entry.get('content', '')}"
+            )
+        history_block = "\n".join(history_lines) or "暂无历史发言"
+        alive_lines = []
+        for pid in alive_players:
+            meta = assignments.get(str(pid), {})
+            name = meta.get("display_name") or f"玩家{pid}"
+            alive_lines.append(f"{pid}号 {name}")
+        alive_block = "，".join(alive_lines) or "暂无玩家"
+        voter_meta = assignments.get(str(voter_id), {})
+        role_hint = voter_meta.get("role") or "civilian"
+        role_label = "卧底" if role_hint == "undercover" else ("白板" if role_hint == "blank" else "平民")
+        word_hint = word or voter_meta.get("word") or "(空白)"
+        return (
+            "你正在参与中文派对游戏《谁是卧底》。"\
+            "请根据历史发言与仍在场的玩家，决定本轮要投票淘汰的对象。"\
+            "你的当前视角：可能是{role_label}，你拿到的词语是：{word_hint}。"\
+            "仍存活的玩家包括：{alive_block}。"\
+            "最近的发言记录：\n{history_block}\n"\
+            "请输出一个 JSON 对象，形如 {{\"decision\": 玩家编号, \"reason\": \"简短理由\"}}，"\
+            "务必只输出 JSON 内容。"
+        ).format(
+            role_label=role_label,
+            word_hint=word_hint,
+            alive_block=alive_block,
+            history_block=history_block,
+        )
+
+    def _parse_vote_response(self, response: str, alive_players: List[int]) -> Optional[VoteDecision]:
+        text = (response or "").strip()
+        if not text:
+            return None
+        if text.startswith("```"):
+            lines = [line for line in text.splitlines() if not line.startswith("```")]
+            text = "\n".join(lines).strip()
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"(\d+)", text)
+            if not match:
+                return None
+            candidate = int(match.group(1))
+            if candidate not in alive_players:
+                return None
+            reason_text = text.replace(match.group(1), "").strip()
+            return VoteDecision(target=candidate, reason=reason_text or None)
+        if isinstance(data, list) and data:
+            data = data[0]
+        if not isinstance(data, dict):
+            return None
+        target = data.get("decision") or data.get("target") or data.get("vote") or data.get("player")
+        if isinstance(target, str):
+            digits = re.findall(r"\d+", target)
+            target = int(digits[0]) if digits else None
+        if not isinstance(target, int):
+            return None
+        if target not in alive_players:
+            return None
+        reason = data.get("reason") or data.get("analysis") or data.get("thought") or ""
+        if isinstance(reason, dict):
+            reason = reason.get("text") or reason.get("value") or ""
+        reason_text = str(reason).strip()
+        return VoteDecision(target=target, reason=reason_text or None)
+
     def pick_vote(
         self,
         *,
@@ -187,26 +276,53 @@ class UndercoverAIStrategy:
         alive_players: List[int],
         assignments: Dict[str, Dict],
         history: List[Dict],
-    ) -> int:
+    ) -> VoteDecision:
         """Return a target seat id for the given voter."""
 
         suspects = [pid for pid in alive_players if pid != voter_id]
         if not suspects:
-            return voter_id
-        # Prefer players没有发言或在上一条 history 中
+            return VoteDecision(target=voter_id)
+        start = perf_counter()
+        voter_meta = assignments.get(str(voter_id), {})
+        voter_word = voter_meta.get("word") or ""
+        if self.llm_client:
+            try:
+                prompt = self._llm_vote_prompt(
+                    voter_id=voter_id,
+                    word=voter_word,
+                    alive_players=alive_players,
+                    assignments=assignments,
+                    history=history,
+                )
+                response = self.llm_client.generate_text(
+                    prompt=prompt,
+                    system_prompt="你是一名桌游玩家，正在决定投票对象。",
+                    temperature=0.4,
+                    metadata={"game": "undercover", "style": self.style, "action": "vote"},
+                )
+                if response:
+                    decision = self._parse_vote_response(response, alive_players)
+                    if decision:
+                        record_ai_latency(perf_counter() - start)
+                        return decision
+            except LLMError as exc:
+                LOGGER.debug("LLM vote generation failed: %s", exc)
         if history:
             last = history[-1].get("player_id")
             if last and last in suspects:
-                return last
-        # 保留一点倾向：卧底更易投向非卧底
+                record_ai_latency(perf_counter() - start)
+                return VoteDecision(target=last)
         voter_role = assignments.get(str(voter_id), {}).get("role")
         civilians = [pid for pid in suspects if assignments.get(str(pid), {}).get("role") != "undercover"]
         undercovers = [pid for pid in suspects if assignments.get(str(pid), {}).get("role") == "undercover"]
         if voter_role == "undercover" and civilians:
-            return random.choice(civilians)
+            record_ai_latency(perf_counter() - start)
+            return VoteDecision(target=random.choice(civilians))
         if voter_role != "undercover" and undercovers:
-            return random.choice(undercovers)
-        return random.choice(suspects)
+            record_ai_latency(perf_counter() - start)
+            return VoteDecision(target=random.choice(undercovers))
+        record_ai_latency(perf_counter() - start)
+        return VoteDecision(target=random.choice(suspects))
 
 
 class WerewolfAIStrategy:

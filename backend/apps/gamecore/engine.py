@@ -6,7 +6,7 @@ import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
@@ -55,6 +55,7 @@ class BaseGameEngine:
         else:
             self.state.pop("timer", None)
         self._timer_dirty = False
+        self._pending_events: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # Lifecycle hooks
@@ -147,4 +148,24 @@ class BaseGameEngine:
             "timer_context": self._timer_context,
             "updated_at": timezone.now(),
         }
+
+    # ------------------------------------------------------------------
+    # Event helpers
+    # ------------------------------------------------------------------
+    def emit_event(self, event_type: str, payload: Optional[Dict[str, Any]] = None) -> None:
+        """Queue an auxiliary event to be broadcast to room members."""
+
+        if not event_type:
+            return
+        self._pending_events.append({
+            "type": event_type,
+            "payload": copy.deepcopy(payload or {}),
+        })
+
+    def consume_pending_events(self) -> List[Dict[str, Any]]:
+        """Return and clear any queued auxiliary events."""
+
+        events = self._pending_events[:]
+        self._pending_events.clear()
+        return events
 

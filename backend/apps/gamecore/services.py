@@ -193,6 +193,16 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
             "room": room_snapshot,
         },
     )
+    for extra in engine.consume_pending_events():
+        if not extra:
+            continue
+        _broadcast_game_event(
+            room,
+            {
+                "event": extra.get("type"),
+                "payload": extra.get("payload", {}),
+            },
+        )
     schedule_session_timer(session)
     if changed:
         LOGGER.debug("Engine auto actions executed after %s", event_type)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 from collections import Counter
 from typing import Any, Dict, List, Optional
@@ -16,6 +17,9 @@ from apps.gamecore.engine import BaseGameEngine, EnginePhase, GameEngineError
 from apps.rooms.models import RoomPlayer
 
 from ..models import WordPair
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class UndercoverEngine(BaseGameEngine):
@@ -130,6 +134,7 @@ class UndercoverEngine(BaseGameEngine):
             "alive_players": [pid for pid in speaking_order],
             "speeches": [],
             "votes": {},
+            "ai_vote_reveals": [],
             "vote_round": 1,
             "revote_candidates": [],
             "history": [],
@@ -208,15 +213,31 @@ class UndercoverEngine(BaseGameEngine):
                 if pending:
                     voter = pending[0]
                     voter_strategy = self._strategy_for_style(self._assignment(voter).get("ai_style"))
-                    target = voter_strategy.pick_vote(
+                    decision = voter_strategy.pick_vote(
                         voter_id=voter,
                         alive_players=self._eligible_vote_targets(),
                         assignments=self.state["assignments"],
                         history=self.state.get("speeches", []),
                     )
+                    target = decision.target
+                    reason = decision.reason
                     if target not in self._eligible_vote_targets() or target == voter:
                         alternatives = [pid for pid in self._eligible_vote_targets() if pid != voter]
-                        target = random.choice(alternatives) if alternatives else voter
+                        fallback = random.choice(alternatives) if alternatives else voter
+                        LOGGER.debug(
+                            "Undercover AI %s attempted invalid vote target %s, fallback to %s",
+                            voter,
+                            target,
+                            fallback,
+                        )
+                        target = fallback
+                    if reason:
+                        LOGGER.info(
+                            "Undercover AI %s voting for %s: %s",
+                            voter,
+                            target,
+                            reason,
+                        )
                     self._process_vote(voter, target, is_ai=True)
                     changed = True
                     continue
@@ -236,6 +257,7 @@ class UndercoverEngine(BaseGameEngine):
 
         assignments_map = self.state.get("assignments", {})
         public_assignments = []
+        reveal_roles = self.phase in {EnginePhase.RESULT, EnginePhase.ENDED} or viewer_player_id is None
         for player_id_str, meta in assignments_map.items():
             pid = int(player_id_str)
             entry = {
@@ -245,11 +267,10 @@ class UndercoverEngine(BaseGameEngine):
                 "isAlive": meta.get("is_alive", True),
                 "aiStyle": meta.get("ai_style"),
             }
-            if viewer_player_id is None or pid == viewer_player_id or self.phase in {EnginePhase.RESULT, EnginePhase.ENDED}:
-                entry["role"] = meta.get("role")
+            entry["role"] = meta.get("role") if reveal_roles else None
+            if reveal_roles or pid == viewer_player_id:
                 entry["word"] = meta.get("word")
             else:
-                entry["role"] = None
                 entry["word"] = None
             public_assignments.append(entry)
 
@@ -271,6 +292,22 @@ class UndercoverEngine(BaseGameEngine):
         }
         if viewer_player_id is not None and str(viewer_player_id) in assignments_map:
             state["word_pair"]["selfWord"] = assignments_map[str(viewer_player_id)]["word"]
+
+        reveals = []
+        for reveal in self.state.get("ai_vote_reveals", []):
+            try:
+                player_id = int(reveal.get("player_id"))
+                target_id = int(reveal.get("target_id"))
+            except (TypeError, ValueError):
+                continue
+            reveals.append(
+                {
+                    "playerId": player_id,
+                    "targetId": target_id,
+                    "timestamp": reveal.get("timestamp"),
+                }
+            )
+        state["ai_vote_reveals"] = reveals
 
         return state
 
@@ -319,13 +356,15 @@ class UndercoverEngine(BaseGameEngine):
         allowed = self.state.get("revote_candidates") or self._alive_player_ids()
         return [int(pid) for pid in allowed]
 
-    def _process_speech(self, actor_id: Optional[int], content: str, *, is_ai: bool = False) -> None:
+    def _ensure_current_speaker(self, actor_id: Optional[int]) -> None:
         if actor_id is None:
             raise GameEngineError("缺少发言玩家信息")
         queue = self.state.get("queue", [])
         if not queue or queue[0] != actor_id:
             raise GameEngineError("当前并非该玩家的发言回合")
-        raw = content.strip()
+
+    def _sanitize_speech_content(self, content: str, *, is_ai: bool) -> str:
+        raw = (content or "").strip()
         try:
             sanitized = enforce_content_policy(raw, mode="mask" if is_ai else "reject")
         except ContentPolicyViolation as exc:
@@ -333,19 +372,48 @@ class UndercoverEngine(BaseGameEngine):
         sanitized = sanitized or ("AI" if is_ai else "")
         if not sanitized:
             raise GameEngineError("发言内容不能为空")
+        return sanitized
+
+    def _append_speech(self, actor_id: int, *, content: str, is_ai: bool, timestamp: str) -> None:
         self.state.setdefault("speeches", []).append(
             {
                 "player_id": actor_id,
-                "content": sanitized,
+                "content": content,
                 "is_ai": is_ai,
-                "timestamp": timezone.now().isoformat(),
+                "timestamp": timestamp,
             }
         )
+
+    def _emit_streaming_speech(self, actor_id: int, *, content: str, timestamp: str) -> None:
+        partial = ""
+        for index, char in enumerate(content):
+            partial += char
+            self.emit_event(
+                "undercover.speech_stream",
+                {
+                    "playerId": actor_id,
+                    "chunk": char,
+                    "content": partial,
+                    "index": index,
+                    "timestamp": timestamp,
+                    "isAi": True,
+                    "done": index == len(content) - 1,
+                },
+            )
+
+    def _process_speech(self, actor_id: Optional[int], content: str, *, is_ai: bool = False) -> None:
+        self._ensure_current_speaker(actor_id)
+        sanitized = self._sanitize_speech_content(content, is_ai=is_ai)
+        timestamp = timezone.now().isoformat()
+        if is_ai:
+            self._emit_streaming_speech(actor_id, content=sanitized, timestamp=timestamp)
+        self._append_speech(actor_id, content=sanitized, is_ai=is_ai, timestamp=timestamp)
         self._advance_queue()
         if self.state.get("current_player_id") is None:
             self.phase = EnginePhase.VOTING
             self.state["phase"] = self.phase.value
             self.state["votes"] = {}
+            self.state["ai_vote_reveals"] = []
             self.state["vote_round"] = self.state.get("vote_round", 1)
             self.state["revote_candidates"] = []
             self._arm_voting_timer()
@@ -362,7 +430,33 @@ class UndercoverEngine(BaseGameEngine):
         if target_id not in self._eligible_vote_targets():
             raise GameEngineError("投票目标不合法")
 
-        self.state.setdefault("votes", {})[str(actor_id)] = int(target_id)
+        vote_target = int(target_id)
+        self.state.setdefault("votes", {})[str(actor_id)] = vote_target
+        if is_ai:
+            timestamp = timezone.now().isoformat()
+            self.state.setdefault("ai_vote_reveals", []).append(
+                {
+                    "player_id": actor_id,
+                    "target_id": vote_target,
+                    "timestamp": timestamp,
+                }
+            )
+            try:
+                player_meta = self._assignment(actor_id)
+                target_meta = self._assignment(vote_target)
+            except GameEngineError:
+                player_meta = {"display_name": str(actor_id)}
+                target_meta = {"display_name": str(vote_target)}
+            self.emit_event(
+                "undercover.vote_cast",
+                {
+                    "playerId": actor_id,
+                    "targetId": vote_target,
+                    "timestamp": timestamp,
+                    "playerName": player_meta.get("display_name"),
+                    "targetName": target_meta.get("display_name"),
+                },
+            )
         if len(self.state["votes"]) >= len(self._alive_player_ids()):
             self._finalize_votes()
 
@@ -404,6 +498,7 @@ class UndercoverEngine(BaseGameEngine):
         self.state["votes"] = {}
         self.state["vote_round"] = 1
         self.state["revote_candidates"] = []
+        self.state["ai_vote_reveals"] = []
         self.phase = EnginePhase.SPEAKING
         self.state["phase"] = self.phase.value
         self._queue_reset()

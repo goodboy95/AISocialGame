@@ -57,6 +57,7 @@ export interface UndercoverStateView {
     difficulty?: string;
     selfWord?: string;
   };
+  aiVoteReveals?: { playerId: number; targetId: number; timestamp: string }[];
   winner?: string;
 }
 
