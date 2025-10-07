@@ -137,6 +137,18 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
         aiStyle: item.aiStyle ?? null
       }))
     : [];
+  const aiVoteRevealsRaw = Array.isArray(state.ai_vote_reveals) ? state.ai_vote_reveals : [];
+  const aiVoteReveals = aiVoteRevealsRaw
+    .map((item: any) => {
+      const playerId = Number(item.playerId ?? item.player_id);
+      const targetId = Number(item.targetId ?? item.target_id);
+      const timestamp = item.timestamp ?? "";
+      if (!Number.isFinite(playerId) || !Number.isFinite(targetId)) {
+        return null;
+      }
+      return { playerId, targetId, timestamp };
+    })
+    .filter((item: any): item is { playerId: number; targetId: number; timestamp: string } => Boolean(item));
   return {
     phase: state.phase ?? "preparing",
     round: state.round ?? 1,
@@ -145,6 +157,7 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
     speeches: Array.isArray(state.speeches) ? state.speeches : [],
     voteSummary: state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} },
     word_pair: state.word_pair ?? {},
+    aiVoteReveals,
     winner: state.winner ?? undefined
   };
 }
@@ -379,17 +392,27 @@ export const useRoomsStore = defineStore("rooms", {
             recipients: payload.recipients ?? undefined
           });
         } else if (data.type === "game.event") {
-          if (data.payload?.room) {
+          const payload = data.payload ?? {};
+          const eventType = payload.event ?? "";
+          if (eventType === "undercover.speech_stream") {
+            this.applyUndercoverSpeechStream(payload.payload ?? {});
+            return;
+          }
+          if (eventType === "undercover.vote_cast") {
+            this.applyUndercoverVoteReveal(payload.payload ?? {});
+            return;
+          }
+          if (payload.room) {
             const previous = this.currentRoom?.isMember ?? false;
-            this.currentRoom = normalizeRoomDetail(data.payload.room);
+            this.currentRoom = normalizeRoomDetail(payload.room);
             if (previous && this.currentRoom) {
               this.currentRoom.isMember = true;
             }
           }
-          if (this.currentRoom && data.payload?.session) {
-            this.currentRoom.gameSession = normalizeGameSession(data.payload.session);
+          if (this.currentRoom && payload.session) {
+            this.currentRoom.gameSession = normalizeGameSession(payload.session);
           }
-          if (this.currentRoom) {
+          if (this.currentRoom && (payload.room || payload.session)) {
             try {
               const latest = await getRoomDetail(this.currentRoom.id);
               this.currentRoom = normalizeRoomDetail(latest);
@@ -438,6 +461,62 @@ export const useRoomsStore = defineStore("rooms", {
             payload: { event, payload }
           })
         );
+      }
+    },
+    applyUndercoverSpeechStream(payload: Record<string, unknown>) {
+      const session = this.currentRoom?.gameSession;
+      if (!session || session.engine !== "undercover") {
+        return;
+      }
+      const state = session.state as UndercoverStateView;
+      if (!Array.isArray(state.speeches)) {
+        state.speeches = [];
+      }
+      const playerId = Number((payload as any).playerId ?? (payload as any).player_id);
+      const timestamp = (payload as any).timestamp ?? "";
+      if (!Number.isFinite(playerId) || !timestamp) {
+        return;
+      }
+      const content = String((payload as any).content ?? "");
+      const isAi = Boolean((payload as any).isAi ?? (payload as any).is_ai ?? false);
+      const existingIndex = state.speeches.findIndex(
+        (speech) => speech.player_id === playerId && speech.timestamp === timestamp
+      );
+      if (existingIndex === -1) {
+        state.speeches.push({
+          player_id: playerId,
+          content,
+          is_ai: isAi,
+          timestamp,
+        });
+      } else {
+        state.speeches[existingIndex] = {
+          ...state.speeches[existingIndex],
+          content,
+        };
+      }
+    },
+    applyUndercoverVoteReveal(payload: Record<string, unknown>) {
+      const session = this.currentRoom?.gameSession;
+      if (!session || session.engine !== "undercover") {
+        return;
+      }
+      const state = session.state as UndercoverStateView;
+      const playerId = Number((payload as any).playerId ?? (payload as any).player_id);
+      const targetId = Number((payload as any).targetId ?? (payload as any).target_id);
+      if (!Number.isFinite(playerId) || !Number.isFinite(targetId)) {
+        return;
+      }
+      const timestamp = (payload as any).timestamp ?? new Date().toISOString();
+      if (!Array.isArray(state.aiVoteReveals)) {
+        state.aiVoteReveals = [];
+      }
+      const existingIndex = state.aiVoteReveals.findIndex((entry) => entry.playerId === playerId);
+      const entry = { playerId, targetId, timestamp };
+      if (existingIndex === -1) {
+        state.aiVoteReveals.push(entry);
+      } else {
+        state.aiVoteReveals[existingIndex] = entry;
       }
     },
     disconnectSocket() {

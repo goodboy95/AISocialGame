@@ -44,6 +44,7 @@ declare module 'vue' {
     GlobalNotifications: typeof import('./components/GlobalNotifications.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SpeechTimeline: typeof import('./components/SpeechTimeline.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

@@ -47,6 +47,24 @@ def test_undercover_engine_full_round(room_with_players, word_pair):
     engine = UndercoverEngine(session)
     engine.start_game()
 
+    fields = engine.to_session_fields()
+    session.state = fields["state"]
+    session.current_phase = fields["current_phase"]
+    session.current_player_id = fields["current_player_id"]
+    session.round_number = fields["round_number"]
+    session.save(update_fields=["state", "current_phase", "current_player_id", "round_number"])
+
+    viewer_membership = room_with_players.players.filter(user__username="player2").first()
+    viewer_user = viewer_membership.user
+    pre_public = serialize_session_for_user(session, user=viewer_user)
+    pre_assignments = pre_public["state"]["assignments"]
+    pre_self = next(item for item in pre_assignments if item["playerId"] == viewer_membership.id)
+    assert pre_self["role"] is None
+    assert pre_self["word"]
+    others_pre = [item for item in pre_assignments if item["playerId"] != viewer_membership.id]
+    assert all(entry["role"] is None for entry in others_pre)
+    assert all(entry["word"] is None for entry in others_pre)
+
     assignments = engine.state["assignments"]
     assert len(assignments) == room_with_players.players.filter(is_active=True).count()
     undercover_id = next(int(pid) for pid, meta in assignments.items() if meta["role"] == "undercover")
@@ -78,10 +96,9 @@ def test_undercover_engine_full_round(room_with_players, word_pair):
     session.current_player_id = engine.state.get("current_player_id")
     session.save(update_fields=["state", "current_phase", "round_number", "current_player_id"])
 
-    viewer = room_with_players.players.filter(user__username="player2").first().user
-    public_state = serialize_session_for_user(session, user=viewer)
+    public_state = serialize_session_for_user(session, user=viewer_user)
     assignments_view = public_state["state"]["assignments"]
-    self_entry = next(item for item in assignments_view if item["playerId"] == viewer.room_memberships.first().id)
+    self_entry = next(item for item in assignments_view if item["playerId"] == viewer_membership.id)
     assert self_entry["word"] != ""
     others = [item for item in assignments_view if item["playerId"] != self_entry["playerId"]]
     assert all(entry["word"] != "" for entry in others)  # 结果阶段全部公开

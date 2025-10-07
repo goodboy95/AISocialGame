@@ -27,27 +27,29 @@
       <el-col :span="6" class="room__sidebar">
         <el-card class="room__panel room__panel--info">
           <template #header>
-            <span>{{ t("room.ui.myIdentity") }}</span>
+            <span>{{ isUndercover ? t("room.ui.myClue") : t("room.ui.myIdentity") }}</span>
           </template>
-          <p>{{ t("room.ui.role") }}: <strong>{{ selfRoleDisplay }}</strong></p>
           <template v-if="isUndercover">
             <p>{{ t("room.ui.word") }}: <strong>{{ selfWordDisplay }}</strong></p>
             <p v-if="undercoverState?.word_pair?.topic">
               {{ t("room.ui.topic") }}: {{ undercoverState.word_pair.topic }}
             </p>
           </template>
-          <template v-else-if="isWerewolf">
-            <p v-if="werewolfPrivateRoleName">
-              {{ t("room.ui.factionHint") }}: <strong>{{ werewolfPrivateRoleName }}</strong>
-            </p>
-            <p v-if="isWolf && werewolfAllyNames">{{ t("room.ui.allies") }}: {{ werewolfAllyNames }}</p>
-            <p v-if="isSeerRole && seerLastResult">{{ t("room.ui.lastInspection") }}: {{ seerLastResult }}</p>
-            <p v-if="isWitchRole">
-              {{ t("room.ui.antidote") }}: {{ werewolfAntidoteAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
-              · {{ t("room.ui.poison") }}:
-              {{ werewolfPoisonAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
-            </p>
-            <p v-if="werewolfPendingKillName">{{ t("room.ui.pendingTarget") }}: {{ werewolfPendingKillName }}</p>
+          <template v-else>
+            <p>{{ t("room.ui.role") }}: <strong>{{ selfRoleDisplay }}</strong></p>
+            <template v-if="isWerewolf">
+              <p v-if="werewolfPrivateRoleName">
+                {{ t("room.ui.factionHint") }}: <strong>{{ werewolfPrivateRoleName }}</strong>
+              </p>
+              <p v-if="isWolf && werewolfAllyNames">{{ t("room.ui.allies") }}: {{ werewolfAllyNames }}</p>
+              <p v-if="isSeerRole && seerLastResult">{{ t("room.ui.lastInspection") }}: {{ seerLastResult }}</p>
+              <p v-if="isWitchRole">
+                {{ t("room.ui.antidote") }}: {{ werewolfAntidoteAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
+                · {{ t("room.ui.poison") }}:
+                {{ werewolfPoisonAvailable ? t("room.ui.available") : t("room.ui.exhausted") }}
+              </p>
+              <p v-if="werewolfPendingKillName">{{ t("room.ui.pendingTarget") }}: {{ werewolfPendingKillName }}</p>
+            </template>
           </template>
           <el-alert v-if="winnerDescription" :title="winnerDescription" type="success" show-icon />
         </el-card>
@@ -120,20 +122,32 @@
                   {{ t("room.ui.currentSpeaker") }}:
                   <strong>{{ currentSpeakerName }}</strong>
                 </p>
-                <div v-if="canSpeak" class="room__speak-form">
-                  <el-input
-                    v-model="speechInput"
-                    type="textarea"
-                    :rows="3"
-                    maxlength="120"
-                    show-word-limit
-                    :placeholder="t('room.ui.speakPlaceholder')"
+                <div class="room__speech-box">
+                  <SpeechTimeline
+                    class="room__speech-history"
+                    :speeches="speeches"
+                    :resolve-name="resolvePlayerName"
+                    :format-time="formatTime"
+                    :title="t('room.ui.speechLog')"
+                    :empty-text="t('room.ui.noSpeeches')"
                   />
-                  <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">
-                    {{ t("room.ui.submitSpeech") }}
-                  </el-button>
+                  <div class="room__speech-input">
+                    <div v-if="canSpeak" class="room__speak-form">
+                      <el-input
+                        v-model="speechInput"
+                        type="textarea"
+                        :rows="3"
+                        maxlength="120"
+                        show-word-limit
+                        :placeholder="t('room.ui.speakPlaceholder')"
+                      />
+                      <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">
+                        {{ t("room.ui.submitSpeech") }}
+                      </el-button>
+                    </div>
+                    <el-alert v-else :title="t('room.ui.waitSpeech')" type="info" show-icon />
+                  </div>
                 </div>
-                <el-alert v-else :title="t('room.ui.waitSpeech')" type="info" show-icon />
               </div>
               <div v-else-if="currentPhase === 'voting'" class="room__phase-block">
                 <p>{{ t("room.ui.selectSuspect") }}</p>
@@ -153,6 +167,16 @@
                   {{ (gameState as any)?.voteSummary?.submitted ?? 0 }} /
                   {{ (gameState as any)?.voteSummary?.required ?? aliveAssignments.length }}
                 </p>
+                <div v-if="aiVoteReveals.length" class="room__vote-reveals">
+                  <p class="room__vote-reveals-title">{{ t("room.ui.aiVoteResults") }}</p>
+                  <ul class="room__vote-reveals-list">
+                    <li v-for="reveal in aiVoteReveals" :key="`${reveal.playerId}-${reveal.timestamp}`">
+                      <strong>{{ reveal.playerName }}</strong>
+                      <span class="room__vote-reveals-arrow">→</span>
+                      <span>{{ reveal.targetName }}</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
               <div v-else-if="currentPhase === 'result'" class="room__phase-block">
                 <el-alert :title="t('room.ui.roundCompleted')" type="success" show-icon />
@@ -276,18 +300,15 @@
               </div>
             </template>
           </template>
-          <div v-if="speeches.length" class="room__speeches">
-            <h4>{{ t("room.ui.speechLog") }}</h4>
-            <el-timeline>
-              <el-timeline-item
-                v-for="speech in speeches"
-                :key="speech.timestamp + '-' + speech.player_id"
-                :timestamp="formatTime(speech.timestamp)"
-              >
-                <strong>{{ resolvePlayerName(speech.player_id) }}</strong>：{{ speech.content }}
-              </el-timeline-item>
-            </el-timeline>
-          </div>
+          <SpeechTimeline
+            v-if="currentPhase !== 'speaking'"
+            class="room__speeches"
+            :speeches="speeches"
+            :resolve-name="resolvePlayerName"
+            :format-time="formatTime"
+            :title="t('room.ui.speechLog')"
+            :empty-text="t('room.ui.noSpeeches')"
+          />
         </el-card>
       </el-col>
       <el-col :span="8">
@@ -493,6 +514,7 @@ import { useRoomsStore } from "../store/rooms";
 import { useAuthStore } from "../store/user";
 import { useMetaStore } from "../store/meta";
 import { notifyError } from "../services/notifications";
+import SpeechTimeline from "../components/SpeechTimeline.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -819,11 +841,32 @@ const selfRoleDisplay = computed(() => {
   return translateRole(selfAssignment.value.role);
 });
 
-const selfWordDisplay = computed(() =>
-  isUndercover.value
-    ? (selfAssignment.value as UndercoverAssignmentView | null)?.word ?? t("room.word.waiting")
-    : t("room.word.placeholder")
-);
+const selfWordDisplay = computed(() => {
+  if (!isUndercover.value) {
+    return t("room.word.placeholder");
+  }
+  const word =
+    undercoverState.value?.word_pair?.selfWord ??
+    (selfAssignment.value as UndercoverAssignmentView | null)?.word ??
+    "";
+  return word ? word : t("room.word.waiting");
+});
+
+const aiVoteReveals = computed(() => {
+  if (!isUndercover.value) {
+    return [] as Array<{ playerId: number; targetId: number; timestamp: string; playerName: string; targetName: string }>;
+  }
+  const entries = (undercoverState.value?.aiVoteReveals ?? []) as Array<{
+    playerId: number;
+    targetId: number;
+    timestamp: string;
+  }>;
+  return entries.map((entry) => ({
+    ...entry,
+    playerName: resolvePlayerName(entry.playerId),
+    targetName: resolvePlayerName(entry.targetId),
+  }));
+});
 
 const werewolfPrivate = computed<WerewolfPrivateInfo>(() => (werewolfState.value?.private as WerewolfPrivateInfo) ?? { role: null });
 const werewolfPrivateRoleName = computed(() => {
@@ -1348,6 +1391,33 @@ function resolvePlayerName(playerId: number) {
   margin-bottom: 16px;
 }
 
+.room__speech-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.room__speech-history {
+  flex: 1 1 320px;
+  min-width: 260px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.room__speech-history :deep(.el-empty) {
+  margin: 0;
+}
+
+.room__speech-input {
+  flex: 1 1 280px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .room__speak-form {
   display: flex;
   flex-direction: column;
@@ -1361,6 +1431,33 @@ function resolvePlayerName(playerId: number) {
 }
 
 .room__vote-summary {
+  color: var(--el-text-color-secondary);
+}
+
+.room__vote-reveals {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+}
+
+.room__vote-reveals-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.room__vote-reveals-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.room__vote-reveals-arrow {
+  margin: 0 6px;
   color: var(--el-text-color-secondary);
 }
 
