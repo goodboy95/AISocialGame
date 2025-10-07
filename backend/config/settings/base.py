@@ -17,7 +17,9 @@ env = environ.Env(
 if env.bool("DJANGO_READ_DOT_ENV_FILE", default=True):
     environ.Env.read_env(BASE_DIR / ".env")
 
-from config.service_settings import MYSQL_CONFIG
+from config.service_settings import MYSQL_CONFIG, REDIS_CONFIG
+
+REDIS_URL = REDIS_CONFIG["URL"]
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)
@@ -156,7 +158,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env("REDIS_URL")],
+            "hosts": [REDIS_URL],
         },
     }
 }
@@ -195,7 +197,7 @@ CONTENT_SAFETY = {
 }
 
 
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=env("REDIS_URL"))
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
 CELERY_TASK_DEFAULT_QUEUE = env("CELERY_DEFAULT_QUEUE", default="default")
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=120)
