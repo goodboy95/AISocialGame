@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 
+import pinia from "../store";
+import { useAuthStore } from "../store/user";
+
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
@@ -30,12 +33,27 @@ const routes: RouteRecordRaw[] = [
     path: "/stats",
     name: "stats",
     component: () => import("../pages/StatsPage.vue")
+  },
+  {
+    path: "/admin/word-bank",
+    name: "word-bank-admin",
+    component: () => import("../pages/WordBankAdminPage.vue"),
+    meta: { requiresAuth: true }
   }
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+});
+
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore(pinia);
+  if (to.meta.requiresAuth && !authStore.profile) {
+    next({ name: "login", query: { redirect: to.fullPath } });
+    return;
+  }
+  next();
 });
 
 export default router;

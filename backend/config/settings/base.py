@@ -11,12 +11,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=(str, "please-change-me"),
-    DATABASE_URL=(str, "sqlite:///" + str(BASE_DIR / "db.sqlite3")),
     REDIS_URL=(str, "redis://redis:6379/0"),
 )
 
 if env.bool("DJANGO_READ_DOT_ENV_FILE", default=True):
     environ.Env.read_env(BASE_DIR / ".env")
+
+from config.service_settings import MYSQL_CONFIG
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)
@@ -76,7 +77,19 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {
-    "default": env.db(),
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "HOST": MYSQL_CONFIG["HOST"],
+        "PORT": MYSQL_CONFIG["PORT"],
+        "USER": MYSQL_CONFIG["USER"],
+        "PASSWORD": MYSQL_CONFIG["PASSWORD"],
+        "NAME": MYSQL_CONFIG["NAME"],
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
+        "CONN_MAX_AGE": env.int("MYSQL_CONN_MAX_AGE", default=60),
+    },
 }
 
 AUTH_PASSWORD_VALIDATORS = [

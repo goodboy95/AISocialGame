@@ -21,5 +21,6 @@ urlpatterns = [
     path("api/auth/", include("apps.users.urls")),
     path("api/meta/", include("apps.ai.urls")),
     path("api/analytics/", include("apps.analytics.urls")),
+    path("api/games/", include("apps.games.urls")),
     path("api/", include("apps.rooms.urls")),
 ]
