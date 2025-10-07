@@ -51,7 +51,7 @@ Dockerfile          # Docker 构建文件
   - `DELETE /api/rooms/{id}/`：房主解散房间。
 - 健康检查：`GET /api/health/`。
 
-WebSocket 入口为 `ws://<host>/ws/rooms/<room_id>/?token=<jwt>`，仅允许房间成员建立连接，支持 `system.sync` 快照、`system.broadcast` 系统事件、`chat.message` 聊天以及 `game.event` 游戏状态推送。
+WebSocket 入口为 `ws://<host>/ws/rooms/<room_id>/?token=<jwt>`，仅允许房间成员建立连接，支持 `system.sync` 快照、`system.broadcast` 系统事件、`chat.message` 聊天以及 `game.event` 游戏状态推送。前端默认会根据页面协议/主机自动推导 `<origin>/ws` 作为基础地址，可直接复用。
 
 ## 核心模块速览
 
@@ -91,5 +91,11 @@ pytest
 - `python manage.py runserver` 已启用 ASGI，可直接用于 WS 调试；若需要压测或与前端联调，可改用 `daphne config.asgi:application --port 8000`。
 - `python manage.py shell_plus` 中可调用 `apps.rooms.services.start_room`、`apps.gamecore.services.handle_room_event` 模拟发言/投票流程。
 - `apps/games/models.WordPair` 提供词库维护能力，可用于导入或调试新的词条。
+
+### 房间联调流程示例
+
+1. 使用 REST API 或前端大厅创建房间并加入，确保房间 `status` 为 `waiting`。
+2. 建立 WebSocket 连接后（可观察前端页面右上角“在线”标签或通过 `system.sync` 快照确认），房主调用 `POST /api/rooms/{id}/start/` 或在前端点击“开始游戏”。
+3. 首次进入发言轮时需发送 `ready` 事件（前端对应“通知开始发言”按钮），随后使用 `submit_speech`、`submit_vote` 等事件驱动引擎推进；收到的 `game.event` 广播将包含最新房间与会话快照，可刷新前端状态。
 
 > Tips：默认 `local` 配置关闭了全局权限校验，方便联调。生产环境请切换到 `config.settings.production` 并补充安全相关配置。
