@@ -20,6 +20,15 @@
         >
           {{ t("room.ui.startGame") }}
         </el-button>
+        <el-button
+          v-if="room.isOwner"
+          type="danger"
+          plain
+          :loading="dissolving"
+          @click="handleDissolve"
+        >
+          {{ t("room.ui.dissolveRoom") }}
+        </el-button>
         <el-button @click="handleLeave">{{ t("room.ui.leaveRoom") }}</el-button>
       </div>
     </header>
@@ -71,11 +80,27 @@
                 <span>{{ player.displayName }}</span>
                 <el-tag v-if="player.isAi" size="small" type="info">AI</el-tag>
               </div>
-              <div class="room__member-meta">
-                <el-tag size="small" :type="playerStatusMap.get(player.id)?.isAlive ? 'success' : 'danger'">
-                  {{ playerStatusMap.get(player.id)?.isAlive ? t("room.ui.alive") : t("room.ui.eliminated") }}
-                </el-tag>
-                <small>{{ t("room.ui.seat") }} {{ player.seatNumber }}</small>
+              <div class="room__member-right">
+                <div class="room__member-meta">
+                  <el-tag size="small" :type="playerStatusMap.get(player.id)?.isAlive ? 'success' : 'danger'">
+                    {{ playerStatusMap.get(player.id)?.isAlive ? t("room.ui.alive") : t("room.ui.eliminated") }}
+                  </el-tag>
+                  <small>{{ t("room.ui.seat") }} {{ player.seatNumber }}</small>
+                </div>
+                <div v-if="isKickable(player.id)" class="room__member-actions">
+                  <el-popconfirm
+                    :title="t('room.messages.kickConfirm', { name: player.displayName })"
+                    :confirm-button-text="t('common.confirm')"
+                    :cancel-button-text="t('common.cancel')"
+                    @confirm="handleKickPlayer(player.id)"
+                  >
+                    <template #reference>
+                      <el-button type="danger" link size="small">
+                        {{ t("room.ui.kickPlayer") }}
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
+                </div>
               </div>
             </li>
           </ul>
@@ -539,6 +564,7 @@ const speechInput = ref("");
 const witchPoisonTarget = ref<number | null>(null);
 const aiForm = reactive({ style: "", displayName: "" });
 const addingAi = ref(false);
+const dissolving = ref(false);
 
 const room = computed(() => currentRoom.value);
 const gameSession = computed(() => room.value?.gameSession ?? null);
@@ -694,6 +720,7 @@ const speeches = computed(() => (gameState.value && Array.isArray((gameState.val
 const hasVoted = computed(() => Boolean((gameState.value as any)?.voteSummary?.selfTarget));
 const voteTarget = computed(() => (gameState.value as any)?.voteSummary?.selfTarget ?? null);
 const aiStyles = computed(() => metaStore.aiStyles);
+const canKickPlayers = computed(() => Boolean(room.value?.isOwner) && room.value?.status === "waiting");
 
 const phaseMap = computed(() => ({
   preparing: t("room.phases.preparing"),
@@ -1060,6 +1087,14 @@ function translateSystemMessage(message: ChatMessage) {
       return t("room.messages.playerLeft", { name: actorName });
     case "room_dissolved":
       return t("room.messages.roomDissolved");
+    case "player_kicked": {
+      const context = message.context as Record<string, any> | undefined;
+      const removedName =
+        context?.removedPlayer?.displayName ??
+        context?.removed_player?.display_name ??
+        t("room.messages.unknownPlayer");
+      return t("room.messages.playerKicked", { host: actorName, name: removedName });
+    }
     case "ai_player_added": {
       const aiContext = (message.context as any)?.aiPlayer;
       if (aiContext?.displayName) {
@@ -1118,6 +1153,33 @@ async function handleAddAi() {
   }
 }
 
+function isKickable(playerId: number) {
+  if (!canKickPlayers.value) {
+    return false;
+  }
+  const target = room.value?.players.find((player) => player.id === playerId);
+  if (!target || target.isHost) {
+    return false;
+  }
+  const selfId = selfPlayer.value?.id ?? null;
+  return playerId !== selfId;
+}
+
+async function handleKickPlayer(playerId: number) {
+  if (!room.value) {
+    return;
+  }
+  const target = room.value.players.find((player) => player.id === playerId);
+  const targetName = target?.displayName ?? t("room.messages.unknownPlayer");
+  try {
+    await roomsStore.kickPlayer(room.value.id, playerId);
+    ElMessage.success(t("room.messages.kickSuccess", { name: targetName }));
+  } catch (error) {
+    console.error(error);
+    notifyError(t("room.messages.kickFailed"));
+  }
+}
+
 async function handleLeave() {
   if (!room.value) {
     return;
@@ -1140,6 +1202,33 @@ async function handleLeave() {
     ElMessage.success(t("room.messages.leaveSuccess"));
   } catch (error) {
     console.error(error);
+  }
+}
+
+async function handleDissolve() {
+  if (!room.value || dissolving.value) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(t("room.messages.dissolveConfirm"), t("room.ui.dissolveRoom"), {
+      confirmButtonText: t("common.confirm"),
+      cancelButtonText: t("common.cancel"),
+      type: "warning",
+    });
+  } catch {
+    return;
+  }
+  dissolving.value = true;
+  const targetRoomId = room.value.id;
+  try {
+    await roomsStore.dissolveRoom(targetRoomId);
+    ElMessage.success(t("room.messages.dissolveSuccess"));
+    router.push({ name: "lobby" });
+  } catch (error) {
+    console.error(error);
+    notifyError(t("room.messages.dissolveFailed"));
+  } finally {
+    dissolving.value = false;
   }
 }
 
@@ -1342,6 +1431,17 @@ function resolvePlayerName(playerId: number) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.room__member-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.room__member-actions .el-button {
+  padding: 0;
 }
 
 .room__phase-desc {

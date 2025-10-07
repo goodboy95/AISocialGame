@@ -14,11 +14,6 @@ function resolveBaseUrl(custom?: string): string {
     }
   }
 
-  if (typeof window !== "undefined" && window.location) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws`;
-  }
-
   const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (apiBase) {
     try {
@@ -30,6 +25,11 @@ function resolveBaseUrl(custom?: string): string {
     } catch (error) {
       console.warn("Failed to derive WebSocket base URL from API base, using default.", error);
     }
+  }
+
+  if (typeof window !== "undefined" && window.location) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return sanitize(`${protocol}//${window.location.host}/ws`);
   }
 
   return "ws://localhost:8000/ws";

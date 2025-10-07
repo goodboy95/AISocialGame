@@ -126,6 +126,77 @@ def test_non_host_cannot_add_ai(api_client, user, member):
 
     assert response.status_code == 400
     assert "房主" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_owner_can_kick_member(api_client, user, member):
+    room = services.create_room(owner=user, name="踢人房间", max_players=4)
+    services.join_room(room=room, user=member)
+    membership = room.players.get(user=member)
+
+    api_client.force_authenticate(user)
+    response = api_client.post(
+        f"/api/rooms/{room.id}/kick/",
+        {"player_id": membership.id},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["player_count"] == 1
+    membership.refresh_from_db()
+    assert membership.is_active is False
+
+
+@pytest.mark.django_db
+def test_non_owner_cannot_kick_member(api_client, user, member):
+    room = services.create_room(owner=user, name="踢人限制房", max_players=4)
+    services.join_room(room=room, user=member)
+    host_membership = room.players.get(user=user)
+
+    api_client.force_authenticate(member)
+    response = api_client.post(
+        f"/api/rooms/{room.id}/kick/",
+        {"player_id": host_membership.id},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "房主" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_owner_cannot_kick_during_game(api_client, user, member, word_pair):
+    room = services.create_room(owner=user, name="对局中房间", max_players=4)
+    services.join_room(room=room, user=member)
+    member_membership = room.players.get(user=member)
+
+    api_client.force_authenticate(user)
+    start_response = api_client.post(f"/api/rooms/{room.id}/start/", format="json")
+    assert start_response.status_code == 200
+
+    response = api_client.post(
+        f"/api/rooms/{room.id}/kick/",
+        {"player_id": member_membership.id},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "游戏进行中" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_owner_can_dissolve_room(api_client, user, member):
+    room = services.create_room(owner=user, name="解散房间", max_players=4)
+    services.join_room(room=room, user=member)
+
+    api_client.force_authenticate(user)
+    response = api_client.delete(f"/api/rooms/{room.id}/")
+
+    assert response.status_code == 204
+    room.refresh_from_db()
+    assert room.status == Room.RoomStatus.CLOSED
+
 @pytest.fixture
 def word_pair(db):
     return WordPair.objects.create(
@@ -134,4 +205,3 @@ def word_pair(db):
         topic="水果",
         difficulty="easy",
     )
-

@@ -221,6 +221,12 @@ class RoomAddAISerializer(serializers.Serializer):
         return value
 
 
+class RoomKickSerializer(serializers.Serializer):
+    """Validate payload for removing a member from the room."""
+
+    player_id = serializers.IntegerField(min_value=1)
+
+
 class ChatMessageSerializer(serializers.Serializer):
     """Helper serializer shared with websocket consumer."""
 

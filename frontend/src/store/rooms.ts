@@ -21,6 +21,8 @@ import {
   leaveRoom as leaveRoomApi,
   startRoom as startRoomApi,
   addAiPlayer as addAiPlayerApi,
+  kickPlayer as kickPlayerApi,
+  deleteRoom as deleteRoomApi,
 } from "../api/rooms";
 import { GameSocket } from "../services/websocket";
 import { i18n } from "../i18n";
@@ -307,6 +309,23 @@ export const useRoomsStore = defineStore("rooms", {
       this.currentRoom = normalizeRoomDetail(detail);
       this.messages.push(systemMessage(translate("room.messages.aiAdded"), "ai_player_added"));
       return this.currentRoom;
+    },
+    async kickPlayer(roomId: number, playerId: number) {
+      const detail = await kickPlayerApi(roomId, playerId);
+      this.currentRoom = normalizeRoomDetail(detail);
+      return this.currentRoom;
+    },
+    async dissolveRoom(roomId: number) {
+      await deleteRoomApi(roomId);
+      if (this.currentRoom?.id === roomId) {
+        this.disconnectSocket();
+        this.resetMessages();
+        this.currentRoom = null;
+      }
+      this.rooms = this.rooms.filter((roomItem) => roomItem.id !== roomId);
+      if (this.total > 0) {
+        this.total -= 1;
+      }
     },
     appendChatMessage(message: ChatMessage) {
       this.messages.push({ ...message, channel: message.channel ?? "public" });

@@ -16,6 +16,7 @@ from .serializers import (
     RoomJoinByCodeSerializer,
     RoomListSerializer,
     RoomAddAISerializer,
+    RoomKickSerializer,
 )
 
 
@@ -126,6 +127,22 @@ class RoomViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.Retriev
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         output = RoomDetailSerializer(room, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
+
+    @action(methods=["post"], detail=True, url_path="kick")
+    def kick(self, request, pk=None):
+        room = self.get_object()
+        serializer = RoomKickSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = services.kick_player(
+                room=room,
+                user=request.user,
+                target_player_id=serializer.validated_data["player_id"],
+            )
+        except services.RoomServiceError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        output = RoomDetailSerializer(result.room, context={"request": request})
+        return Response(output.data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         room = self.get_object()

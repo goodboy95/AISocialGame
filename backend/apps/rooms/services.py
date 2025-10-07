@@ -395,6 +395,90 @@ def leave_room(*, room: Room, user) -> RoomOperationResult:
     return RoomOperationResult(room=locked_room, actor=membership, event="player_left", message=message)
 
 
+def kick_player(*, room: Room, user, target_player_id: int) -> RoomOperationResult:
+    try:
+        host_membership = room.players.get(user=user, is_active=True)
+    except RoomPlayer.DoesNotExist as exc:
+        raise RoomServiceError("只有房主可以移除玩家") from exc
+    if not host_membership.is_host:
+        raise RoomServiceError("只有房主可以移除玩家")
+    if room.status == Room.RoomStatus.IN_PROGRESS:
+        raise RoomServiceError("游戏进行中无法移除玩家")
+
+    if host_membership.id == target_player_id:
+        raise RoomServiceError("无法移除自己")
+
+    try:
+        target_membership = room.players.get(pk=target_player_id, is_active=True)
+    except RoomPlayer.DoesNotExist as exc:
+        raise RoomServiceError("目标玩家不存在或已离开") from exc
+
+    if target_membership.is_host:
+        raise RoomServiceError("无法移除房主")
+
+    def _kick() -> tuple[Room, RoomPlayer]:
+        with transaction.atomic():
+            locked_room = (
+                Room.objects.select_for_update()
+                .prefetch_related("players__user")
+                .get(pk=room.pk)
+            )
+            try:
+                membership = (
+                    locked_room.players.select_for_update()
+                    .select_related("user")
+                    .get(pk=target_player_id)
+                )
+            except RoomPlayer.DoesNotExist as exc:
+                raise RoomServiceError("目标玩家不存在或已离开") from exc
+
+            if not membership.is_active:
+                raise RoomServiceError("目标玩家不存在或已离开")
+
+            membership.is_active = False
+            membership.is_host = False
+            membership.is_alive = False
+            membership.save(update_fields=["is_active", "is_host", "is_alive"])
+
+            return locked_room, membership
+
+    locked_room, removed_membership = _execute_with_retry(_kick)
+
+    message = f"{removed_membership.resolved_display_name} 被房主移出房间"
+    payload = {
+        "room": _serialize_room(locked_room),
+        "actor": {
+            "id": host_membership.user_id,
+            "display_name": host_membership.resolved_display_name,
+            "username": host_membership.user.username if host_membership.user else None,
+        },
+        "message": message,
+        "timestamp": timezone.now().isoformat(),
+        "event": "player_kicked",
+        "context": {
+            "removed_player": {
+                "id": removed_membership.id,
+                "display_name": removed_membership.resolved_display_name,
+                "is_ai": removed_membership.is_ai,
+            }
+        },
+        "status_code": status.HTTP_200_OK,
+    }
+    _broadcast("system.broadcast", payload)
+    LOGGER.info(
+        "Host %s removed player %s from room %s",
+        host_membership.user_id,
+        removed_membership.id,
+        locked_room.code,
+    )
+    return RoomOperationResult(
+        room=locked_room,
+        actor=removed_membership,
+        event="player_kicked",
+        message=message,
+    )
+
+
 def start_room(*, room: Room, user) -> Room:
     if room.status != Room.RoomStatus.WAITING:
         raise RoomServiceError("房间当前状态无法开始游戏")

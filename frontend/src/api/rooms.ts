@@ -84,3 +84,14 @@ export async function addAiPlayer(roomId: number, payload: AddAiPayload): Promis
   });
   return data;
 }
+
+export async function kickPlayer(roomId: number, playerId: number): Promise<RoomDetail> {
+  const { data } = await http.post<RoomDetail>(`/rooms/${roomId}/kick/`, {
+    player_id: playerId
+  });
+  return data;
+}
+
+export async function deleteRoom(roomId: number): Promise<void> {
+  await http.delete(`/rooms/${roomId}/`);
+}
