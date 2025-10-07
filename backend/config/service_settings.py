@@ -1,24 +1,43 @@
 """Centralized service configuration for external dependencies."""
 
+from __future__ import annotations
+
+import os
 from typing import Final
 
-from config.settings.base import env
+
+def _get_env(name: str, default: str | None = None) -> str:
+    """Fetch environment variables with optional defaults."""
+
+    value = os.getenv(name, default)
+    if value is None:
+        raise RuntimeError(f"Environment variable {name} is required")
+    return value
+
+
+def _get_int(name: str, default: int | None = None) -> int:
+    raw = _get_env(name, str(default) if default is not None else None)
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive branch
+        raise RuntimeError(f"Environment variable {name} must be an integer") from exc
+
 
 MYSQL_CONFIG: Final = {
-    "HOST": env("MYSQL_HOST", default="localhost"),
-    "PORT": env.int("MYSQL_PORT", default=3306),
-    "USER": env("MYSQL_USER", default="duwei"),
-    "PASSWORD": env("MYSQL_PASSWORD", default="123456"),
-    "NAME": env("MYSQL_DATABASE", default="aisocialgame"),
+    "HOST": _get_env("MYSQL_HOST", "localhost"),
+    "PORT": _get_int("MYSQL_PORT", 3306),
+    "USER": _get_env("MYSQL_USER", "duwei"),
+    "PASSWORD": _get_env("MYSQL_PASSWORD", "123456"),
+    "NAME": _get_env("MYSQL_DATABASE", "aisocialgame"),
 }
 
 REDIS_CONFIG: Final = {
-    "URL": env("REDIS_URL", default="redis://localhost:6379/0"),
+    "URL": _get_env("REDIS_URL", "redis://localhost:6379/0"),
 }
 
 LLM_CONFIG: Final = {
-    "BASE_URL": env("LLM_API_BASE_URL", default="https://api.deepseek.com/v1"),
-    "API_KEY": env("LLM_API_KEY", default="123456"),
-    "MODEL": env("LLM_MODEL_NAME", default="deepseek-chat"),
+    "BASE_URL": _get_env("LLM_API_BASE_URL", "https://api.deepseek.com/v1"),
+    "API_KEY": _get_env("LLM_API_KEY", "123456"),
+    "MODEL": _get_env("LLM_MODEL_NAME", "deepseek-chat"),
 }
 

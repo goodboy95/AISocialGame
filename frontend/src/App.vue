@@ -10,6 +10,14 @@
         <el-space size="large" class="nav-actions">
           <el-button type="primary" link @click="goTo('lobby')">{{ t("nav.lobby") }}</el-button>
           <el-button type="primary" link @click="goTo('stats')">{{ t("nav.stats") }}</el-button>
+          <el-button
+            v-if="isLoggedIn"
+            type="primary"
+            link
+            @click="goTo('word-bank-admin')"
+          >
+            {{ t("nav.wordBank") }}
+          </el-button>
           <template v-if="!isLoggedIn">
             <el-button type="primary" link @click="goTo('login')">{{ t("nav.login") }}</el-button>
             <el-button type="primary" link @click="goTo('register')">{{ t("nav.register") }}</el-button>
@@ -28,6 +36,9 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item @click="goTo('word-bank-admin')">
+                    {{ t("nav.wordBank") }}
+                  </el-dropdown-item>
                   <el-dropdown-item @click="goTo('stats')">{{ t("nav.stats") }}</el-dropdown-item>
                   <el-dropdown-item divided @click="handleLogout">{{ t("nav.logout") }}</el-dropdown-item>
                 </el-dropdown-menu>
