@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlsplit, urlunsplit
 
 import environ
 from corsheaders.defaults import default_headers
@@ -11,7 +12,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=(str, "please-change-me"),
-    REDIS_URL=(str, "redis://redis:6379/0"),
 )
 
 if env.bool("DJANGO_READ_DOT_ENV_FILE", default=True):
@@ -19,7 +19,33 @@ if env.bool("DJANGO_READ_DOT_ENV_FILE", default=True):
 
 from config.service_settings import MYSQL_CONFIG, REDIS_CONFIG
 
-REDIS_URL = REDIS_CONFIG["URL"]
+
+def _ensure_redis_password(url: str, password: str) -> str:
+    if not password:
+        return url
+
+    parsed = urlsplit(url)
+    if parsed.password:
+        return url
+
+    hostname = parsed.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+
+    port = f":{parsed.port}" if parsed.port else ""
+    username = parsed.username or ""
+    credentials = f"{username}:{password}" if username else f":{password}"
+    netloc = f"{credentials}@{hostname}{port}" if hostname else parsed.netloc
+
+    if not netloc:
+        return url
+
+    return urlunsplit(parsed._replace(netloc=netloc))
+
+
+RAW_REDIS_URL = REDIS_CONFIG["URL"]
+REDIS_PASSWORD = REDIS_CONFIG["PASSWORD"]
+REDIS_URL = _ensure_redis_password(RAW_REDIS_URL, REDIS_PASSWORD)
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)

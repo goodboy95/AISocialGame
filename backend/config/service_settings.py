@@ -33,6 +33,7 @@ MYSQL_CONFIG: Final = {
 
 REDIS_CONFIG: Final = {
     "URL": _get_env("REDIS_URL", "redis://localhost:6379/0"),
+    "PASSWORD": _get_env("REDIS_PASSWORD", ""),
 }
 
 LLM_CONFIG: Final = {
