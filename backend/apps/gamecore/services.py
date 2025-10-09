@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
@@ -129,61 +130,72 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
     """Push an event into the active engine and broadcast the result."""
 
     payload = payload or {}
-    session = (
-        room.sessions.filter(status=GameSession.SessionStatus.ACTIVE)
-        .select_for_update()
-        .first()
-    )
-    if not session:
-        raise GameEngineError("房间尚未开始游戏")
+    public_session: Dict[str, Any] | None = None
+    room_snapshot: Dict[str, Any] | None = None
+    pending_events: list[Dict[str, Any]] = []
+    changed = False
 
-    engine = get_engine_for_session(session)
-    event = GameEvent(type=event_type, payload=payload, actor_id=actor.id if actor else None)
-    engine.handle_event(event)
-    changed = engine.run_auto_actions()
-    fields = engine.to_session_fields()
-    session.state = fields["state"]
-    session.current_phase = fields["current_phase"]
-    session.current_player_id = fields["current_player_id"]
-    session.round_number = fields["round_number"]
-    session.deadline_at = fields.get("deadline_at")
-    session.timer_context = fields.get("timer_context") or {}
-    if engine.phase == EnginePhase.ENDED or fields["state"].get("winner"):
-        session.status = GameSession.SessionStatus.COMPLETED
-        session.ended_at = timezone.now()
-    session.save(update_fields=[
-        "state",
-        "current_phase",
-        "current_player_id",
-        "round_number",
-        "deadline_at",
-        "timer_context",
-        "status",
-        "ended_at",
-        "updated_at",
-    ])
+    with transaction.atomic():
+        session = (
+            room.sessions.filter(status=GameSession.SessionStatus.ACTIVE)
+            .select_for_update()
+            .first()
+        )
+        if not session:
+            raise GameEngineError("房间尚未开始游戏")
 
-    analytics_services.log_round_event(
-        session=session,
-        event_type=event_type,
-        payload=payload,
-        actor_id=actor.id if actor else None,
-    )
-    defaults_snapshot = fields["state"].get("default_actions", {}) if isinstance(fields.get("state"), dict) else {}
-    formatted_defaults = {
-        key: {"defaults": value}
-        for key, value in defaults_snapshot.items()
-    }
-    if session.status == GameSession.SessionStatus.COMPLETED:
-        analytics_services.finalize_record(session, defaults=formatted_defaults)
-    else:
-        analytics_services.update_record_from_session(session)
+        engine = get_engine_for_session(session)
+        event = GameEvent(type=event_type, payload=payload, actor_id=actor.id if actor else None)
+        engine.handle_event(event)
+        changed = engine.run_auto_actions()
+        fields = engine.to_session_fields()
+        session.state = fields["state"]
+        session.current_phase = fields["current_phase"]
+        session.current_player_id = fields["current_player_id"]
+        session.round_number = fields["round_number"]
+        session.deadline_at = fields.get("deadline_at")
+        session.timer_context = fields.get("timer_context") or {}
+        if engine.phase == EnginePhase.ENDED or fields["state"].get("winner"):
+            session.status = GameSession.SessionStatus.COMPLETED
+            session.ended_at = timezone.now()
+        session.save(update_fields=[
+            "state",
+            "current_phase",
+            "current_player_id",
+            "round_number",
+            "deadline_at",
+            "timer_context",
+            "status",
+            "ended_at",
+            "updated_at",
+        ])
 
-    public_session = serialize_session_for_user(session)
-    from apps.rooms.serializers import RoomDetailSerializer  # local import to avoid circular
+        analytics_services.log_round_event(
+            session=session,
+            event_type=event_type,
+            payload=payload,
+            actor_id=actor.id if actor else None,
+        )
+        defaults_snapshot = fields["state"].get("default_actions", {}) if isinstance(fields.get("state"), dict) else {}
+        formatted_defaults = {
+            key: {"defaults": value}
+            for key, value in defaults_snapshot.items()
+        }
+        if session.status == GameSession.SessionStatus.COMPLETED:
+            analytics_services.finalize_record(session, defaults=formatted_defaults)
+        else:
+            analytics_services.update_record_from_session(session)
 
-    room_snapshot = RoomDetailSerializer(room).data
-    room_snapshot["game_session"] = public_session
+        public_session = serialize_session_for_user(session)
+        from apps.rooms.serializers import RoomDetailSerializer  # local import to avoid circular
+
+        room_snapshot = RoomDetailSerializer(room).data
+        room_snapshot["game_session"] = public_session
+        pending_events = [extra for extra in engine.consume_pending_events() if extra]
+
+    if public_session is None or room_snapshot is None:
+        raise GameEngineError("棋局状态更新失败")
+
     _broadcast_game_event(
         room,
         {
@@ -193,9 +205,7 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
             "room": room_snapshot,
         },
     )
-    for extra in engine.consume_pending_events():
-        if not extra:
-            continue
+    for extra in pending_events:
         _broadcast_game_event(
             room,
             {
@@ -207,4 +217,3 @@ def handle_room_event(*, room: Room, actor: Optional[RoomPlayer], event_type: st
     if changed:
         LOGGER.debug("Engine auto actions executed after %s", event_type)
     return public_session
-

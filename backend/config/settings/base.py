@@ -1,11 +1,13 @@
 """Base settings shared across environments."""
 
+import inspect
 from pathlib import Path
 from datetime import timedelta
 from urllib.parse import urlsplit, urlunsplit
 
 import environ
 from corsheaders.defaults import default_headers
+from django.utils.functional import cached_property
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -18,6 +20,32 @@ if env.bool("DJANGO_READ_DOT_ENV_FILE", default=True):
     environ.Env.read_env(BASE_DIR / ".env")
 
 from config.service_settings import MYSQL_CONFIG, REDIS_CONFIG
+
+from mysql.connector.django.base import DatabaseWrapper as _MySQLDatabaseWrapper
+
+
+def _patch_mysql_connector_display_name() -> None:
+    """Ensure mysql-connector's DatabaseWrapper exposes a bound display_name."""
+
+    descriptor = _MySQLDatabaseWrapper.__dict__.get("display_name")
+    if not isinstance(descriptor, cached_property):
+        return
+
+    func = getattr(descriptor, "func", None)
+    if func is None or len(inspect.signature(func).parameters) != 0:
+        return
+
+    def _display_name(self: _MySQLDatabaseWrapper) -> str:
+        return "MySQL"
+
+    descriptor = cached_property(_display_name)
+    _MySQLDatabaseWrapper.display_name = descriptor
+    set_name = getattr(descriptor, "__set_name__", None)
+    if set_name is not None:
+        set_name(_MySQLDatabaseWrapper, "display_name")
+
+
+_patch_mysql_connector_display_name()
 
 
 def _ensure_redis_password(url: str, password: str) -> str:
@@ -107,7 +135,7 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
+        "ENGINE": "mysql.connector.django",
         "HOST": MYSQL_CONFIG["HOST"],
         "PORT": MYSQL_CONFIG["PORT"],
         "USER": MYSQL_CONFIG["USER"],

@@ -6,11 +6,12 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 
-from .routing import websocket_urlpatterns
-
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
 default_django_application = get_asgi_application()
+
+# Import websocket routing after Django initialises to avoid AppRegistryNotReady.
+from .routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(
     {

@@ -206,7 +206,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await database_sync_to_async(PrivateMessage.objects.create)(
             record=record,
             session=session,
-            room=membership.room,
+            room_id=membership.room_id,
             sender=membership,
             channel="private",
             target_player=target,
@@ -274,7 +274,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await database_sync_to_async(PrivateMessage.objects.create)(
             record=record,
             session=session,
-            room=membership.room,
+            room_id=membership.room_id,
             sender=membership,
             channel="faction",
             payload={"content": safe_content, "faction": faction},
@@ -284,6 +284,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 self._player_group(pid),
                 {"type": "chat.direct", "payload": message},
             )
+
     async def _handle_game_event(self, payload: dict):
         event_type = (payload or {}).get("event")
         event_payload = (payload or {}).get("payload") or {}
@@ -328,9 +329,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def _get_membership(self) -> Optional[RoomPlayer]:
         return await database_sync_to_async(
-            lambda: RoomPlayer.objects.filter(
-                room_id=self.room_id, user_id=self.user.id, is_active=True
-            ).first()
+            lambda: RoomPlayer.objects.select_related("room", "user")
+            .filter(room_id=self.room_id, user_id=self.user.id, is_active=True)
+            .first()
         )()
 
     async def _send_room_snapshot(self) -> None:
@@ -346,12 +347,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def _get_active_session(self) -> Optional[GameSession]:
         return await database_sync_to_async(
-            lambda: GameSession.objects.filter(
-                room_id=self.room_id, status=GameSession.SessionStatus.ACTIVE
-            ).first()
+            lambda: GameSession.objects.select_related("analytics_record")
+            .filter(room_id=self.room_id, status=GameSession.SessionStatus.ACTIVE)
+            .first()
         )()
 
     async def _get_player(self, player_id: int) -> Optional[RoomPlayer]:
         return await database_sync_to_async(
-            lambda: RoomPlayer.objects.filter(room_id=self.room_id, pk=player_id, is_active=True).first()
+            lambda: RoomPlayer.objects.select_related("user", "room")
+            .filter(room_id=self.room_id, pk=player_id, is_active=True)
+            .first()
         )()

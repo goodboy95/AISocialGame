@@ -23,7 +23,7 @@ CHANNEL_LAYERS = {
 }
 
 DATABASES["default"] = {
-    "ENGINE": "django.db.backends.mysql",
+    "ENGINE": "mysql.connector.django",
     "HOST": MYSQL_CONFIG["HOST"],
     "PORT": MYSQL_CONFIG["PORT"],
     "USER": MYSQL_CONFIG["USER"],
