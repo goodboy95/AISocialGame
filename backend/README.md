@@ -1,102 +1,52 @@
-# 后端服务（Django + DRF + Channels）
+# 后端服务（Spring Boot）
 
-本目录包含 Django 后端工程代码，负责提供 REST API、WebSocket 实时通信以及未来的 AI 能力集成。当前已落地房间管理、实时聊天、"谁是卧底" 与 "狼人杀" 两大玩法，可直接供前端大厅与房间页面联调使用。
+该目录包含使用 Java 21 与 Spring Boot 3 编写的后端服务，提供大厅/房间管理、玩家注册登录、AI 角色元数据与词库维护等 REST API，保持与既有前端的接口约定兼容。
 
-## 目录结构
+## 技术栈
 
-```text
-apps/               # 业务应用目录
-  ai/               # AI 策略与助手配置
-  gamecore/         # 游戏会话模型、引擎基类与调度服务
-  games/            # 游戏元数据、词库与具体玩法实现
-  rooms/            # 房间模型、业务服务、REST API、Consumers
-  users/            # 自定义用户模型与认证 API
-config/             # Django 项目配置（ASGI/WSGI/Settings）
-manage.py           # 管理命令入口
-requirements/       # 依赖声明
-Dockerfile          # Docker 构建文件
-```
+- Java 21
+- Spring Boot 3.2
+- Spring MVC + Spring Security + Spring Data JPA
+- H2（默认内存数据库，可通过环境变量切换到 MySQL）
+- JSON Web Token (JWT) 认证
 
-## 环境变量
+## 主要模块
 
-使用 `django-environ` 读取环境变量，`.env.example` 已提供推荐配置：
+- `config/`：应用配置（安全策略、JWT、AI 风格配置属性）。
+- `controller/`：REST API 控制器。
+- `dto/`：请求/响应数据传输对象。
+- `entity/`：JPA 实体模型，覆盖用户、房间、玩家、游戏会话、词库等。
+- `repository/`：Spring Data 仓储接口。
+- `security/`：JWT 生成与过滤器、用户详情服务。
+- `service/`：业务服务实现，包括房间管理、认证、用户信息导出、词库 CRUD 等。
 
-- `SECRET_KEY`：Django 密钥。
-- `DATABASE_URL`：默认指向 `mysql://ai_social_game:ai_social_game@db:3306/ai_social_game`。
-- `REDIS_URL`：Channels 使用的 Redis 连接。
-- `CORS_ALLOW_ALL_ORIGINS`：是否放开 CORS 限制，默认 `True`。
-- `CORS_ALLOWED_ORIGINS`：当未放开限制时允许的前端域名列表，默认 `http://localhost:5173`。
-- `CORS_ALLOW_CREDENTIALS`：是否允许跨域携带认证信息，放开限制时默认 `False`，其他情况下默认 `True`。
-
-## 关键依赖
-
-- Django 5 + Django REST Framework
-- Channels + channels-redis（为 WebSocket 做准备）
-- djangorestframework-simplejwt：JWT 登录/刷新
-- django-cors-headers：跨域支持
-
-## 可用接口
-
-- 认证体系
-  - `POST /api/auth/register/`：注册新用户。
-  - `POST /api/auth/token/`、`POST /api/auth/token/refresh/`：获取/刷新 JWT。
-  - `GET /api/auth/me/`：获取当前用户信息。
-- 房间管理
-  - `GET /api/rooms/`：分页查询房间列表，支持 `search`、`status`、`is_private` 参数。
-  - `POST /api/rooms/`：创建房间，自动生成房间号并将房主加入。
-- `GET /api/rooms/{id}/`：查看房间详情（含成员列表、房主标识、房态与当前游戏会话）。
-  - `POST /api/rooms/{id}/join/`、`POST /api/rooms/{id}/leave/`：加入/退出房间。
-  - `POST /api/rooms/join-by-code/`：通过房号加入房间。
-- `POST /api/rooms/{id}/start/`：房主发起游戏流程，自动补齐 AI 玩家并根据房间配置选择“谁是卧底”或“狼人杀”引擎。
-  - `DELETE /api/rooms/{id}/`：房主解散房间。
-- 健康检查：`GET /api/health/`。
-
-WebSocket 入口为 `ws://<host>/ws/rooms/<room_id>/?token=<jwt>`，仅允许房间成员建立连接，支持 `system.sync` 快照、`system.broadcast` 系统事件、`chat.message` 聊天以及 `game.event` 游戏状态推送。前端默认会根据页面协议/主机自动推导 `<origin>/ws` 作为基础地址，可直接复用。
-
-## 核心模块速览
-
-- `apps/rooms/services.py`
-  - `create_room`：封装房间初始化、房主入座与系统广播。
-  - `join_room` / `leave_room`：处理并发校验、席位分配、房主转移。
-  - `start_room`：自动补齐 AI 玩家、创建游戏会话并广播初始状态。
-  - `dissolve_room`：房主权限校验并通过 Channels 通知所有成员。
-- `apps/gamecore/engine.py`：定义 `BaseGameEngine`、`EnginePhase` 与 `GameEvent` 数据模型。
-- `apps/gamecore/services.py`：维护 `GameSession`，负责启动/更新引擎并通过 `game.event` 向前端推送状态。
-- `apps/games/models.py`：提供 `WordPair` 词库模型，支持按主题/难度随机抽词。
-- `apps/games/undercover/engine.py`：实现“谁是卧底”状态机，涵盖发言轮转、投票计票、平局重投、胜负判定及 AI 自动行为。
-- `apps/games/werewolf/engine.py`：实现“狼人杀”多阶段状态机，处理夜间行动（狼人击杀、预言家查验、女巫解救/投毒）、白天发言与投票、胜负判定及私密信息透出。
-- `apps/ai/services.py`：封装 AI 玩家昵称生成、“谁是卧底”与“狼人杀”两套启发式策略（发言、投票、夜间行动决策）。
-- `apps/rooms/models.RoomPlayer`：新增 `has_used_skill` 字段，用于记录一次性技能使用情况，便于引擎协同。
-- `apps/rooms/consumers.py`：WebSocket 协议统一使用 `type` + `payload`，支持聊天、系统广播、游戏事件与 `ping/pong` 心跳。
-- `apps/.../tests/`：`pytest` + `pytest-django` 覆盖 REST、WS 与游戏引擎核心流程，可作为新增功能的测试范例。
-
-## 开发与测试
+## 运行
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements/dev.txt
-python manage.py migrate
-daphne -b 0.0.0.0 -p 8000 config.asgi:application
-
-# 运行自动化测试
-pytest
+cd backend
+./mvnw spring-boot:run
 ```
 
-测试配置基于 `config.settings.test`，使用 SQLite 与 InMemory Channel Layer，`pytest` 用例覆盖房间创建/加入/退出、房主权限校验、WebSocket 消息广播以及“谁是卧底”“狼人杀”核心回合逻辑。
+默认监听 `http://localhost:8000/api`。若需连接外部数据库，可设置：
 
-### 本地 Channels 调试小贴士
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SPRING_DATASOURCE_DRIVER`
 
-- 需要 Redis 支撑多实例时，可使用 `docker compose up redis` 或本地安装 `redis-server` 后在 `.env` 中设置 `REDIS_URL=redis://127.0.0.1:6379/0`。
-- **务必使用 ASGI 服务器启动（Daphne / Uvicorn）**：若使用 Django 自带的 `runserver` 或 WSGI 服务器（如 Gunicorn）将导致 WebSocket 握手返回 `404`，因为 HTTP 请求不会被路由到 `RoomConsumer`。
-- 推荐开发命令：`daphne -b 0.0.0.0 -p 8000 config.asgi:application`。如需启用自动重载，可使用 `uvicorn --reload config.asgi:application --host 0.0.0.0 --port 8000`。
-- `python manage.py shell_plus` 中可调用 `apps.rooms.services.start_room`、`apps.gamecore.services.handle_room_event` 模拟发言/投票流程。
-- `apps/games/models.WordPair` 提供词库维护能力，可用于导入或调试新的词条。
+JWT 相关参数可通过环境变量覆写：
 
-### 房间联调流程示例
+- `JWT_SECRET`
+- `JWT_ACCESS_TTL`
+- `JWT_REFRESH_TTL`
 
-1. 使用 REST API 或前端大厅创建房间并加入，确保房间 `status` 为 `waiting`。
-2. 建立 WebSocket 连接后（可观察前端页面右上角“在线”标签或通过 `system.sync` 快照确认），房主调用 `POST /api/rooms/{id}/start/` 或在前端点击“开始游戏”。
-3. 首次进入发言轮时需发送 `ready` 事件（前端对应“通知开始发言”按钮），随后使用 `submit_speech`、`submit_vote` 等事件驱动引擎推进；收到的 `game.event` 广播将包含最新房间与会话快照，可刷新前端状态。
+## 可用接口概览
 
-> Tips：默认 `local` 配置关闭了全局权限校验，方便联调。生产环境请切换到 `config.settings.production` 并补充安全相关配置。
+- `POST /api/auth/register/`、`/token/`、`/token/refresh/`、`/logout/`
+- `GET /api/auth/me/`、`/me/export/`、`DELETE /api/auth/me/`
+- `GET /api/rooms/`、`POST /api/rooms/`
+- 房间操作：`/join/`、`/leave/`、`/start/`、`/add-ai/`、`/kick/`、`/join-by-code/`、`DELETE /api/rooms/{id}/`
+- `GET /api/meta/styles/`
+- 词库：`GET /api/games/word-pairs/`、`POST /api/games/word-pairs/`、`PATCH /api/games/word-pairs/{id}/`、`DELETE /api/games/word-pairs/{id}/`、`POST /api/games/word-pairs/import/`、`GET /api/games/word-pairs/export/`
+
+接口返回遵循前端所需的字段结构，部分业务（如游戏流程）以轻量化模拟数据提供。
