@@ -72,6 +72,7 @@ function normalizeRoom(data: any): RoomListItem {
     statusDisplay: data.status_display,
     phase: data.phase,
     phaseDisplay: data.phase_display,
+    engine: data.engine ?? "undercover",
     maxPlayers: data.max_players,
     currentRound: data.current_round,
     isPrivate: data.is_private,
@@ -271,7 +272,7 @@ export const useRoomsStore = defineStore("rooms", {
         this.loading = false;
       }
     },
-    async createRoom(payload: { name: string; maxPlayers: number; isPrivate: boolean }) {
+    async createRoom(payload: { name: string; maxPlayers: number; isPrivate: boolean; engine: "undercover" | "werewolf" }) {
       const detail = await createRoomApi(payload);
       this.currentRoom = normalizeRoomDetail(detail);
       this.messages = [];
@@ -331,6 +332,21 @@ export const useRoomsStore = defineStore("rooms", {
       this.messages.push({ ...message, channel: message.channel ?? "public" });
     },
     appendDirectMessage(message: DirectMessage) {
+      const existingPendingIndex = this.directMessages.findIndex(
+        (item) =>
+          item.pending &&
+          item.channel === message.channel &&
+          item.sender.id === message.sender.id &&
+          item.targetPlayerId === message.targetPlayerId &&
+          item.content === message.content
+      );
+      if (existingPendingIndex !== -1) {
+        this.directMessages.splice(existingPendingIndex, 1, { ...message });
+        return;
+      }
+      if (this.directMessages.some((item) => item.id === message.id)) {
+        return;
+      }
       this.directMessages.push(message);
     },
     async connectSocket(roomId: number) {
@@ -466,6 +482,27 @@ export const useRoomsStore = defineStore("rooms", {
     },
     sendPrivateMessage(targetPlayerId: number, content: string) {
       const raw = this.socket?.getRawInstance();
+      const auth = useAuthStore();
+      const now = new Date().toISOString();
+      const selfPlayer = this.currentRoom?.players.find(
+        (player) => player.userId && player.userId === auth.profile?.id
+      );
+      if (selfPlayer) {
+        this.appendDirectMessage({
+          id: crypto.randomUUID(),
+          roomId: this.currentRoom?.id ?? 0,
+          sessionId: this.currentRoom?.gameSession?.id ?? null,
+          channel: "private",
+          content,
+          timestamp: now,
+          sender: {
+            id: selfPlayer.id,
+            displayName: selfPlayer.displayName
+          },
+          targetPlayerId,
+          pending: true
+        });
+      }
       if (raw && raw.readyState === WebSocket.OPEN) {
         raw.send(
           JSON.stringify({

@@ -44,6 +44,7 @@
           </template>
           <p>房主：{{ room.owner.displayName }}</p>
           <p>房间号：<strong>{{ room.code }}</strong></p>
+          <p>模式：{{ resolveGameLabel(room.engine) }}</p>
           <p>人数：{{ room.playerCount }}/{{ room.maxPlayers }}</p>
           <div class="lobby__card-actions">
             <el-button type="primary" plain size="small" @click="enterRoom(room.id)">加入房间</el-button>
@@ -56,6 +57,11 @@
       <el-form :model="createForm" label-width="90px">
         <el-form-item label="房间名称">
           <el-input v-model="createForm.name" placeholder="给你的房间起个名字" />
+        </el-form-item>
+        <el-form-item label="游戏模式">
+          <el-select v-model="createForm.engine" placeholder="选择游戏模式">
+            <el-option v-for="option in gameModeOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
         </el-form-item>
         <el-form-item label="人数上限">
           <el-input-number v-model="createForm.maxPlayers" :min="2" :max="12" />
@@ -101,8 +107,14 @@ const creating = ref(false);
 const createForm = reactive({
   name: "",
   maxPlayers: 8,
-  isPrivate: false
+  isPrivate: false,
+  engine: "undercover"
 });
+
+const gameModeOptions = [
+  { value: "undercover", label: "谁是卧底" },
+  { value: "werewolf", label: "狼人杀" }
+];
 
 onMounted(() => {
   refresh();
@@ -131,12 +143,18 @@ async function submitCreate() {
     const room = await roomsStore.createRoom({ ...createForm });
     createDialogVisible.value = false;
     createForm.name = "";
+    createForm.engine = "undercover";
     await enterRoom(room.id);
   } catch (error) {
     console.error(error);
   } finally {
     creating.value = false;
   }
+}
+
+function resolveGameLabel(engine: string): string {
+  const found = gameModeOptions.find((item) => item.value === engine);
+  return found ? found.label : engine;
 }
 
 async function enterRoom(roomId: number) {

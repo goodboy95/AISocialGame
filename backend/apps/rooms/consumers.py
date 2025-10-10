@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Optional
@@ -12,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from apps.ai import UndercoverAIStrategy, WerewolfAIStrategy
 from apps.common import ContentPolicyViolation, enforce_content_policy
 from apps.analytics.models import PrivateMessage
 from apps.common.metrics import WS_CONNECTION_GAUGE
@@ -218,6 +220,111 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 self._player_group(pid),
                 {"type": "chat.direct", "payload": message},
             )
+        if target.is_ai:
+            await self._schedule_ai_private_reply(
+                session=session,
+                ai_player=target,
+                sender=membership,
+                incoming=message,
+            )
+
+    async def _schedule_ai_private_reply(
+        self,
+        *,
+        session: GameSession,
+        ai_player: RoomPlayer,
+        sender: RoomPlayer,
+        incoming: dict,
+    ) -> None:
+        async def _respond() -> None:
+            try:
+                reply = await asyncio.to_thread(
+                    self._generate_ai_private_reply,
+                    session,
+                    ai_player,
+                    incoming,
+                )
+            except Exception:  # pragma: no cover - defensive logging
+                logger.exception(
+                    "Failed to build AI private reply",
+                    extra={"room_id": self.room_id, "ai_player": ai_player.id},
+                )
+                return
+            if not reply:
+                return
+            timestamp = timezone.now().isoformat()
+            payload = {
+                "id": str(uuid.uuid4()),
+                "roomId": self.room_id,
+                "sessionId": session.id,
+                "channel": "private",
+                "content": reply,
+                "timestamp": timestamp,
+                "sender": {
+                    "id": ai_player.id,
+                    "displayName": ai_player.resolved_display_name,
+                },
+                "targetPlayerId": sender.id,
+            }
+            record = getattr(session, "analytics_record", None)
+            await database_sync_to_async(PrivateMessage.objects.create)(
+                record=record,
+                session=session,
+                room_id=self.room_id,
+                sender=ai_player,
+                channel="private",
+                target_player=sender,
+                payload={"content": reply},
+            )
+            recipients = {sender.id, ai_player.id}
+            for pid in recipients:
+                await self.channel_layer.group_send(
+                    self._player_group(pid),
+                    {"type": "chat.direct", "payload": payload},
+                )
+
+        asyncio.create_task(_respond())
+
+    def _generate_ai_private_reply(
+        self,
+        session: GameSession,
+        ai_player: RoomPlayer,
+        incoming: dict,
+    ) -> str | None:
+        content = (incoming or {}).get("content", "")
+        text = (content or "").strip()
+        if not text:
+            text = ""
+        state = session.state or {}
+        assignments = state.get("assignments", {}) if isinstance(state, dict) else {}
+        ai_meta = assignments.get(str(ai_player.id), {}) if isinstance(assignments, dict) else {}
+        style = (
+            ai_meta.get("ai_style")
+            or getattr(ai_player, "ai_style", None)
+            or "balanced"
+        )
+        engine = session.engine
+        if engine == "undercover":
+            strategy = UndercoverAIStrategy(style=style)
+            role = ai_meta.get("role") or getattr(ai_player, "role", "")
+            word = ai_meta.get("word") or getattr(ai_player, "word", "")
+            return strategy.generate_private_reply(
+                incoming=text,
+                role=role or "civilian",
+                word=word or "",
+            )
+        if engine == "werewolf":
+            strategy = WerewolfAIStrategy(style=style)
+            role = ai_meta.get("role") or getattr(ai_player, "role", "villager")
+            last_result = state.get("last_result") if isinstance(state, dict) else {}
+            if not isinstance(last_result, dict):
+                last_result = {}
+            return strategy.generate_private_reply(
+                incoming=text,
+                role=role or "villager",
+                last_result=last_result,
+            )
+        return ""
 
     async def _handle_faction_message(self, payload: dict):
         content = (payload or {}).get("content", "").strip()

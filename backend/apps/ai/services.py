@@ -193,6 +193,28 @@ class UndercoverAIStrategy:
         record_ai_latency(perf_counter() - start)
         return result
 
+    def generate_private_reply(
+        self,
+        *,
+        incoming: str,
+        role: str,
+        word: str | None,
+    ) -> str:
+        snippet = (incoming or "").strip()
+        if len(snippet) > 20:
+            snippet = snippet[-20:]
+        prefix, suffix = self._style_snippet()
+        keyword = word or "这个词"
+        if role == "undercover":
+            body = f"收到，我们悄悄围绕『{keyword}』聊聊"
+        elif role == "blank":
+            body = "我先装作若无其事，继续观察"
+        else:
+            body = f"明白，一起把话题往『{keyword}』靠拢"
+        if snippet:
+            body += f"，记得你提到“{snippet}”"
+        return f"{prefix}{body}{suffix}"
+
     def _llm_vote_prompt(
         self,
         *,
@@ -486,6 +508,32 @@ class WerewolfAIStrategy:
         result = f"{prefix}{body}{suffix}"
         record_ai_latency(perf_counter() - start)
         return result
+
+    def generate_private_reply(
+        self,
+        *,
+        incoming: str,
+        role: str,
+        last_result: Dict[str, list[int]],
+    ) -> str:
+        snippet = (incoming or "").strip()
+        if len(snippet) > 20:
+            snippet = snippet[-20:]
+        prefix, suffix = self._style_snippet()
+        if role == "werewolf":
+            body = "收到，夜里按计划行事"
+        elif role == "seer":
+            body = "了解，我会尽快给出查验"
+        elif role == "witch":
+            body = "我会留意药水使用，别担心"
+        else:
+            body = "懂了，白天我们多交流线索"
+        if snippet:
+            body += f"，你提到的“{snippet}”我记下了"
+        night_losses = last_result.get("nightKilled") if isinstance(last_result, dict) else None
+        if night_losses:
+            body += f"，昨夜的阵亡也得复盘"
+        return f"{prefix}{body}{suffix}"
 
     def pick_vote(
         self,

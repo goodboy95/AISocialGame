@@ -138,6 +138,7 @@ export interface RoomListItem {
   statusDisplay: string;
   phase: string;
   phaseDisplay: string;
+  engine: string;
   maxPlayers: number;
   currentRound: number;
   isPrivate: boolean;
@@ -183,4 +184,5 @@ export interface DirectMessage {
   targetPlayerId?: number;
   faction?: string;
   recipients?: number[];
+  pending?: boolean;
 }
