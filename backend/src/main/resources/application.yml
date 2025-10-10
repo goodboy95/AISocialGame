@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: ai-social-game-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:aisocialgame;DB_CLOSE_DELAY=-1;MODE=MYSQL}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+server:
+  port: ${SERVER_PORT:8000}
+  servlet:
+    context-path: /api
+security:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please}
+    issuer: ai-social-game
+    access-token-ttl: ${JWT_ACCESS_TTL:PT1H}
+    refresh-token-ttl: ${JWT_REFRESH_TTL:P7D}
+app:
+  ai-styles:
+    - key: storyteller
+      label: "故事王"
+      description: "喜欢用夸张的比喻来迷惑其他玩家的 AI。"
+    - key: analyst
+      label: "逻辑学家"
+      description: "擅长从细节推理出卧底身份的 AI。"
+    - key: prankster
+      label: "恶作剧达人"
+      description: "总是用搞怪的方式发表观点，令人哭笑不得的 AI。"
