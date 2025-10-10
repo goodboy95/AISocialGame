@@ -8,6 +8,7 @@ export interface CreateRoomPayload {
   name: string;
   maxPlayers: number;
   isPrivate: boolean;
+  engine: "undercover" | "werewolf";
   config?: Record<string, unknown>;
 }
 
@@ -43,11 +44,18 @@ export async function fetchRooms(params: RoomListQuery = {}): Promise<PaginatedR
 }
 
 export async function createRoom(payload: CreateRoomPayload): Promise<RoomDetail> {
+  const baseConfig = (payload.config && typeof payload.config === "object") ? { ...payload.config } : {};
+  const nestedGameConfig =
+    baseConfig && typeof (baseConfig as any).game === "object"
+      ? { ...(baseConfig as any).game }
+      : {};
+  nestedGameConfig.engine = payload.engine;
+  const requestConfig = { ...baseConfig, engine: payload.engine, game: nestedGameConfig } as Record<string, unknown>;
   const { data } = await http.post<RoomDetail>("/rooms/", {
     name: payload.name,
     max_players: payload.maxPlayers,
     is_private: payload.isPrivate,
-    config: payload.config ?? {}
+    config: requestConfig
   });
   return data;
 }

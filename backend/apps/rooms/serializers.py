@@ -79,6 +79,7 @@ class RoomBaseSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     phase_display = serializers.CharField(source="get_phase_display", read_only=True)
     player_count = serializers.SerializerMethodField()
+    engine = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
@@ -91,6 +92,7 @@ class RoomBaseSerializer(serializers.ModelSerializer):
             "status_display",
             "phase",
             "phase_display",
+            "engine",
             "max_players",
             "current_round",
             "is_private",
@@ -117,6 +119,22 @@ class RoomBaseSerializer(serializers.ModelSerializer):
 
     def get_player_count(self, obj: Room) -> int:
         return obj.players.filter(is_active=True).count()
+
+    def get_engine(self, obj: Room) -> str:
+        session = obj.sessions.filter(status="active").values_list("engine", flat=True).first()
+        if session:
+            return session
+        config = obj.config or {}
+        if isinstance(config, dict):
+            game_cfg = config.get("game")
+            if isinstance(game_cfg, dict):
+                engine = game_cfg.get("engine") or game_cfg.get("mode")
+                if isinstance(engine, str) and engine:
+                    return engine
+            engine = config.get("engine")
+            if isinstance(engine, str) and engine:
+                return engine
+        return "undercover"
 
 
 class RoomListSerializer(RoomBaseSerializer):

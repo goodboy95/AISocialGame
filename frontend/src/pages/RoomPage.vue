@@ -519,7 +519,7 @@
 
 <script setup lang="ts">
 import { Clock, Trophy } from "@element-plus/icons-vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -568,7 +568,9 @@ const dissolving = ref(false);
 
 const room = computed(() => currentRoom.value);
 const gameSession = computed(() => room.value?.gameSession ?? null);
-const gameEngine = computed(() => gameSession.value?.engine ?? "undercover");
+const gameEngine = computed(
+  () => gameSession.value?.engine ?? room.value?.engine ?? "undercover"
+);
 const isUndercover = computed(() => gameEngine.value === "undercover");
 const isWerewolf = computed(() => gameEngine.value === "werewolf");
 
@@ -714,6 +716,52 @@ const chatPlaceholder = computed(() => {
   }
   return t("room.chatPlaceholder");
 });
+
+const processedPrivateMessageIds = new Set<string>();
+
+watch(
+  directMessages,
+  (messages) => {
+    const selfId = selfPlayer.value?.id;
+    if (!selfId) {
+      return;
+    }
+    messages.forEach((message) => {
+      if (processedPrivateMessageIds.has(message.id)) {
+        return;
+      }
+      processedPrivateMessageIds.add(message.id);
+      if (message.channel !== "private") {
+        return;
+      }
+      if (message.sender.id === selfId || message.targetPlayerId !== selfId) {
+        return;
+      }
+      if (!privateTarget.value) {
+        privateTarget.value = message.sender.id;
+      }
+      if (!message.pending) {
+        ElNotification({
+          title: t("room.chat.privateNoticeTitle"),
+          message: t("room.chat.privateNoticeMessage", {
+            name: message.sender.displayName,
+            content: message.content,
+          }),
+          type: "info",
+          duration: 5000,
+        });
+      }
+    });
+  },
+  { deep: true }
+);
+
+watch(
+  () => room.value?.id,
+  () => {
+    processedPrivateMessageIds.clear();
+  }
+);
 
 const aliveAssignments = computed(() => assignments.value.filter((assignment) => assignment.isAlive));
 const speeches = computed(() => (gameState.value && Array.isArray((gameState.value as any).speeches) ? (gameState.value as any).speeches : []));
@@ -1244,8 +1292,20 @@ async function handleStart() {
   }
 }
 
-function handleReady() {
-  roomsStore.sendGameEvent("ready");
+async function handleReady() {
+  if (!room.value) {
+    return;
+  }
+  try {
+    if (!room.value.gameSession && room.value.isOwner) {
+      await roomsStore.startRoom(room.value.id);
+      ElMessage.success(t("room.messages.startSuccess"));
+    }
+    roomsStore.sendGameEvent("ready");
+  } catch (error) {
+    console.error(error);
+    notifyError(t("room.messages.startFailed"));
+  }
 }
 
 function handleSubmitSpeech() {
