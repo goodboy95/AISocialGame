@@ -75,35 +75,40 @@ class UndercoverEngine(BaseGameEngine):
     # Lifecycle
     # ------------------------------------------------------------------
     def start_game(self) -> None:
-        players = list(
-            self.room.players.filter(is_active=True).select_for_update().order_by("seat_number")
-        )
-        if len(players) < 3:
-            raise GameEngineError("至少需要 3 名玩家才能开始游戏")
-
-        cfg = self._config()
-        undercover_count = max(1, int(cfg.get("undercover_count", 1)))
-        blank_count = max(0, int(cfg.get("blank_count", 0)))
-        if undercover_count + blank_count >= len(players):
-            raise GameEngineError("卧底与白板数量过多，请调整配置")
-
-        try:
-            pair = WordPair.pick_random(**self._word_preferences())
-        except WordPair.DoesNotExist as exc:  # pragma: no cover - validated in tests
-            raise GameEngineError("词库中暂无合适的词对，请先在后台配置") from exc
-
-        speaking_order = [player.id for player in players]
-        random.shuffle(speaking_order)
-
         assignments: Dict[str, Dict[str, Any]] = {}
-        roles_pool: List[str] = (
-            ["undercover"] * undercover_count
-            + ["blank"] * blank_count
-            + ["civilian"] * (len(players) - undercover_count - blank_count)
-        )
-        random.shuffle(roles_pool)
+        speaking_order: List[int] = []
+        pair: WordPair | None = None
 
         with transaction.atomic():
+            players = list(
+                self.room.players.filter(is_active=True)
+                .select_for_update()
+                .order_by("seat_number")
+            )
+            if len(players) < 3:
+                raise GameEngineError("至少需要 3 名玩家才能开始游戏")
+
+            cfg = self._config()
+            undercover_count = max(1, int(cfg.get("undercover_count", 1)))
+            blank_count = max(0, int(cfg.get("blank_count", 0)))
+            if undercover_count + blank_count >= len(players):
+                raise GameEngineError("卧底与白板数量过多，请调整配置")
+
+            try:
+                pair = WordPair.pick_random(**self._word_preferences())
+            except WordPair.DoesNotExist as exc:  # pragma: no cover - validated in tests
+                raise GameEngineError("词库中暂无合适的词对，请先在后台配置") from exc
+
+            speaking_order = [player.id for player in players]
+            random.shuffle(speaking_order)
+
+            roles_pool: List[str] = (
+                ["undercover"] * undercover_count
+                + ["blank"] * blank_count
+                + ["civilian"] * (len(players) - undercover_count - blank_count)
+            )
+            random.shuffle(roles_pool)
+
             updates: List[RoomPlayer] = []
             for player, role in zip(players, roles_pool):
                 word = pair.undercover_word if role == "undercover" else pair.civilian_word
@@ -123,6 +128,8 @@ class UndercoverEngine(BaseGameEngine):
                     "is_alive": True,
                 }
             RoomPlayer.objects.bulk_update(updates, ["role", "word", "is_alive"])
+
+        assert pair is not None  # for type checkers
 
         self.phase = EnginePhase.PREPARING
         self.state = {
