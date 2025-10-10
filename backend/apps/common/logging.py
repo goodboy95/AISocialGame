@@ -48,8 +48,19 @@ class StructuredJsonFormatter(logging.Formatter):
             "message",
         }
         if extra_keys:
-            payload["extra"] = {key: getattr(record, key) for key in extra_keys}
-        return json.dumps(payload, ensure_ascii=False)
+            payload["extra"] = {
+                key: self._serialize_extra(getattr(record, key)) for key in extra_keys
+            }
+        return json.dumps(payload, ensure_ascii=False, default=str)
+
+    @staticmethod
+    def _serialize_extra(value):
+        """Ensure extra payload values are JSON serialisable."""
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return str(value)
 
 
 class MaskSensitiveFilter(logging.Filter):
