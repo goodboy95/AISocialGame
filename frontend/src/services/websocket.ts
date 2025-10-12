@@ -23,7 +23,15 @@ function resolveBaseUrl(custom?: string): string {
   }
 
   const apiBaseEnv = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  const apiBase = apiBaseEnv && apiBaseEnv.trim() ? apiBaseEnv : "http://localhost:8000/api";
+  let apiBase = apiBaseEnv && apiBaseEnv.trim() ? apiBaseEnv : undefined;
+
+  if (!apiBase) {
+    if (!import.meta.env.DEV && typeof window !== "undefined" && window.location) {
+      apiBase = `${window.location.origin.replace(/\/$/, "")}/api`;
+    } else {
+      apiBase = "http://localhost:8000/api";
+    }
+  }
   try {
     const parsed = new URL(apiBase);
     parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";

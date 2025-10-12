@@ -1,6 +1,20 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
+function resolveBaseURL(): string {
+  const envBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (envBase && envBase.trim()) {
+    return envBase;
+  }
+
+  if (typeof window !== "undefined" && window.location && !import.meta.env.DEV) {
+    const origin = window.location.origin.replace(/\/$/, "");
+    return `${origin}/api`;
+  }
+
+  return "http://localhost:8000/api";
+}
+
+const baseURL = resolveBaseURL();
 
 type NotificationHandler = (message: string) => void;
 
