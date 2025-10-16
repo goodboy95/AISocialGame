@@ -6,9 +6,14 @@ function resolveBaseURL(): string {
     return envBase;
   }
 
-  if (typeof window !== "undefined" && window.location && !import.meta.env.DEV) {
+  if (typeof window !== "undefined" && window.location) {
     const origin = window.location.origin.replace(/\/$/, "");
-    return `${origin}/api`;
+    const hostname = window.location.hostname.toLowerCase();
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+
+    if (!import.meta.env.DEV || !isLocalHost) {
+      return `${origin}/api`;
+    }
   }
 
   return "http://localhost:8000/api";
