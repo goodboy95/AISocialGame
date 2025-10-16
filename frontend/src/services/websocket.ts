@@ -26,9 +26,17 @@ function resolveBaseUrl(custom?: string): string {
   let apiBase = apiBaseEnv && apiBaseEnv.trim() ? apiBaseEnv : undefined;
 
   if (!apiBase) {
-    if (!import.meta.env.DEV && typeof window !== "undefined" && window.location) {
-      apiBase = `${window.location.origin.replace(/\/$/, "")}/api`;
-    } else {
+    if (typeof window !== "undefined" && window.location) {
+      const origin = window.location.origin.replace(/\/$/, "");
+      const hostname = window.location.hostname.toLowerCase();
+      const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+
+      if (!import.meta.env.DEV || !isLocalHost) {
+        apiBase = `${origin}/api`;
+      }
+    }
+
+    if (!apiBase) {
       apiBase = "http://localhost:8000/api";
     }
   }
