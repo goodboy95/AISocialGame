@@ -3,6 +3,8 @@ package com.aisocialgame.backend.service;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -21,6 +23,8 @@ import com.aisocialgame.backend.security.JwtService;
 @Service
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -38,12 +42,14 @@ public class AuthService {
     }
 
     public AuthDtos.TokenResponse login(String username, String password) {
+        log.debug("Attempting login for user '{}'", username);
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(username, password));
         AccountUserDetails userDetails = (AccountUserDetails) authentication.getPrincipal();
         UserAccount user = userDetails.getUser();
         String accessToken = jwtService.createAccessToken(user);
         String refresh = createRefreshToken(user);
+        log.debug("User '{}' authenticated successfully", username);
         return new AuthDtos.TokenResponse(accessToken, refresh);
     }
 
@@ -53,6 +59,7 @@ public class AuthService {
         token.setToken(UUID.randomUUID().toString());
         token.setExpiresAt(Instant.now().plus(jwtProperties.getRefreshTokenTtl()));
         refreshTokenRepository.save(token);
+        log.debug("Created refresh token for user {} expiring at {}", user.getId(), token.getExpiresAt());
         return token.getToken();
     }
 
