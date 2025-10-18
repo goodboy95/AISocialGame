@@ -2,10 +2,11 @@ spring:
   application:
     name: ai-social-game-backend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:aisocialgame;DB_CLOSE_DELAY=-1;MODE=MYSQL}
-    username: ${SPRING_DATASOURCE_USERNAME:sa}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
-    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    type: ${SPRING_DATASOURCE_TYPE:com.alibaba.druid.pool.DruidDataSource}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:duwei}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}
   jpa:
     hibernate:
       ddl-auto: update
