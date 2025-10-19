@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +30,7 @@ import com.aisocialgame.backend.repository.GameSessionRepository;
 import com.aisocialgame.backend.repository.RoomPlayerRepository;
 import com.aisocialgame.backend.repository.RoomRepository;
 import com.aisocialgame.backend.repository.UserRepository;
+import com.aisocialgame.backend.websocket.RoomEvents;
 
 @Service
 public class RoomService {
@@ -39,16 +41,19 @@ public class RoomService {
     private final UserRepository userRepository;
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
     private final Random random = new SecureRandom();
+    private final ApplicationEventPublisher eventPublisher;
 
     public RoomService(
             RoomRepository roomRepository,
             RoomPlayerRepository roomPlayerRepository,
             GameSessionRepository gameSessionRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.roomRepository = roomRepository;
         this.roomPlayerRepository = roomPlayerRepository;
         this.gameSessionRepository = gameSessionRepository;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public Room createRoom(UserAccount owner, String name, int maxPlayers, boolean isPrivate, Map<String, Object> config) {
@@ -118,7 +123,9 @@ public class RoomService {
         player.setUsername(user.getUsername());
         roomPlayerRepository.save(player);
         room.setUpdatedAt(Instant.now());
-        return roomRepository.save(room);
+        Room saved = roomRepository.save(room);
+        publishRoomUpdate(saved, player, "room.player.joined", player.getDisplayName() + " 加入了房间");
+        return saved;
     }
 
     @Transactional
@@ -137,12 +144,17 @@ public class RoomService {
         ai.setAiStyle(style);
         roomPlayerRepository.save(ai);
         room.setUpdatedAt(Instant.now());
-        return roomRepository.save(room);
+        Room saved = roomRepository.save(room);
+        publishRoomUpdate(saved, ai, "room.ai.joined", ai.getDisplayName() + "（AI）加入了房间");
+        return saved;
     }
 
     @Transactional
     public Room leaveRoom(Room room, UserAccount user) {
-        roomPlayerRepository.findByRoomAndUser(room, user).ifPresent(roomPlayerRepository::delete);
+        RoomPlayer leaving = roomPlayerRepository.findByRoomAndUser(room, user).orElse(null);
+        if (leaving != null) {
+            roomPlayerRepository.delete(leaving);
+        }
         if (room.getOwner() != null && room.getOwner().getId().equals(user.getId())) {
             roomPlayerRepository.findByRoomOrderBySeatNumberAsc(room).stream()
                     .filter(player -> player.getUser() != null)
@@ -157,7 +169,13 @@ public class RoomService {
             }
         }
         room.setUpdatedAt(Instant.now());
-        return roomRepository.save(room);
+        Room saved = roomRepository.save(room);
+        if (leaving != null) {
+            publishRoomUpdate(saved, leaving, "room.player.left", leaving.getDisplayName() + " 离开了房间");
+        } else {
+            publishRoomUpdate(saved, null, "room.player.left", null);
+        }
+        return saved;
     }
 
     @Transactional
@@ -175,35 +193,46 @@ public class RoomService {
         session.setUpdatedAt(Instant.now());
         session.setStateJson(JsonUtils.toJson(generateInitialState(room)));
         gameSessionRepository.save(session);
-        return roomRepository.save(room);
+        Room saved = roomRepository.save(room);
+        RoomPlayer ownerPlayer = null;
+        if (room.getOwner() != null) {
+            ownerPlayer = roomPlayerRepository.findByRoomAndUser(room, room.getOwner()).orElse(null);
+        }
+        publishRoomUpdate(saved, ownerPlayer, "room.started", null);
+        return saved;
     }
 
     @Transactional
     public void removeRoom(Room room) {
         roomRepository.delete(room);
+        publishRoomRemoved(room, "room.removed");
     }
 
     @Transactional
     public Room kickPlayer(Room room, long playerId) {
-        roomPlayerRepository.findById(playerId).ifPresent(player -> {
-            if (player.getRoom().getId().equals(room.getId())) {
-                roomPlayerRepository.delete(player);
-                if (player.isHost()) {
-                    roomPlayerRepository.findByRoomOrderBySeatNumberAsc(room).stream()
-                            .filter(next -> !next.getId().equals(player.getId()))
-                            .findFirst()
-                            .ifPresent(next -> {
-                                next.setHost(true);
-                                if (next.getUser() != null) {
-                                    room.setOwner(next.getUser());
-                                }
-                                roomPlayerRepository.save(next);
-                            });
-                }
+        RoomPlayer removed = roomPlayerRepository.findById(playerId)
+                .filter(player -> player.getRoom().getId().equals(room.getId()))
+                .orElse(null);
+        if (removed != null) {
+            roomPlayerRepository.delete(removed);
+            if (removed.isHost()) {
+                roomPlayerRepository.findByRoomOrderBySeatNumberAsc(room).stream()
+                        .filter(next -> !next.getId().equals(removed.getId()))
+                        .findFirst()
+                        .ifPresent(next -> {
+                            next.setHost(true);
+                            if (next.getUser() != null) {
+                                room.setOwner(next.getUser());
+                            }
+                            roomPlayerRepository.save(next);
+                        });
             }
-        });
+        }
         room.setUpdatedAt(Instant.now());
-        return roomRepository.save(room);
+        Room saved = roomRepository.save(room);
+        publishRoomUpdate(saved, removed, "room.player.kicked",
+                removed != null ? removed.getDisplayName() + " 被移出房间" : null);
+        return saved;
     }
 
     public RoomDtos.RoomDetail toRoomDetail(Room room, UserAccount currentUser) {
@@ -254,6 +283,22 @@ public class RoomService {
                 playerCount,
                 formatter.format(room.getCreatedAt()),
                 formatter.format(room.getUpdatedAt()));
+    }
+
+    private void publishRoomUpdate(Room room, RoomPlayer actor, String event, String message) {
+        RoomEvents.ActorSnapshot snapshot = null;
+        if (actor != null) {
+            snapshot = new RoomEvents.ActorSnapshot(
+                    actor.getId(),
+                    actor.getUser() != null ? actor.getUser().getId() : null,
+                    actor.getUsername(),
+                    actor.getDisplayName());
+        }
+        eventPublisher.publishEvent(new RoomEvents.RoomUpdated(room.getId(), snapshot, event, message));
+    }
+
+    private void publishRoomRemoved(Room room, String reason) {
+        eventPublisher.publishEvent(new RoomEvents.RoomRemoved(room.getId(), reason));
     }
 
     private RoomDtos.GameSessionSnapshot toSnapshot(GameSession session) {

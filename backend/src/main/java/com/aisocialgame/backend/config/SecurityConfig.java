@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/register/**", "/auth/token/**", "/auth/logout/**", "/meta/**").permitAll()
+                        .requestMatchers("/ws/**", "/api/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/rooms/**", "/games/word-pairs/**").permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
