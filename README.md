@@ -38,8 +38,8 @@ doc/       # 设计文档与阶段总结
 docker-compose up --build
 ```
 
-- 前端默认运行在 `http://localhost:5173`
-- 后端 REST API 位于 `http://localhost:8000/api`
+- 前端默认运行在 `http://localhost:5100`
+- 后端 REST API 位于 `http://socialgame.seekerhut.com/api`
 
 首次启动会构建 Spring Boot 可执行包并安装前端依赖。
 
@@ -58,7 +58,7 @@ npm install
 npm run dev
 ```
 
-> 提示：若未在 `.env` 中显式设置 `VITE_WS_BASE_URL`，前端会优先基于 `VITE_API_BASE_URL` 自动推导 WebSocket 基础地址（例如 `http://localhost:8000/api` 会映射到 `ws://localhost:8000/ws`），若未配置 API 地址，则回退到当前访问域名的 `/ws`。
+> 提示：若未在 `.env` 中显式设置 `VITE_WS_BASE_URL`，前端会优先基于 `VITE_API_BASE_URL` 自动推导 WebSocket 基础地址（例如 `http://socialgame.seekerhut.com/api` 会映射到 `ws://socialgame.seekerhut.com/ws`），若未配置 API 地址，则回退到当前访问域名的 `/ws`。
 
 ## 功能验证指南
 
@@ -66,10 +66,10 @@ npm run dev
 
    ```bash
    # 注册用户
-   http POST http://localhost:8000/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
+   http POST http://socialgame.seekerhut.com/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
 
    # 登录获取 JWT
-   http POST http://localhost:8000/api/auth/token/ username=alice password=Passw0rd!
+   http POST http://socialgame.seekerhut.com/api/auth/token/ username=alice password=Passw0rd!
    ```
 
    登录成功后将返回 `access`、`refresh` 令牌，后续请求在 Header 中携带 `Authorization: Bearer <access>`。
@@ -77,8 +77,8 @@ npm run dev
 2. **创建并加入房间**：
 
    ```bash
-   http POST http://localhost:8000/api/rooms/ name="Alice 的房间" max_players:=6 Authorization:"Bearer <access>"
-   http POST http://localhost:8000/api/rooms/{id}/join/ Authorization:"Bearer <access>"
+   http POST http://socialgame.seekerhut.com/api/rooms/ name="Alice 的房间" max_players:=6 Authorization:"Bearer <access>"
+   http POST http://socialgame.seekerhut.com/api/rooms/{id}/join/ Authorization:"Bearer <access>"
    ```
 
    创建成功会返回房间 ID 与房号 (`code`)，可通过 `POST /api/rooms/join-by-code/` 邀请其他成员加入。

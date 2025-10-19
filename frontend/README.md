@@ -44,8 +44,8 @@ src/
 复制 `.env.example` 为 `.env` 并根据后端部署地址调整：
 
 ```ini
-VITE_API_BASE_URL=http://localhost:8000/api
-VITE_WS_BASE_URL=ws://localhost:8000/ws
+VITE_API_BASE_URL=http://socialgame.seekerhut.com/api
+VITE_WS_BASE_URL=ws://socialgame.seekerhut.com/ws
 ```
 
 - 若未设置 `VITE_WS_BASE_URL`，`RoomRealtimeClient` 会尝试根据 `VITE_API_BASE_URL` 或当前页面地址推导 WebSocket 入口。【F:frontend/src/services/realtime.ts†L9-L44】

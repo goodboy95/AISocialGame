@@ -15,7 +15,7 @@ spring:
         format_sql: true
     open-in-view: false
 server:
-  port: ${SERVER_PORT:8000}
+  port: ${SERVER_PORT:8100}
   servlet:
     context-path: /api
 security:

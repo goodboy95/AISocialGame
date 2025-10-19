@@ -33,7 +33,7 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
-默认监听 `http://localhost:8000/api`。若需连接外部数据库，可设置：
+默认监听 `http://socialgame.seekerhut.com/api`。若需连接外部数据库，可设置：
 
 - `SPRING_DATASOURCE_URL`
 - `SPRING_DATASOURCE_USERNAME`

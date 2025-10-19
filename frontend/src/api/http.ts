@@ -26,7 +26,7 @@ function resolveBaseURL(): string {
     }
   }
 
-  return "http://localhost:8000/api";
+  return "http://socialgame.seekerhut.com/api";
 }
 
 const baseURL = resolveBaseURL();

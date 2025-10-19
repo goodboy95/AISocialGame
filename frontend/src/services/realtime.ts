@@ -38,7 +38,7 @@ function determineBaseUrl(options: RealtimeOptions = {}): string {
     return `${protocol}//${window.location.host}/ws`;
   }
 
-  return "ws://localhost:8000/ws";
+  return "ws://socialgame.seekerhut.com/ws";
 }
 
 function buildUrl(base: string, path: string, token?: string) {
