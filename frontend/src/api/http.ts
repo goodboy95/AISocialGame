@@ -1,5 +1,15 @@
 import axios from "axios";
 
+/**
+ * Central axios instance used by the application.  The file keeps the logic for resolving the base
+ * URL, attaching tracing headers and exposing consistent error notifications in one place so that
+ * feature modules stay lean.
+ */
+
+/**
+ * Determines the correct API base URL by inspecting the Vite configuration and falling back to a
+ * sensible local default.
+ */
 function resolveBaseURL(): string {
   const envBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (envBase && envBase.trim()) {
@@ -20,6 +30,9 @@ function resolveBaseURL(): string {
 }
 
 const baseURL = resolveBaseURL();
+if (import.meta.env.DEV) {
+  console.debug("Resolved API base URL", baseURL);
+}
 
 type NotificationHandler = (message: string) => void;
 
@@ -46,9 +59,19 @@ http.interceptors.request.use((config) => {
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2);
   headers["X-Request-ID"] = requestId;
+  if (import.meta.env.DEV) {
+    console.debug("HTTP request", {
+      method: config.method,
+      url: config.url,
+      requestId
+    });
+  }
   return config;
 });
 
+/**
+ * Tries to unwrap a human friendly error message from an axios error payload.
+ */
 function extractErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const response = error.response;
@@ -82,7 +105,16 @@ function extractErrorMessage(error: unknown): string {
 }
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (import.meta.env.DEV) {
+      console.debug("HTTP response", {
+        url: response.config.url,
+        status: response.status,
+        requestId: response.config.headers?.["X-Request-ID"]
+      });
+    }
+    return response;
+  },
   async (error) => {
     const message = extractErrorMessage(error);
     try {
