@@ -6,6 +6,8 @@ import type {
   GameStateView,
   RoomDetail,
   RoomListItem,
+  RoomOwner,
+  RoomPlayer,
   SessionTimer,
   UndercoverAssignmentView,
   UndercoverStateView,
@@ -39,77 +41,110 @@ interface RoomState {
   socketConnected: boolean;
 }
 
-function normalizePlayer(player: any) {
+function pickValue<T>(source: any, ...keys: string[]): T | undefined {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+  for (const key of keys) {
+    if (key in source) {
+      const value = source[key];
+      if (value !== undefined) {
+        return value as T;
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeOwner(owner: any): RoomOwner {
+  if (!owner || typeof owner !== "object") {
+    return {
+      id: 0,
+      username: "",
+      displayName: ""
+    };
+  }
+  const username = pickValue<string>(owner, "username") ?? "";
   return {
-    id: player.id,
-    userId: player.user_id ?? null,
-    username: player.username ?? null,
-    displayName: player.display_name,
-    seatNumber: player.seat_number,
-    isHost: player.is_host,
-    isAi: player.is_ai,
-    isActive: player.is_active,
-    joinedAt: player.joined_at,
-    role: player.role,
-    word: player.word,
-    isAlive: player.is_alive,
-    hasUsedSkill: player.has_used_skill ?? false,
-    aiStyle: player.ai_style ?? null
+    id: Number(owner.id ?? 0),
+    username,
+    displayName:
+      pickValue<string>(owner, "display_name", "displayName") ?? username
+  };
+}
+
+function normalizePlayer(player: any): RoomPlayer {
+  return {
+    id: Number(player.id ?? 0),
+    userId: pickValue<number | null>(player, "user_id", "userId") ?? null,
+    username: pickValue<string | null>(player, "username") ?? null,
+    displayName: pickValue<string>(player, "display_name", "displayName") ?? "",
+    seatNumber: Number(pickValue<number>(player, "seat_number", "seatNumber") ?? 0),
+    isHost: Boolean(pickValue<boolean>(player, "is_host", "isHost")),
+    isAi: Boolean(pickValue<boolean>(player, "is_ai", "isAi")),
+    isActive: Boolean(pickValue<boolean>(player, "is_active", "isActive")),
+    joinedAt: pickValue<string>(player, "joined_at", "joinedAt") ?? "",
+    role: pickValue<string>(player, "role") ?? "",
+    word: pickValue<string>(player, "word") ?? "",
+    isAlive: Boolean(pickValue<boolean>(player, "is_alive", "isAlive") ?? true),
+    hasUsedSkill: Boolean(pickValue<boolean>(player, "has_used_skill", "hasUsedSkill") ?? false),
+    aiStyle: pickValue<string | null>(player, "ai_style", "aiStyle") ?? null
   };
 }
 
 function normalizeRoom(data: any): RoomListItem {
+  const owner = normalizeOwner(pickValue<any>(data, "owner"));
   return {
-    id: data.id,
-    name: data.name,
-    code: data.code,
-    owner: {
-      id: data.owner.id,
-      username: data.owner.username,
-      displayName: data.owner.display_name
-    },
-    status: data.status,
-    statusDisplay: data.status_display,
-    phase: data.phase,
-    phaseDisplay: data.phase_display,
-    engine: data.engine ?? "undercover",
-    maxPlayers: data.max_players,
-    currentRound: data.current_round,
-    isPrivate: data.is_private,
-    playerCount: data.player_count,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
+    id: Number(data.id ?? 0),
+    name: pickValue<string>(data, "name") ?? "",
+    code: pickValue<string>(data, "code") ?? "",
+    owner,
+    status: pickValue<string>(data, "status") ?? "",
+    statusDisplay: pickValue<string>(data, "status_display", "statusDisplay") ?? "",
+    phase: pickValue<string>(data, "phase") ?? "",
+    phaseDisplay: pickValue<string>(data, "phase_display", "phaseDisplay") ?? "",
+    engine: pickValue<string>(data, "engine") ?? "undercover",
+    maxPlayers: Number(pickValue<number>(data, "max_players", "maxPlayers") ?? 0),
+    currentRound: Number(pickValue<number>(data, "current_round", "currentRound") ?? 0),
+    isPrivate: Boolean(pickValue<boolean>(data, "is_private", "isPrivate") ?? false),
+    playerCount: Number(pickValue<number>(data, "player_count", "playerCount") ?? 0),
+    createdAt: pickValue<string>(data, "created_at", "createdAt") ?? "",
+    updatedAt: pickValue<string>(data, "updated_at", "updatedAt") ?? ""
   };
 }
 
 function normalizeRoomDetail(data: any): RoomDetail {
+  const playersRaw = pickValue<any[]>(data, "players");
   return {
     ...normalizeRoom(data),
-    config: data.config ?? {},
-    players: Array.isArray(data.players) ? data.players.map(normalizePlayer) : [],
-    isMember: data.is_member ?? false,
-    isOwner: data.is_owner ?? false,
-    gameSession: data.game_session ? normalizeGameSession(data.game_session) : null
+    config: pickValue<Record<string, unknown>>(data, "config") ?? {},
+    players: Array.isArray(playersRaw) ? playersRaw.map(normalizePlayer) : [],
+    isMember: Boolean(pickValue<boolean>(data, "is_member", "isMember") ?? false),
+    isOwner: Boolean(pickValue<boolean>(data, "is_owner", "isOwner") ?? false),
+    gameSession: (() => {
+      const rawSession = pickValue<any>(data, "game_session", "gameSession");
+      return rawSession ? normalizeGameSession(rawSession) : null;
+    })()
   };
 }
 
 function normalizeGameSession(data: any): GameSessionSnapshot<GameStateView> {
-  const engine = data.engine;
-  const rawState = data.state ?? {};
+  const engine = String(pickValue<string>(data, "engine") ?? "undercover");
+  const rawState = pickValue<Record<string, unknown>>(data, "state") ?? {};
   const state: GameStateView = engine === "werewolf"
     ? normalizeWerewolfState(rawState)
     : normalizeUndercoverState(rawState);
   return {
-    id: data.id,
-    engine: data.engine,
-    phase: data.phase,
-    round: data.round,
-    currentPlayerId: data.currentPlayerId ?? null,
-    status: data.status,
-    startedAt: data.startedAt,
-    updatedAt: data.updatedAt,
-    deadlineAt: data.deadlineAt ?? null,
-    timer: normalizeSessionTimer(data.timer),
+    id: Number(data.id ?? 0),
+    engine,
+    phase: String(pickValue<string>(data, "phase") ?? ""),
+    round: Number(pickValue<number>(data, "round") ?? 0),
+    currentPlayerId: pickValue<number | null>(data, "currentPlayerId", "current_player_id") ?? null,
+    status: String(pickValue<string>(data, "status") ?? ""),
+    startedAt: pickValue<string>(data, "startedAt", "started_at") ?? "",
+    updatedAt: pickValue<string>(data, "updatedAt", "updated_at") ?? "",
+    deadlineAt: pickValue<string | null>(data, "deadlineAt", "deadline_at") ?? null,
+    timer: normalizeSessionTimer(pickValue<any>(data, "timer")),
     state
   };
 }
@@ -119,33 +154,41 @@ function normalizeSessionTimer(timer: any): SessionTimer | null {
     return null;
   }
   return {
-    phase: String(timer.phase ?? ""),
-    duration: Number(timer.duration ?? 0),
-    expiresAt: timer.expiresAt ?? "",
-    defaultAction: timer.defaultAction ?? undefined,
-    description: timer.description ?? undefined,
-    metadata: timer.metadata ?? undefined
+    phase: String(pickValue<string>(timer, "phase") ?? ""),
+    duration: Number(pickValue<number>(timer, "duration") ?? 0),
+    expiresAt: pickValue<string>(timer, "expiresAt", "expires_at") ?? "",
+    defaultAction: pickValue<Record<string, unknown>>(timer, "defaultAction", "default_action") ?? undefined,
+    description: pickValue<string>(timer, "description") ?? undefined,
+    metadata: pickValue<Record<string, unknown>>(timer, "metadata") ?? undefined
   };
 }
 
 function normalizeUndercoverState(state: any): UndercoverStateView {
-  const assignments: UndercoverAssignmentView[] = Array.isArray(state.assignments)
-    ? state.assignments.map((item: any) => ({
-        playerId: item.playerId,
-        displayName: item.displayName,
-        isAi: Boolean(item.isAi),
-        isAlive: Boolean(item.isAlive),
-        role: item.role ?? null,
-        word: item.word ?? null,
-        aiStyle: item.aiStyle ?? null
+  const rawAssignments = pickValue<any[]>(state, "assignments") ?? [];
+  const assignments: UndercoverAssignmentView[] = Array.isArray(rawAssignments)
+    ? rawAssignments.map((item: any) => ({
+        playerId: Number(pickValue<number>(item, "playerId", "player_id") ?? 0),
+        displayName: pickValue<string>(item, "displayName", "display_name") ?? "",
+        isAi: Boolean(pickValue<boolean>(item, "isAi", "is_ai")),
+        isAlive: Boolean(pickValue<boolean>(item, "isAlive", "is_alive")),
+        role: pickValue<string | null>(item, "role") ?? null,
+        word: pickValue<string | null>(item, "word") ?? null,
+        aiStyle: pickValue<string | null>(item, "aiStyle", "ai_style") ?? null
       }))
     : [];
-  const aiVoteRevealsRaw = Array.isArray(state.ai_vote_reveals) ? state.ai_vote_reveals : [];
+  const aiVoteRevealsRaw = (() => {
+    const camel = pickValue<any[]>(state, "aiVoteReveals");
+    if (Array.isArray(camel)) {
+      return camel;
+    }
+    const snake = pickValue<any[]>(state, "ai_vote_reveals");
+    return Array.isArray(snake) ? snake : [];
+  })();
   const aiVoteReveals = aiVoteRevealsRaw
     .map((item: any) => {
-      const playerId = Number(item.playerId ?? item.player_id);
-      const targetId = Number(item.targetId ?? item.target_id);
-      const timestamp = item.timestamp ?? "";
+      const playerId = Number(pickValue<number>(item, "playerId", "player_id") ?? NaN);
+      const targetId = Number(pickValue<number>(item, "targetId", "target_id") ?? NaN);
+      const timestamp = pickValue<string>(item, "timestamp") ?? "";
       if (!Number.isFinite(playerId) || !Number.isFinite(targetId)) {
         return null;
       }
@@ -153,83 +196,131 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
     })
     .filter((item: any): item is { playerId: number; targetId: number; timestamp: string } => Boolean(item));
   return {
-    phase: state.phase ?? "preparing",
-    round: state.round ?? 1,
-    current_player_id: state.current_player_id ?? null,
+    phase: String(pickValue<string>(state, "phase") ?? "preparing"),
+    round: Number(pickValue<number>(state, "round") ?? 1),
+    current_player_id: pickValue<number | null>(state, "current_player_id", "currentPlayerId") ?? null,
     assignments,
-    speeches: Array.isArray(state.speeches) ? state.speeches : [],
-    voteSummary: state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} },
-    word_pair: state.word_pair ?? {},
+    speeches: (() => {
+      const rawSpeeches = pickValue<any[]>(state, "speeches");
+      return Array.isArray(rawSpeeches)
+        ? (rawSpeeches as UndercoverStateView["speeches"])
+        : [];
+    })(),
+    voteSummary: ((): UndercoverStateView["voteSummary"] => {
+      const raw = pickValue<any>(state, "voteSummary", "vote_summary");
+      if (!raw || typeof raw !== "object") {
+        return { submitted: 0, required: assignments.length, tally: {} };
+      }
+      return {
+        submitted: Number(pickValue<number>(raw, "submitted") ?? 0),
+        required: Number(pickValue<number>(raw, "required") ?? assignments.length),
+        tally: ((): Record<string, number> => {
+          const rawTally = pickValue<Record<string, number>>(raw, "tally") ?? {};
+          return Object.fromEntries(
+            Object.entries(rawTally).map(([key, value]) => [key, Number(value)])
+          );
+        })(),
+        selfTarget: pickValue<number>(raw, "selfTarget", "self_target") ?? undefined
+      };
+    })(),
+    word_pair: pickValue<any>(state, "word_pair", "wordPair") ?? {},
     aiVoteReveals,
-    winner: state.winner ?? undefined
+    winner: pickValue<string>(state, "winner") ?? undefined
   };
 }
 
 function normalizeWerewolfState(state: any): WerewolfStateView {
-  const assignments: WerewolfAssignmentView[] = Array.isArray(state.assignments)
-    ? state.assignments.map((item: any) => ({
-        playerId: item.playerId,
-        displayName: item.displayName,
-        isAi: Boolean(item.isAi),
-        isAlive: Boolean(item.isAlive),
-        role: item.role ?? null,
-        aiStyle: item.aiStyle ?? null
+  const rawAssignments = pickValue<any[]>(state, "assignments") ?? [];
+  const assignments: WerewolfAssignmentView[] = Array.isArray(rawAssignments)
+    ? rawAssignments.map((item: any) => ({
+        playerId: Number(pickValue<number>(item, "playerId", "player_id") ?? 0),
+        displayName: pickValue<string>(item, "displayName", "display_name") ?? "",
+        isAi: Boolean(pickValue<boolean>(item, "isAi", "is_ai")),
+        isAlive: Boolean(pickValue<boolean>(item, "isAlive", "is_alive")),
+        role: pickValue<string | null>(item, "role") ?? null,
+        aiStyle: pickValue<string | null>(item, "aiStyle", "ai_style") ?? null
       }))
     : [];
-  const voteSummaryRaw = state.voteSummary ?? { submitted: 0, required: assignments.length, tally: {} };
-  const tallyEntries = voteSummaryRaw.tally ?? {};
-  const lastResultRaw = state.last_result ?? {};
-  const privateRaw = state.private ?? {};
+  const voteSummaryRaw = pickValue<any>(state, "voteSummary", "vote_summary")
+    ?? { submitted: 0, required: assignments.length, tally: {} };
+  const tallyEntries = pickValue<Record<string, number>>(voteSummaryRaw, "tally") ?? {};
+  const lastResultRaw = pickValue<any>(state, "last_result", "lastResult") ?? {};
+  const privateRaw = pickValue<any>(state, "private") ?? {};
   return {
-    phase: state.phase ?? "night",
-    stage: state.stage ?? "night.wolves",
-    round: state.round ?? 1,
-    current_player_id: state.current_player_id ?? null,
+    phase: String(pickValue<string>(state, "phase") ?? "night"),
+    stage: String(pickValue<string>(state, "stage") ?? "night.wolves"),
+    round: Number(pickValue<number>(state, "round") ?? 1),
+    current_player_id: pickValue<number | null>(state, "current_player_id", "currentPlayerId") ?? null,
     assignments,
-    speeches: Array.isArray(state.speeches) ? state.speeches : [],
+    speeches: (() => {
+      const rawSpeeches = pickValue<any[]>(state, "speeches");
+      return Array.isArray(rawSpeeches)
+        ? (rawSpeeches as UndercoverStateView["speeches"])
+        : [];
+    })(),
     voteSummary: {
-      submitted: voteSummaryRaw.submitted ?? 0,
-      required: voteSummaryRaw.required ?? assignments.length,
+      submitted: Number(pickValue<number>(voteSummaryRaw, "submitted") ?? 0),
+      required: Number(pickValue<number>(voteSummaryRaw, "required") ?? assignments.length),
       tally: Object.fromEntries(
         Object.entries(tallyEntries).map(([key, value]) => [Number(key), Number(value)])
       ),
-      selfTarget: voteSummaryRaw.selfTarget ?? undefined
+      selfTarget: pickValue<number>(voteSummaryRaw, "selfTarget", "self_target") ?? undefined
     },
     last_result: {
-      nightKilled: Array.isArray(lastResultRaw.nightKilled) ? lastResultRaw.nightKilled : [],
-      lynched: Array.isArray(lastResultRaw.lynched) ? lastResultRaw.lynched : [],
-      saved: lastResultRaw.saved ?? null
+      nightKilled: Array.isArray(pickValue<any[]>(lastResultRaw, "nightKilled", "night_killed"))
+        ? (pickValue<any[]>(lastResultRaw, "nightKilled", "night_killed") as number[])
+        : [],
+      lynched: Array.isArray(pickValue<any[]>(lastResultRaw, "lynched"))
+        ? (pickValue<any[]>(lastResultRaw, "lynched") as number[])
+        : [],
+      saved: pickValue<number | null>(lastResultRaw, "saved") ?? null
     },
     private: {
-      role: privateRaw.role ?? null,
-      wolves: privateRaw.wolves
-        ? {
-            allies: Array.isArray(privateRaw.wolves.allies)
-              ? privateRaw.wolves.allies.map((ally: any) => ({
-                  playerId: ally.playerId,
-                  displayName: ally.displayName,
-                  isAlive: Boolean(ally.isAlive),
-                  isAi: Boolean(ally.isAi)
+      role: pickValue<string | null>(privateRaw, "role") ?? null,
+      wolves: (() => {
+        const wolvesRaw = pickValue<any>(privateRaw, "wolves");
+        if (!wolvesRaw) {
+          return undefined;
+        }
+        const alliesRaw = pickValue<any[]>(wolvesRaw, "allies") ?? [];
+        return {
+          allies: Array.isArray(alliesRaw)
+            ? alliesRaw.map((ally: any) => ({
+                  playerId: Number(pickValue<number>(ally, "playerId", "player_id") ?? 0),
+                  displayName: pickValue<string>(ally, "displayName", "display_name") ?? "",
+                  isAlive: Boolean(pickValue<boolean>(ally, "isAlive", "is_alive")),
+                  isAi: Boolean(pickValue<boolean>(ally, "isAi", "is_ai"))
                 }))
               : [],
-            selectedTarget: privateRaw.wolves.selectedTarget ?? null
-          }
-        : undefined,
-      seer: privateRaw.seer
-        ? {
-            history: Array.isArray(privateRaw.seer.history) ? privateRaw.seer.history : [],
-            lastResult: privateRaw.seer.lastResult ?? null
-          }
-        : undefined,
-      witch: privateRaw.witch
-        ? {
-            antidoteAvailable: Boolean(privateRaw.witch.antidoteAvailable),
-            poisonAvailable: Boolean(privateRaw.witch.poisonAvailable),
-            pendingKill: privateRaw.witch.pendingKill ?? null
-          }
-        : undefined
+          selectedTarget: pickValue<number | null>(wolvesRaw, "selectedTarget", "selected_target") ?? null
+        };
+      })(),
+      seer: (() => {
+        const seerRaw = pickValue<any>(privateRaw, "seer");
+        if (!seerRaw) {
+          return undefined;
+        }
+        const historyRaw = pickValue<any[]>(seerRaw, "history");
+        return {
+          history: Array.isArray(historyRaw)
+            ? (historyRaw as WerewolfPrivateInfo["seer"]!["history"])
+            : [],
+          lastResult: pickValue<any>(seerRaw, "lastResult", "last_result") ?? null
+        };
+      })(),
+      witch: (() => {
+        const witchRaw = pickValue<any>(privateRaw, "witch");
+        if (!witchRaw) {
+          return undefined;
+        }
+        return {
+          antidoteAvailable: Boolean(pickValue<boolean>(witchRaw, "antidoteAvailable", "antidote_available")),
+          poisonAvailable: Boolean(pickValue<boolean>(witchRaw, "poisonAvailable", "poison_available")),
+          pendingKill: pickValue<number | null>(witchRaw, "pendingKill", "pending_kill") ?? null
+        };
+      })()
     },
-    winner: state.winner ?? undefined
+    winner: pickValue<string>(state, "winner") ?? undefined
   };
 }
 
