@@ -28,6 +28,7 @@ import com.aisocialgame.backend.entity.UserAccount;
 import com.aisocialgame.backend.repository.GameSessionRepository;
 import com.aisocialgame.backend.repository.RoomPlayerRepository;
 import com.aisocialgame.backend.repository.RoomRepository;
+import com.aisocialgame.backend.repository.UserRepository;
 
 @Service
 public class RoomService {
@@ -35,16 +36,19 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final RoomPlayerRepository roomPlayerRepository;
     private final GameSessionRepository gameSessionRepository;
+    private final UserRepository userRepository;
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
     private final Random random = new SecureRandom();
 
     public RoomService(
             RoomRepository roomRepository,
             RoomPlayerRepository roomPlayerRepository,
-            GameSessionRepository gameSessionRepository) {
+            GameSessionRepository gameSessionRepository,
+            UserRepository userRepository) {
         this.roomRepository = roomRepository;
         this.roomPlayerRepository = roomPlayerRepository;
         this.gameSessionRepository = gameSessionRepository;
+        this.userRepository = userRepository;
     }
 
     public Room createRoom(UserAccount owner, String name, int maxPlayers, boolean isPrivate, Map<String, Object> config) {
@@ -205,12 +209,7 @@ public class RoomService {
     public RoomDtos.RoomDetail toRoomDetail(Room room, UserAccount currentUser) {
         List<RoomPlayer> players = roomPlayerRepository.findByRoomOrderBySeatNumberAsc(room);
         int playerCount = players.size();
-        RoomDtos.RoomOwner owner = room.getOwner() != null
-                ? new RoomDtos.RoomOwner(
-                        room.getOwner().getId(),
-                        room.getOwner().getUsername(),
-                        room.getOwner().getDisplayName())
-                : null;
+        RoomDtos.RoomOwner owner = toOwner(room.getOwner());
         GameSession session = gameSessionRepository.findFirstByRoomOrderByStartedAtDesc(room).orElse(null);
         RoomDtos.GameSessionSnapshot snapshot = session != null ? toSnapshot(session) : null;
         return new RoomDtos.RoomDetail(
@@ -243,9 +242,7 @@ public class RoomService {
                 room.getId(),
                 room.getName(),
                 room.getCode(),
-                room.getOwner() != null
-                        ? new RoomDtos.RoomOwner(room.getOwner().getId(), room.getOwner().getUsername(), room.getOwner().getDisplayName())
-                        : null,
+                toOwner(room.getOwner()),
                 room.getStatus().name().toLowerCase(),
                 displayStatus(room.getStatus()),
                 room.getPhase(),
@@ -290,6 +287,21 @@ public class RoomService {
                 player.isAlive(),
                 player.isHasUsedSkill(),
                 player.getAiStyle());
+    }
+
+    private RoomDtos.RoomOwner toOwner(UserAccount owner) {
+        if (owner == null) {
+            return null;
+        }
+        Long ownerId = owner.getId();
+        UserAccount resolvedOwner = owner;
+        if (ownerId != null) {
+            resolvedOwner = userRepository.findById(ownerId).orElse(owner);
+        }
+        return new RoomDtos.RoomOwner(
+                resolvedOwner.getId(),
+                resolvedOwner.getUsername(),
+                resolvedOwner.getDisplayName());
     }
 
     private void ensureRoomJoinable(Room room) {
