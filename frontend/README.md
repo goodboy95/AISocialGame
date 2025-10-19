@@ -1,65 +1,89 @@
 # 前端应用（Vue 3 + Vite + Element Plus）
 
-该目录包含基于 Vue 3 + TypeScript 的前端工程。当前版本已实现登录/注册、房间大厅、房间内实时聊天，并同时适配“谁是卧底”与“狼人杀”两种游戏面板，与后端房间 API 与 WebSocket 完成打通。
+该目录包含基于 Vue 3 + TypeScript 的前端工程。当前版本已实现登录/注册、房间大厅、房间内实时聊天与阶段推进，并适配“谁是卧底”与“狼人杀”两种游戏面板。
 
-## 主要特性
+## 技术栈与依赖
 
-- 使用 Vite 5 构建，支持热更新。
-- 集成 Element Plus，启用按需自动引入（unplugin-auto-import / unplugin-vue-components）。
-- 采用 Vue Router + Pinia 管理认证状态与房间大厅/房间内数据，`rooms` Store 可根据引擎自动解析不同状态结构。
-- 封装房间 REST API、房号加入/创建表单以及基于 JWT 的 WebSocket 客户端。
-- 大厅支持搜索、状态筛选、房号加入、创建房间弹窗；房间页可根据玩法显示身份词语/私密情报、昼夜阶段提示、发言/技能/投票操作和实时聊天。
+- Vite 5、Vue 3、TypeScript
+- Pinia 管理全局状态
+- Vue Router 进行页面导航
+- Element Plus + 自定义样式（`src/styles`）
+- Axios 访问后端 REST API
+- WebSocket (`RoomRealtimeClient`) 处理实时消息
 
 ## 可用脚本
 
 ```bash
 npm install    # 安装依赖
 npm run dev    # 本地开发，默认端口 5173
-npm run build  # 产物构建
+npm run build  # 生产构建
 npm run preview  # 预览构建结果
 ```
+
+> 项目暂未启用 ESLint/Vitest，如需引入请在 `package.json` 中补充脚本并更新本文档。
 
 ## 目录结构
 
 ```text
 src/
-  api/         # REST API 封装
-  pages/       # 登录/注册/大厅/房间页面
-  router/      # 路由配置
-  services/    # WebSocket 客户端
-  store/       # 认证 / 房间状态管理
-  styles/      # 全局样式与主题
-  types/       # TypeScript 类型定义
+  api/         # REST API 封装（axios 实例、房间/认证接口）
+  components/  # 可复用 UI 组件（聊天消息、计时器、对话框等）
+  i18n/        # 国际化配置，提供系统提示字符串
+  pages/       # 页面级组件（登录、注册、大厅、房间）
+  router/      # 路由定义与守卫
+  services/    # WebSocket 客户端、实时工具
+  store/       # Pinia Store（用户、房间）
+  styles/      # 全局样式与 Element Plus 主题覆盖
+  types/       # TypeScript 类型定义（房间、用户、游戏状态）
 ```
+
+静态资源位于 `public/`，Vite 配置位于 `vite.config.ts`，已启用自动按需引入 Element Plus 组件。
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env`，并根据后端部署地址调整：
+复制 `.env.example` 为 `.env` 并根据后端部署地址调整：
 
-```
+```ini
 VITE_API_BASE_URL=http://localhost:8000/api
 VITE_WS_BASE_URL=ws://localhost:8000/ws
 ```
 
-若未设置 `VITE_WS_BASE_URL`，应用会自动依据当前页面协议与主机生成 `<origin>/ws` 作为 WebSocket 地址，并附带 JWT `token` 查询参数。
+- 若未设置 `VITE_WS_BASE_URL`，`RoomRealtimeClient` 会尝试根据 `VITE_API_BASE_URL` 或当前页面地址推导 WebSocket 入口。【F:frontend/src/services/realtime.ts†L9-L44】
+- `VITE_API_BASE_URL` 会作为 axios 基础地址，并在 Pinia `user` Store 中附加 JWT Header。【F:frontend/src/api/http.ts†L1-L56】
 
-## 房间模块速览
+## 状态管理
 
-- `src/store/rooms.ts`：管理大厅分页、房间详情、WebSocket 状态、消息列表与游戏会话，公开 `fetchRooms`、`joinRoom`、`leaveRoom`、`sendChat`、`sendGameEvent` 等方法。
-- `src/api/rooms.ts`：封装房间 REST 请求，包含房号加入、房间启动等接口。
-- `src/pages/lobby`、`src/pages/RoomPage.vue`：大厅列表与房间游戏面板，实现身份展示、发言/技能/投票交互与聊天。
-- `src/services/gameSocket.ts`：统一维护 WebSocket 连接（包含 `connect`、`disconnect`、`getInstance`），并对外抛出监听器。
+- `src/store/user.ts`：处理登录、登出、刷新当前用户、持久化 token，并在应用初始化时尝试自动登录。【F:frontend/src/store/user.ts†L1-L164】
+- `src/store/rooms.ts`：维护房间列表、当前房间详情、实时消息与 WebSocket 连接状态。提供 `fetchRooms`、`createRoom`、`joinRoom`、`leaveRoom`、`startGame`、`sendChat` 等方法，并负责解析后端返回的驼峰/下划线字段。【F:frontend/src/store/rooms.ts†L1-L330】
 
-## 本地调试指南
+## 页面与组件
 
-1. **配置身份**：在后端获取 JWT（参见根目录 README 中的功能验证指南），并通过登录页面输入用户名/密码登录。
-2. **大厅验证**：访问 `/lobby`，使用顶部搜索框筛选房间或通过“创建房间”弹窗快速创建新房间。
-3. **加入房间**：点击房间卡片或输入房号加入，房间页将展示身份、阶段提示、发言记录与系统消息面板。
-4. **发起游戏并发言**：房主点击“开始游戏”后，界面中部的阶段面板会进入准备态；当按钮变为“通知开始发言”时再次点击即可切换到发言轮。轮到自己发言时，中间面板右侧的文本框会解锁，可输入发言并点击“提交发言”将内容广播至时间轴与聊天面板。
-5. **聊天与投票**：右侧聊天区域默认显示“公屏”消息，可切换到“私聊”“阵营”标签页；底部输入框支持回车发送。进入投票阶段后，阶段面板下方会出现存活玩家按钮，点击即可上报投票选择。
+- `pages/LoginPage.vue`、`pages/RegisterPage.vue`：账号注册与登录表单，调用 `user` Store 完成认证流程。
+- `pages/lobby/LobbyPage.vue`：显示房间列表、过滤器、创建房间弹窗与房号加入入口。通过 `useRoomsStore` 拉取分页数据，并在卡片内展示状态、人数与房主信息。【F:frontend/src/pages/lobby/LobbyPage.vue†L1-L260】
+- `pages/RoomPage.vue`：房间主界面，包含阶段面板、发言/技能按钮、聊天区域、成员列表等。会在挂载时建立 WebSocket 连接、订阅事件并在卸载时清理资源。【F:frontend/src/pages/RoomPage.vue†L1-L420】
+- `components/chat/`：聊天气泡、频道切换、输入框等组件；`components/game/` 下包含阶段面板、倒计时、身份卡片等游戏相关组件。
 
-### 常见问题
+## 实时通信流程
 
-- 连接 WebSocket 失败时，请确认右上角状态标签是否显示为“离线”。若未配置 `VITE_WS_BASE_URL`，可直接使用默认的 `<当前域名>/ws`，或在 `.env` 中显式指定后重新启动开发服务器。
-- 若需在开发环境模拟多用户，可打开浏览器隐身窗口或使用不同的浏览器登录不同账号。
-- 当修改 API 定义后，记得同步更新 `src/types/rooms.ts` 与对应组件使用的类型提示。
+1. 登录成功后，`user` Store 持有 JWT。
+2. 进入房间页时，`rooms` Store 调用 `RoomRealtimeClient.connect('/rooms/${roomId}')`，会自动携带 `token` 查询参数。【F:frontend/src/store/rooms.ts†L188-L274】
+3. 后端推送 `system.sync` 与 `system.broadcast` 消息，Store 根据 `type` 分发至 `handleSystemPayload`、`handleChatPayload` 等分支，并更新 `messages`、`directMessages`、`gameSession` 状态。
+4. 组件层响应状态变化刷新 UI（倒计时、发言列表、聊天区域）。断线时 `socketConnected` 会变为 `false`，页面顶部状态徽标显示为“离线”。
+
+## 开发注意事项
+
+- 新增 API 时请同步更新 `src/api/*` 与 `src/types/*` 中的类型定义，避免组件直接访问未定义字段。
+- `rooms` Store 的 normalizer 支持驼峰/下划线字段混用，添加新字段时请扩展 `pickValue` 或 `normalize*` 函数，确保兼容老数据。【F:frontend/src/store/rooms.ts†L20-L152】
+- WebSocket 未包含自动重连策略；若需要可在页面层监听 `socketConnected`，在断线后调用 `connectRoomRealtime` 重新建立连接。
+- Element Plus 主题调整集中在 `src/styles/theme.scss`，避免在组件中直接写硬编码颜色。
+
+## 测试与质量
+
+- 目前暂无自动化测试脚本。若添加 Vitest/Cypress，请更新本文档并在 `package.json` 新增命令。
+- 建议在开发时开启浏览器 DevTools WebSocket 面板，便于调试实时事件。
+
+## 常见问题
+
+- **WebSocket 无法连接**：确认 `.env` 中的 `VITE_WS_BASE_URL` 是否可访问，或者后端是否运行在 8000 端口；检查浏览器 Console 是否出现 4401 关闭码。
+- **界面状态不同步**：请确认 `rooms` Store 中的事件处理是否覆盖新加入的消息类型，并确保前端发送的动作与后端事件名称一致。
+- **多账号调试**：可通过浏览器隐身窗口或不同浏览器登录多个账号，或使用 `npm run dev -- --host` 在局域网内共享。

@@ -101,4 +101,4 @@ npm run dev
 
    该命令会执行 Spring Boot 的单元测试并生成可运行的 Jar 包。
 
-更多细节请参考 `doc/` 目录中的阶段性文档。
+更多细节请参考 `doc/` 目录中的架构、功能与使用指南（architecture.md、features.md、usage.md）。
