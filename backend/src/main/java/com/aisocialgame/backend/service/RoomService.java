@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -32,8 +34,17 @@ import com.aisocialgame.backend.repository.RoomRepository;
 import com.aisocialgame.backend.repository.UserRepository;
 import com.aisocialgame.backend.realtime.RoomRealtimeEvents;
 
+/**
+ * Service responsible for the lifecycle of {@link Room} entities.  The class glues together
+ * persistence, realtime notifications and the light-weight game bootstrap logic that prepares
+ * room specific state.  Most public methods perform small chunks of business logic and then
+ * delegate to the repositories, so keeping them well documented helps new contributors quickly
+ * grasp the flow.
+ */
 @Service
 public class RoomService {
+
+    private static final Logger log = LoggerFactory.getLogger(RoomService.class);
 
     private final RoomRepository roomRepository;
     private final RoomPlayerRepository roomPlayerRepository;
@@ -56,7 +67,12 @@ public class RoomService {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Creates a new room and persists the owner as the first player/host.  A realtime update is not
+     * emitted here because the frontend performs an immediate fetch after creation.
+     */
     public Room createRoom(UserAccount owner, String name, int maxPlayers, boolean isPrivate, Map<String, Object> config) {
+        log.info("Creating room '{}' for user {}", name, owner.getId());
         Room room = new Room();
         room.setOwner(owner);
         room.setName(name);
@@ -80,6 +96,7 @@ public class RoomService {
         roomPlayerRepository.save(player);
         saved.setUpdatedAt(Instant.now());
         roomRepository.save(saved);
+        log.debug("Room '{}' (id={}) created with code {}", name, saved.getId(), saved.getCode());
         return saved;
     }
 
@@ -106,8 +123,10 @@ public class RoomService {
 
     @Transactional
     public Room joinRoom(Room room, UserAccount user) {
+        log.info("User {} attempting to join room {}", user.getId(), room.getId());
         ensureRoomJoinable(room);
         if (roomPlayerRepository.findByRoomAndUser(room, user).isPresent()) {
+            log.debug("User {} already in room {}", user.getId(), room.getId());
             return room;
         }
         int seatNumber = roomPlayerRepository.findFirstByRoomOrderBySeatNumberDesc(room)
@@ -125,11 +144,13 @@ public class RoomService {
         room.setUpdatedAt(Instant.now());
         Room saved = roomRepository.save(room);
         publishRoomUpdate(saved, player, "room.player.joined", player.getDisplayName() + " 加入了房间");
+        log.info("User {} joined room {} as seat {}", user.getId(), room.getId(), seatNumber);
         return saved;
     }
 
     @Transactional
     public Room addAiPlayer(Room room, String style, String displayName) {
+        log.info("Adding AI player to room {} with style {}", room.getId(), style);
         ensureRoomJoinable(room);
         int seatNumber = roomPlayerRepository.findFirstByRoomOrderBySeatNumberDesc(room)
                 .map(RoomPlayer::getSeatNumber)
@@ -146,11 +167,13 @@ public class RoomService {
         room.setUpdatedAt(Instant.now());
         Room saved = roomRepository.save(room);
         publishRoomUpdate(saved, ai, "room.ai.joined", ai.getDisplayName() + "（AI）加入了房间");
+        log.debug("AI player {} added to room {}", ai.getDisplayName(), room.getId());
         return saved;
     }
 
     @Transactional
     public Room leaveRoom(Room room, UserAccount user) {
+        log.info("User {} leaving room {}", user.getId(), room.getId());
         RoomPlayer leaving = roomPlayerRepository.findByRoomAndUser(room, user).orElse(null);
         if (leaving != null) {
             roomPlayerRepository.delete(leaving);
@@ -175,11 +198,13 @@ public class RoomService {
         } else {
             publishRoomUpdate(saved, null, "room.player.left", null);
         }
+        log.info("User {} left room {}", user.getId(), room.getId());
         return saved;
     }
 
     @Transactional
     public Room startRoom(Room room) {
+        log.info("Starting room {}", room.getId());
         room.setStatus(Room.Status.PLAYING);
         room.setPhase("playing");
         room.setUpdatedAt(Instant.now());
@@ -199,17 +224,20 @@ public class RoomService {
             ownerPlayer = roomPlayerRepository.findByRoomAndUser(room, room.getOwner()).orElse(null);
         }
         publishRoomUpdate(saved, ownerPlayer, "room.started", null);
+        log.debug("Room {} moved to PLAYING phase", room.getId());
         return saved;
     }
 
     @Transactional
     public void removeRoom(Room room) {
+        log.warn("Removing room {}", room.getId());
         roomRepository.delete(room);
         publishRoomRemoved(room, "room.removed");
     }
 
     @Transactional
     public Room kickPlayer(Room room, long playerId) {
+        log.info("Kicking player {} from room {}", playerId, room.getId());
         RoomPlayer removed = roomPlayerRepository.findById(playerId)
                 .filter(player -> player.getRoom().getId().equals(room.getId()))
                 .orElse(null);
@@ -232,6 +260,11 @@ public class RoomService {
         Room saved = roomRepository.save(room);
         publishRoomUpdate(saved, removed, "room.player.kicked",
                 removed != null ? removed.getDisplayName() + " 被移出房间" : null);
+        if (removed != null) {
+            log.info("Player {} removed from room {}", playerId, room.getId());
+        } else {
+            log.debug("Player {} not found in room {} during kick request", playerId, room.getId());
+        }
         return saved;
     }
 
@@ -286,6 +319,9 @@ public class RoomService {
     }
 
     private void publishRoomUpdate(Room room, RoomPlayer actor, String event, String message) {
+        if (log.isDebugEnabled()) {
+            log.debug("Publishing room update event '{}' for room {}", event, room.getId());
+        }
         RoomRealtimeEvents.Actor snapshot = null;
         if (actor != null) {
             snapshot = new RoomRealtimeEvents.Actor(
@@ -298,6 +334,9 @@ public class RoomService {
     }
 
     private void publishRoomRemoved(Room room, String reason) {
+        if (log.isDebugEnabled()) {
+            log.debug("Publishing room removal event for room {} due to {}", room.getId(), reason);
+        }
         eventPublisher.publishEvent(new RoomRealtimeEvents.RoomRemoved(room.getId(), reason));
     }
 
@@ -349,16 +388,27 @@ public class RoomService {
                 resolvedOwner.getDisplayName());
     }
 
+    /**
+     * Validates the room can accept new participants.
+     *
+     * @throws IllegalStateException when the room is not accepting members anymore.
+     */
     private void ensureRoomJoinable(Room room) {
         if (room.getStatus() != Room.Status.WAITING) {
+            log.debug("Room {} is not joinable because status is {}", room.getId(), room.getStatus());
             throw new IllegalStateException("房间已锁定，无法加入");
         }
         int count = roomPlayerRepository.countByRoom(room);
         if (count >= room.getMaxPlayers()) {
+            log.debug("Room {} is full ({}/{})", room.getId(), count, room.getMaxPlayers());
             throw new IllegalStateException("房间人数已满");
         }
     }
 
+    /**
+     * Extracts the configured engine identifier from the provided configuration map.  The backend
+     * keeps the parsing logic centralized so both REST and websocket flows remain in sync.
+     */
     private String extractEngine(Map<String, Object> config) {
         if (config != null && config.containsKey("engine")) {
             return String.valueOf(config.get("engine"));
@@ -366,6 +416,9 @@ public class RoomService {
         return "undercover";
     }
 
+    /**
+     * Generates a six character invite code using a character set that avoids ambiguous symbols.
+     */
     private String generateRoomCode() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         while (true) {
@@ -380,6 +433,12 @@ public class RoomService {
         }
     }
 
+    /**
+     * Builds a minimal initial game state for the classic "Undercover" party game so the frontend
+     * can render the lobby immediately.  The implementation intentionally keeps the structure
+     * simple and deterministic, trading sophistication for predictability while the real engine is
+     * being integrated.
+     */
     private Map<String, Object> generateInitialState(Room room) {
         Map<String, Object> state = new HashMap<>();
         state.put("phase", "intro");
