@@ -20,7 +20,7 @@ server:
     context-path: /api
 security:
   jwt:
-    secret: ${JWT_SECRET:change-me-please}
+    secret: d93rf9bhg7fhwGd39daGB8hd329hd9hdadhadasd
     issuer: ai-social-game
     access-token-ttl: ${JWT_ACCESS_TTL:PT1H}
     refresh-token-ttl: ${JWT_REFRESH_TTL:P7D}
