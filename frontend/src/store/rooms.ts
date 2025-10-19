@@ -26,7 +26,7 @@ import {
   kickPlayer as kickPlayerApi,
   deleteRoom as deleteRoomApi,
 } from "../api/rooms";
-import { GameSocket } from "../services/websocket";
+import { RoomRealtimeClient } from "../services/realtime";
 import { i18n } from "../i18n";
 import { useAuthStore } from "./user";
 
@@ -37,7 +37,7 @@ interface RoomState {
   currentRoom: RoomDetail | null;
   messages: ChatMessage[];
   directMessages: DirectMessage[];
-  socket: GameSocket | null;
+  socket: RoomRealtimeClient | null;
   socketConnected: boolean;
 }
 
@@ -452,10 +452,10 @@ export const useRoomsStore = defineStore("rooms", {
       this.disconnectSocket();
       this.socketConnected = false;
       const wsBase = import.meta.env.VITE_WS_BASE_URL as string | undefined;
-      const socket = new GameSocket({ token: auth.accessToken, url: wsBase });
+      const socket = new RoomRealtimeClient({ token: auth.accessToken, baseUrl: wsBase });
       let raw: WebSocket;
       try {
-        raw = socket.connect(`/rooms/${roomId}/`);
+        raw = socket.connect(`/rooms/${roomId}`);
       } catch (error) {
         console.error("Failed to establish room websocket connection", error);
         throw error;
@@ -566,13 +566,13 @@ export const useRoomsStore = defineStore("rooms", {
       this.socket = socket;
     },
     sendChat(content: string) {
-      const raw = this.socket?.getRawInstance();
+      const raw = this.socket?.getRaw();
       if (raw && raw.readyState === WebSocket.OPEN) {
         raw.send(JSON.stringify({ type: "chat.message", payload: { content } }));
       }
     },
     sendPrivateMessage(targetPlayerId: number, content: string) {
-      const raw = this.socket?.getRawInstance();
+      const raw = this.socket?.getRaw();
       const auth = useAuthStore();
       const now = new Date().toISOString();
       const selfPlayer = this.currentRoom?.players.find(
@@ -604,7 +604,7 @@ export const useRoomsStore = defineStore("rooms", {
       }
     },
     sendFactionMessage(content: string, faction?: string) {
-      const raw = this.socket?.getRawInstance();
+      const raw = this.socket?.getRaw();
       if (raw && raw.readyState === WebSocket.OPEN) {
         raw.send(
           JSON.stringify({
@@ -615,7 +615,7 @@ export const useRoomsStore = defineStore("rooms", {
       }
     },
     sendGameEvent(event: string, payload: Record<string, unknown> = {}) {
-      const raw = this.socket?.getRawInstance();
+      const raw = this.socket?.getRaw();
       if (raw && raw.readyState === WebSocket.OPEN) {
         raw.send(
           JSON.stringify({
