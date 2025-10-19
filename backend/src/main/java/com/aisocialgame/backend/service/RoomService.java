@@ -30,7 +30,7 @@ import com.aisocialgame.backend.repository.GameSessionRepository;
 import com.aisocialgame.backend.repository.RoomPlayerRepository;
 import com.aisocialgame.backend.repository.RoomRepository;
 import com.aisocialgame.backend.repository.UserRepository;
-import com.aisocialgame.backend.websocket.RoomEvents;
+import com.aisocialgame.backend.realtime.RoomRealtimeEvents;
 
 @Service
 public class RoomService {
@@ -286,19 +286,19 @@ public class RoomService {
     }
 
     private void publishRoomUpdate(Room room, RoomPlayer actor, String event, String message) {
-        RoomEvents.ActorSnapshot snapshot = null;
+        RoomRealtimeEvents.Actor snapshot = null;
         if (actor != null) {
-            snapshot = new RoomEvents.ActorSnapshot(
+            snapshot = new RoomRealtimeEvents.Actor(
                     actor.getId(),
                     actor.getUser() != null ? actor.getUser().getId() : null,
                     actor.getUsername(),
                     actor.getDisplayName());
         }
-        eventPublisher.publishEvent(new RoomEvents.RoomUpdated(room.getId(), snapshot, event, message));
+        eventPublisher.publishEvent(new RoomRealtimeEvents.RoomUpdated(room.getId(), snapshot, event, message));
     }
 
     private void publishRoomRemoved(Room room, String reason) {
-        eventPublisher.publishEvent(new RoomEvents.RoomRemoved(room.getId(), reason));
+        eventPublisher.publishEvent(new RoomRealtimeEvents.RoomRemoved(room.getId(), reason));
     }
 
     private RoomDtos.GameSessionSnapshot toSnapshot(GameSession session) {
