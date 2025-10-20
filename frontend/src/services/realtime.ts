@@ -29,6 +29,12 @@ function normalizeCandidate(candidate: string): string | null {
   }
   try {
     const parsed = new URL(candidate);
+    if (typeof window !== "undefined" && window.location) {
+      const isSecurePage = window.location.protocol === "https:";
+      if (isSecurePage && parsed.protocol === "ws:") {
+        parsed.protocol = "wss:";
+      }
+    }
     if (typeof window !== "undefined") {
       const pageHost = window.location.hostname;
       if (!isLocalHostname(pageHost) && isLocalHostname(parsed.hostname)) {
