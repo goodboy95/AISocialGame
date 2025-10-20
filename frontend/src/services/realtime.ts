@@ -7,16 +7,54 @@ function sanitizeUrl(url: string) {
   return url.replace(/\/$/, "");
 }
 
+function isLocalHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return ["localhost", "127.0.0.1", "::1"].includes(normalized) || normalized.endsWith(".local");
+}
+
+function ensureWsPath(parsed: URL): URL {
+  const pathname = parsed.pathname || "/";
+  if (/\/ws\/?$/i.test(pathname)) {
+    parsed.pathname = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  } else {
+    const trimmed = pathname.replace(/\/$/, "");
+    parsed.pathname = `${trimmed}/ws`;
+  }
+  return parsed;
+}
+
+function normalizeCandidate(candidate: string): string | null {
+  if (!candidate.trim()) {
+    return null;
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (typeof window !== "undefined") {
+      const pageHost = window.location.hostname;
+      if (!isLocalHostname(pageHost) && isLocalHostname(parsed.hostname)) {
+        console.warn(
+          `Ignoring realtime base url '${candidate}' because it points to a local host while the page is served from '${pageHost}'.`
+        );
+        return null;
+      }
+    }
+    ensureWsPath(parsed);
+    return sanitizeUrl(parsed.toString());
+  } catch (error) {
+    console.warn(`Ignoring invalid realtime base url '${candidate}'`, error);
+    return null;
+  }
+}
+
 function determineBaseUrl(options: RealtimeOptions = {}): string {
   const candidates = [options.baseUrl, import.meta.env.VITE_WS_BASE_URL as string | undefined].filter(
     (value): value is string => Boolean(value && value.trim())
   );
 
   for (const candidate of candidates) {
-    try {
-      return sanitizeUrl(new URL(candidate).toString());
-    } catch (error) {
-      console.warn(`Ignoring invalid realtime base url '${candidate}'`, error);
+    const normalized = normalizeCandidate(candidate);
+    if (normalized) {
+      return normalized;
     }
   }
 
@@ -27,7 +65,10 @@ function determineBaseUrl(options: RealtimeOptions = {}): string {
       parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
       const suffix = parsed.pathname.endsWith("/api") ? parsed.pathname.slice(0, -4) : parsed.pathname;
       parsed.pathname = `${suffix.replace(/\/$/, "")}/ws`;
-      return sanitizeUrl(parsed.toString());
+      const normalized = normalizeCandidate(parsed.toString());
+      if (normalized) {
+        return normalized;
+      }
     } catch (error) {
       console.warn("Unable to derive websocket base from VITE_API_BASE_URL", error);
     }

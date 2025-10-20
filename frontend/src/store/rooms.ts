@@ -39,6 +39,7 @@ interface RoomState {
   directMessages: DirectMessage[];
   socket: RoomRealtimeClient | null;
   socketConnected: boolean;
+  socketRoomId: number | null;
 }
 
 function pickValue<T>(source: any, ...keys: string[]): T | undefined {
@@ -350,7 +351,8 @@ export const useRoomsStore = defineStore("rooms", {
     messages: [],
     directMessages: [],
     socket: null,
-    socketConnected: false
+    socketConnected: false,
+    socketRoomId: null
   }),
   actions: {
     async fetchRooms(params: { search?: string; status?: string; isPrivate?: boolean; page?: number } = {}) {
@@ -445,12 +447,17 @@ export const useRoomsStore = defineStore("rooms", {
       if (!auth.accessToken) {
         throw new Error(translate("room.messages.loginRequired"));
       }
+      if (this.socket && this.socketRoomId === roomId && this.socket.isOpen()) {
+        this.socketConnected = true;
+        return;
+      }
       const refreshed = await auth.refreshSession();
       if (!refreshed || !auth.accessToken) {
         throw new Error(translate("room.messages.loginRequired"));
       }
       this.disconnectSocket();
       this.socketConnected = false;
+      this.socketRoomId = roomId;
       const wsBase = import.meta.env.VITE_WS_BASE_URL as string | undefined;
       const socket = new RoomRealtimeClient({ token: auth.accessToken, baseUrl: wsBase });
       let raw: WebSocket;
@@ -465,12 +472,18 @@ export const useRoomsStore = defineStore("rooms", {
       };
       raw.onclose = (event) => {
         this.socketConnected = false;
+        if (this.socketRoomId === roomId) {
+          this.socketRoomId = null;
+        }
         if (event.code !== 1000) {
           console.warn("Room websocket closed abnormally", event);
         }
       };
       raw.onerror = (event) => {
         this.socketConnected = false;
+        if (this.socketRoomId === roomId) {
+          this.socketRoomId = null;
+        }
         console.error("Room websocket error", event);
       };
       raw.onmessage = async (event) => {
@@ -685,6 +698,7 @@ export const useRoomsStore = defineStore("rooms", {
       this.socket?.close();
       this.socket = null;
       this.socketConnected = false;
+      this.socketRoomId = null;
     },
     resetMessages() {
       this.messages = [];
