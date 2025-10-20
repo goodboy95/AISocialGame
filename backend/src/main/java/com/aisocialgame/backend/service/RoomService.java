@@ -452,14 +452,15 @@ public class RoomService {
             boolean undercover = i == players.size() - 1 && players.size() > 1;
             player.setRole(undercover ? "undercover" : "civilian");
             player.setWord(undercover ? undercoverWords[i % undercoverWords.length] : civilianWords[i % civilianWords.length]);
-            assignments.add(Map.of(
-                    "playerId", player.getId(),
-                    "displayName", player.getDisplayName(),
-                    "isAi", player.isAi(),
-                    "isAlive", player.isAlive(),
-                    "role", player.getRole(),
-                    "word", player.getWord(),
-                    "aiStyle", player.getAiStyle()));
+            Map<String, Object> assignment = new HashMap<>();
+            assignment.put("playerId", player.getId());
+            assignment.put("displayName", player.getDisplayName());
+            assignment.put("isAi", player.isAi());
+            assignment.put("isAlive", player.isAlive());
+            assignment.put("role", player.getRole());
+            assignment.put("word", player.getWord());
+            assignment.put("aiStyle", player.getAiStyle());
+            assignments.add(assignment);
         }
         state.put("assignments", assignments);
         state.put("speeches", new ArrayList<>());
