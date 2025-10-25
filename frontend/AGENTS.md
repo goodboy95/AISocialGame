@@ -4,6 +4,7 @@
 - Vue 3 + TypeScript single-page application served by Vite.
 - Pinia stores handle auth (`user`) and room state (`rooms`); WebSocket logic lives in `src/services/realtime.ts`.
 - Element Plus is auto-imported via Vite plugins; styles are customised under `src/styles`.
+- For a detailed breakdown of the project structure, see `projectStructure.md` in the root directory.
 
 ## Build & run
 - Install Node.js 18+ (project ships with `package-lock.json`).

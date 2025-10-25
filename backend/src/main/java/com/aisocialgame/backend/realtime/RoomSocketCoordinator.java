@@ -227,6 +227,10 @@ public class RoomSocketCoordinator {
         if (room == null) {
             return;
         }
+        broadcastGameEvent(room, payload);
+    }
+
+    public void broadcastGameEvent(Room room, Map<String, Object> payload) {
         Map<String, Object> messagePayload = new HashMap<>(payload != null ? payload : Map.of());
         messagePayload.put("timestamp", Instant.now().toString());
         Map<String, Object> envelope = Map.of(

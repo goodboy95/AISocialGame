@@ -42,6 +42,13 @@ interface RoomState {
   socketRoomId: number | null;
 }
 
+function createLocalId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function pickValue<T>(source: any, ...keys: string[]): T | undefined {
   if (!source || typeof source !== "object") {
     return undefined;
@@ -331,7 +338,7 @@ function translate(key: string, values?: Record<string, unknown>): string {
 
 function systemMessage(message: string, event?: string, context?: Record<string, unknown>): ChatMessage {
   return {
-    id: crypto.randomUUID(),
+    id: createLocalId(),
     content: message,
     timestamp: new Date().toISOString(),
     sender: null,
@@ -500,7 +507,7 @@ export const useRoomsStore = defineStore("rooms", {
           }
           if (data.payload?.message) {
             this.appendChatMessage({
-              id: crypto.randomUUID(),
+              id: createLocalId(),
               content: data.payload.message,
               timestamp: data.payload.timestamp ?? new Date().toISOString(),
               sender: data.payload.actor
@@ -531,7 +538,7 @@ export const useRoomsStore = defineStore("rooms", {
         } else if (data.type === "chat.direct") {
           const payload = data.payload ?? {};
           this.appendDirectMessage({
-            id: payload.id ?? crypto.randomUUID(),
+            id: payload.id ?? createLocalId(),
             roomId: this.currentRoom?.id ?? 0,
             sessionId: payload.sessionId ?? null,
             channel: payload.channel ?? "private",
@@ -593,7 +600,7 @@ export const useRoomsStore = defineStore("rooms", {
       );
       if (selfPlayer) {
         this.appendDirectMessage({
-          id: crypto.randomUUID(),
+          id: createLocalId(),
           roomId: this.currentRoom?.id ?? 0,
           sessionId: this.currentRoom?.gameSession?.id ?? null,
           channel: "private",

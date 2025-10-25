@@ -4,6 +4,7 @@
 - Spring Boot 3 service providing REST + WebSocket APIs for the AI Social Game platform.
 - Key packages: `controller`, `service`, `realtime`, `security`, `entity`, `dto`, `repository`, `config`.
 - JWT-secured endpoints expect `/api` prefix; WebSocket endpoints live under `/ws/rooms/{id}` and require a JWT passed via the `token` query param.
+- For a detailed breakdown of the project structure, see `projectStructure.md` in the root directory.
 
 ## Build & run
 - Install Java 21. Use the Maven Wrapper shipped in the repo.

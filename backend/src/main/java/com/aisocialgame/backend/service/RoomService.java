@@ -3,9 +3,7 @@ package com.aisocialgame.backend.service;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +31,7 @@ import com.aisocialgame.backend.repository.RoomPlayerRepository;
 import com.aisocialgame.backend.repository.RoomRepository;
 import com.aisocialgame.backend.repository.UserRepository;
 import com.aisocialgame.backend.realtime.RoomRealtimeEvents;
+import com.aisocialgame.backend.service.game.UndercoverGameManager;
 
 /**
  * Service responsible for the lifecycle of {@link Room} entities.  The class glues together
@@ -53,18 +52,24 @@ public class RoomService {
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
     private final Random random = new SecureRandom();
     private final ApplicationEventPublisher eventPublisher;
+    private final GameSessionMapper gameSessionMapper;
+    private final UndercoverGameManager undercoverGameManager;
 
     public RoomService(
             RoomRepository roomRepository,
             RoomPlayerRepository roomPlayerRepository,
             GameSessionRepository gameSessionRepository,
             UserRepository userRepository,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GameSessionMapper gameSessionMapper,
+            UndercoverGameManager undercoverGameManager) {
         this.roomRepository = roomRepository;
         this.roomPlayerRepository = roomPlayerRepository;
         this.gameSessionRepository = gameSessionRepository;
         this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
+        this.gameSessionMapper = gameSessionMapper;
+        this.undercoverGameManager = undercoverGameManager;
     }
 
     /**
@@ -208,7 +213,7 @@ public class RoomService {
         room.setStatus(Room.Status.PLAYING);
         room.setPhase("playing");
         room.setUpdatedAt(Instant.now());
-        GameSession session = new GameSession();
+          GameSession session = new GameSession();
         session.setRoom(room);
         session.setEngine(room.getEngine());
         session.setPhase("setup");
@@ -216,16 +221,19 @@ public class RoomService {
         session.setCurrentPlayerId(null);
         session.setStartedAt(Instant.now());
         session.setUpdatedAt(Instant.now());
-        session.setStateJson(JsonUtils.toJson(generateInitialState(room)));
-        gameSessionRepository.save(session);
-        Room saved = roomRepository.save(room);
-        RoomPlayer ownerPlayer = null;
-        if (room.getOwner() != null) {
-            ownerPlayer = roomPlayerRepository.findByRoomAndUser(room, room.getOwner()).orElse(null);
-        }
-        publishRoomUpdate(saved, ownerPlayer, "room.started", null);
-        log.debug("Room {} moved to PLAYING phase", room.getId());
-        return saved;
+          session.setStateJson("{}");
+          gameSessionRepository.save(session);
+          Room saved = roomRepository.save(room);
+          RoomPlayer ownerPlayer = null;
+          if (room.getOwner() != null) {
+              ownerPlayer = roomPlayerRepository.findByRoomAndUser(room, room.getOwner()).orElse(null);
+          }
+          if ("undercover".equalsIgnoreCase(room.getEngine())) {
+              undercoverGameManager.initializeSession(session);
+          }
+          publishRoomUpdate(saved, ownerPlayer, "room.started", null);
+          log.debug("Room {} moved to PLAYING phase", room.getId());
+          return saved;
     }
 
     @Transactional
@@ -273,7 +281,7 @@ public class RoomService {
         int playerCount = players.size();
         RoomDtos.RoomOwner owner = toOwner(room.getOwner());
         GameSession session = gameSessionRepository.findFirstByRoomOrderByStartedAtDesc(room).orElse(null);
-        RoomDtos.GameSessionSnapshot snapshot = session != null ? toSnapshot(session) : null;
+          RoomDtos.GameSessionSnapshot snapshot = session != null ? gameSessionMapper.toSnapshot(session) : null;
         return new RoomDtos.RoomDetail(
                 room.getId(),
                 room.getName(),
@@ -341,18 +349,7 @@ public class RoomService {
     }
 
     private RoomDtos.GameSessionSnapshot toSnapshot(GameSession session) {
-        return new RoomDtos.GameSessionSnapshot(
-                session.getId(),
-                session.getEngine(),
-                session.getPhase(),
-                session.getRoundNumber(),
-                session.getCurrentPlayerId(),
-                session.getStatus().name().toLowerCase(),
-                formatter.format(session.getStartedAt()),
-                formatter.format(session.getUpdatedAt()),
-                session.getDeadlineAt() != null ? formatter.format(session.getDeadlineAt()) : null,
-                null,
-                JsonUtils.fromJson(session.getStateJson()));
+        return gameSessionMapper.toSnapshot(session);
     }
 
     private RoomDtos.RoomPlayer toPlayer(RoomPlayer player) {
@@ -431,42 +428,6 @@ public class RoomService {
                 return code;
             }
         }
-    }
-
-    /**
-     * Builds a minimal initial game state for the classic "Undercover" party game so the frontend
-     * can render the lobby immediately.  The implementation intentionally keeps the structure
-     * simple and deterministic, trading sophistication for predictability while the real engine is
-     * being integrated.
-     */
-    private Map<String, Object> generateInitialState(Room room) {
-        Map<String, Object> state = new HashMap<>();
-        state.put("phase", "intro");
-        state.put("round", 1);
-        List<Map<String, Object>> assignments = new ArrayList<>();
-        List<RoomPlayer> players = roomPlayerRepository.findByRoomOrderBySeatNumberAsc(room);
-        String[] undercoverWords = {"向日葵", "月光", "流星"};
-        String[] civilianWords = {"太阳", "夜晚", "星星"};
-        for (int i = 0; i < players.size(); i++) {
-            RoomPlayer player = players.get(i);
-            boolean undercover = i == players.size() - 1 && players.size() > 1;
-            player.setRole(undercover ? "undercover" : "civilian");
-            player.setWord(undercover ? undercoverWords[i % undercoverWords.length] : civilianWords[i % civilianWords.length]);
-            Map<String, Object> assignment = new HashMap<>();
-            assignment.put("playerId", player.getId());
-            assignment.put("displayName", player.getDisplayName());
-            assignment.put("isAi", player.isAi());
-            assignment.put("isAlive", player.isAlive());
-            assignment.put("role", player.getRole());
-            assignment.put("word", player.getWord());
-            assignment.put("aiStyle", player.getAiStyle());
-            assignments.add(assignment);
-        }
-        state.put("assignments", assignments);
-        state.put("speeches", new ArrayList<>());
-        state.put("voteSummary", Map.of("submitted", 0, "required", Math.max(1, players.size() - 1)));
-        roomPlayerRepository.saveAll(players);
-        return state;
     }
 
     private String displayStatus(Room.Status status) {

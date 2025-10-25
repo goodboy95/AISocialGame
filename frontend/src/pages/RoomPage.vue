@@ -142,12 +142,9 @@
                 </el-button>
                 <el-alert v-else :title="t('room.ui.waitHost')" type="info" show-icon />
               </div>
-              <div v-else-if="currentPhase === 'speaking'" class="room__phase-block room__phase-block--speaking">
-                <p class="room__current-speaker">
-                  {{ t("room.ui.currentSpeaker") }}:
-                  <strong>{{ currentSpeakerName }}</strong>
-                </p>
-                <div class="room__speech-order">
+              <div v-else-if="currentPhase === 'speaking'" class="room__phase-block">
+                <p class="room__phase-tip">{{ t("room.descriptions.undercover.speaking") }}</p>
+                <div v-if="speechDisplayEntries.length" class="room__speech-order">
                   <div
                     v-for="entry in speechDisplayEntries"
                     :key="entry.playerId"
@@ -185,28 +182,8 @@
                     </div>
                   </div>
                 </div>
-                <div class="room__speech-editor">
-                  <el-input
-                    v-model="speechInput"
-                    type="textarea"
-                    :rows="3"
-                    maxlength="120"
-                    show-word-limit
-                    :placeholder="currentSpeechPlaceholder"
-                    :disabled="!canSpeak"
-                  />
-                  <div class="room__speech-editor-actions">
-                    <el-button
-                      type="primary"
-                      :disabled="!canSpeak || !speechInput.trim()"
-                      @click="handleSubmitSpeech"
-                    >
-                      {{ t("room.ui.submitSpeech") }}
-                    </el-button>
-                    <span v-if="!canSpeak && speechInputHint" class="room__speech-editor-hint">
-                      {{ speechInputHint }}
-                    </span>
-                  </div>
+                <div v-else class="room__speech-empty">
+                  {{ t("room.ui.waitSpeech") }}
                 </div>
               </div>
               <div v-else-if="currentPhase === 'voting'" class="room__phase-block">
@@ -240,6 +217,29 @@
               </div>
               <div v-else-if="currentPhase === 'result'" class="room__phase-block">
                 <el-alert :title="t('room.ui.roundCompleted')" type="success" show-icon />
+              </div>
+              <div class="room__phase-block room__speech-editor">
+                <el-input
+                  v-model="speechInput"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="120"
+                  show-word-limit
+                  :placeholder="currentSpeechPlaceholder"
+                  :disabled="!canSpeak"
+                />
+                <div class="room__speech-editor-actions">
+                  <el-button
+                    type="primary"
+                    :disabled="!canSpeak || !speechInput.trim()"
+                    @click="handleSubmitSpeech"
+                  >
+                    {{ t("room.ui.submitSpeech") }}
+                  </el-button>
+                  <span v-if="!canSpeak && speechInputHint" class="room__speech-editor-hint">
+                    {{ speechInputHint }}
+                  </span>
+                </div>
               </div>
             </template>
             <template v-else-if="isWerewolf">
@@ -357,6 +357,76 @@
               </div>
               <div v-else class="room__phase-block">
                 <el-alert :title="t('room.ui.waitNextStage')" type="info" show-icon />
+              </div>
+              <div class="room__phase-block room__phase-block--speaking room__speech-panel">
+                <p class="room__current-speaker">
+                  {{ t("room.ui.currentSpeaker") }}:
+                  <strong>{{ currentSpeakerName }}</strong>
+                </p>
+                <div v-if="speechDisplayEntries.length" class="room__speech-order">
+                  <div
+                    v-for="entry in speechDisplayEntries"
+                    :key="entry.playerId"
+                    :class="[
+                      'room__speech-entry',
+                      `room__speech-entry--${entry.status}`,
+                      { 'room__speech-entry--expandable': entry.hasContent }
+                    ]"
+                    @click="entry.hasContent && handleToggleSpeech(entry.playerId)"
+                  >
+                    <div class="room__speech-entry-header">
+                      <span class="room__speech-entry-name">{{ entry.displayName }}</span>
+                      <el-tag
+                        v-if="entry.status !== 'spoken'"
+                        :type="entry.status === 'active' ? 'success' : entry.status === 'eliminated' ? 'danger' : 'info'"
+                        size="small"
+                        class="room__speech-entry-tag"
+                      >
+                        {{ entry.statusLabel }}
+                      </el-tag>
+                    </div>
+                    <div
+                      class="room__speech-entry-content"
+                      :class="{
+                        'room__speech-entry-content--expanded': entry.isExpanded,
+                        'room__speech-entry-content--empty': !entry.hasContent
+                      }"
+                    >
+                      <template v-if="entry.hasContent">
+                        <span>{{ entry.isExpanded ? entry.content : entry.preview }}</span>
+                      </template>
+                      <template v-else>
+                        <span>{{ entry.statusLabel }}</span>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="room__speech-empty">
+                  {{ t("room.ui.waitSpeech") }}
+                </div>
+                <div class="room__speech-editor">
+                  <el-input
+                    v-model="speechInput"
+                    type="textarea"
+                    :rows="3"
+                    maxlength="120"
+                    show-word-limit
+                    :placeholder="currentSpeechPlaceholder"
+                    :disabled="!canSpeak"
+                  />
+                  <div class="room__speech-editor-actions">
+                    <el-button
+                      type="primary"
+                      :disabled="!canSpeak || !speechInput.trim()"
+                      @click="handleSubmitSpeech"
+                    >
+                      {{ t("room.ui.submitSpeech") }}
+                    </el-button>
+                    <span v-if="!canSpeak && speechInputHint" class="room__speech-editor-hint">
+                      {{ speechInputHint }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </template>
           </template>
@@ -597,6 +667,8 @@ const { currentRoom, messages, directMessages, socketConnected } = storeToRefs(r
 const messageInput = ref("");
 const chatContainer = ref<HTMLDivElement | null>(null);
 const speechInput = ref("");
+const speechDraftTimerId = ref<number | null>(null);
+const speechDraftSpeakerId = ref<number | null>(null);
 const expandedSpeechPlayerId = ref<number | null>(null);
 const speakingOrder = ref<number[]>([]);
 const speakingOrderSignature = ref<string | null>(null);
@@ -620,6 +692,11 @@ const werewolfState = computed<WerewolfStateView | null>(() =>
   isWerewolf.value ? ((gameSession.value?.state as WerewolfStateView | undefined) ?? null) : null
 );
 const gameState = computed(() => undercoverState.value ?? werewolfState.value ?? null);
+const speeches = computed(() =>
+  gameState.value && Array.isArray((gameState.value as any).speeches)
+    ? ((gameState.value as any).speeches as UndercoverSpeech[])
+    : []
+);
 
 const sessionTimer = computed(() => room.value?.gameSession?.timer ?? null);
 const timerRemaining = ref<number | null>(null);
@@ -915,7 +992,6 @@ watch(
 );
 
 const aliveAssignments = computed(() => assignments.value.filter((assignment) => assignment.isAlive));
-const speeches = computed(() => (gameState.value && Array.isArray((gameState.value as any).speeches) ? (gameState.value as any).speeches : []));
 const hasVoted = computed(() => Boolean((gameState.value as any)?.voteSummary?.selfTarget));
 const voteTarget = computed(() => (gameState.value as any)?.voteSummary?.selfTarget ?? null);
 const aiStyles = computed(() => metaStore.aiStyles);
@@ -1293,6 +1369,14 @@ onBeforeUnmount(() => {
     window.clearInterval(timerIntervalId.value);
     timerIntervalId.value = null;
   }
+  if (speechDraftTimerId.value !== null) {
+    window.clearTimeout(speechDraftTimerId.value);
+    speechDraftTimerId.value = null;
+  }
+  if (speechDraftSpeakerId.value) {
+    roomsStore.sendGameEvent("update_speech_draft", { content: "" });
+    speechDraftSpeakerId.value = null;
+  }
   roomsStore.disconnectSocket();
   roomsStore.resetMessages();
 });
@@ -1318,6 +1402,37 @@ watch(
     } else {
       timerRemaining.value = null;
     }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    canSpeak: canSpeak.value,
+    activeSpeaker: activeSpeakerId.value,
+    selfId: selfPlayer.value?.id ?? null,
+    draft: speechInput.value,
+  }),
+  ({ canSpeak, activeSpeaker, selfId, draft }) => {
+    const isSelfSpeaker = Boolean(canSpeak && selfId && activeSpeaker === selfId);
+    if (!isSelfSpeaker) {
+      if (speechDraftTimerId.value !== null) {
+        window.clearTimeout(speechDraftTimerId.value);
+        speechDraftTimerId.value = null;
+      }
+      if (speechDraftSpeakerId.value && speechDraftSpeakerId.value === selfId) {
+        roomsStore.sendGameEvent("update_speech_draft", { content: "" });
+      }
+      speechDraftSpeakerId.value = null;
+      return;
+    }
+    speechDraftSpeakerId.value = selfId ?? null;
+    if (speechDraftTimerId.value !== null) {
+      window.clearTimeout(speechDraftTimerId.value);
+    }
+    speechDraftTimerId.value = window.setTimeout(() => {
+      roomsStore.sendGameEvent("update_speech_draft", { content: draft });
+    }, 300);
   },
   { immediate: true }
 );
@@ -1856,6 +1971,18 @@ function buildPreview(content: string, limit = 60): string {
   padding-right: 4px;
 }
 
+.room__speech-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.room__speech-empty {
+  text-align: center;
+  color: var(--el-text-color-secondary);
+  padding: 24px 0;
+}
+
 .room__speech-entry {
   border: 1px solid var(--el-border-color-light);
   border-radius: 10px;
@@ -1874,8 +2001,20 @@ function buildPreview(content: string, limit = 60): string {
 }
 
 .room__speech-entry--active {
+  position: relative;
   border-color: var(--el-color-success);
   box-shadow: 0 0 0 1px rgba(103, 194, 58, 0.25);
+}
+
+.room__speech-entry--active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 8px solid var(--el-color-success);
 }
 
 .room__speech-entry--eliminated {

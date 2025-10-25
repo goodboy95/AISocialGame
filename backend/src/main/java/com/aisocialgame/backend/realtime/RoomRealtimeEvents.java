@@ -1,5 +1,7 @@
 package com.aisocialgame.backend.realtime;
 
+import java.util.Map;
+
 public final class RoomRealtimeEvents {
 
     private RoomRealtimeEvents() {
@@ -12,5 +14,8 @@ public final class RoomRealtimeEvents {
     }
 
     public record RoomRemoved(long roomId, String reason) {
+    }
+
+    public record GameEvent(long roomId, Map<String, Object> payload) {
     }
 }

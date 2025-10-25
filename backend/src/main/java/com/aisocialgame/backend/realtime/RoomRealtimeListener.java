@@ -29,4 +29,12 @@ public class RoomRealtimeListener {
         log.debug("Closing websocket connections for removed room {}", event.roomId());
         coordinator.closeRoom(event.roomId(), event.reason());
     }
+
+    @EventListener
+    public void onGameEvent(RoomRealtimeEvents.GameEvent event) {
+        coordinator.resolveRoom(event.roomId()).ifPresent(room -> {
+            log.debug("Broadcasting game event for room {}", room.getId());
+            coordinator.broadcastGameEvent(room, event.payload());
+        });
+    }
 }

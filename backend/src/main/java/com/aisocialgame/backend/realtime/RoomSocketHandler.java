@@ -17,6 +17,7 @@ import com.aisocialgame.backend.entity.RoomPlayer;
 import com.aisocialgame.backend.entity.UserAccount;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aisocialgame.backend.service.RoomGameEventService;
 
 @Component
 public class RoomSocketHandler extends TextWebSocketHandler {
@@ -25,10 +26,12 @@ public class RoomSocketHandler extends TextWebSocketHandler {
 
     private final RoomSocketCoordinator coordinator;
     private final ObjectMapper objectMapper;
+    private final RoomGameEventService gameEventService;
 
-    public RoomSocketHandler(RoomSocketCoordinator coordinator, ObjectMapper objectMapper) {
+    public RoomSocketHandler(RoomSocketCoordinator coordinator, ObjectMapper objectMapper, RoomGameEventService gameEventService) {
         this.coordinator = coordinator;
         this.objectMapper = objectMapper;
+        this.gameEventService = gameEventService;
     }
 
     @Override
@@ -109,7 +112,11 @@ public class RoomSocketHandler extends TextWebSocketHandler {
                 Map<String, Object> eventPayload = (payload != null && !payload.isMissingNode() && !payload.isNull())
                         ? objectMapper.convertValue(payload, Map.class)
                         : Map.of();
-                coordinator.publishGameEvent(client, eventPayload);
+                String eventType = payload.path("event").asText();
+                boolean handled = gameEventService.handleEvent(client.getRoomId(), client.getUser(), eventType, eventPayload);
+                if (!handled) {
+                    coordinator.publishGameEvent(client, eventPayload);
+                }
             }
             default -> log.warn("Unsupported websocket message type '{}' from session {}", type, session.getId());
         }
