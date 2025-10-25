@@ -142,35 +142,70 @@
                 </el-button>
                 <el-alert v-else :title="t('room.ui.waitHost')" type="info" show-icon />
               </div>
-              <div v-else-if="currentPhase === 'speaking'" class="room__phase-block">
-                <p>
+              <div v-else-if="currentPhase === 'speaking'" class="room__phase-block room__phase-block--speaking">
+                <p class="room__current-speaker">
                   {{ t("room.ui.currentSpeaker") }}:
                   <strong>{{ currentSpeakerName }}</strong>
                 </p>
-                <div class="room__speech-box">
-                  <SpeechTimeline
-                    class="room__speech-history"
-                    :speeches="speeches"
-                    :resolve-name="resolvePlayerName"
-                    :format-time="formatTime"
-                    :title="t('room.ui.speechLog')"
-                    :empty-text="t('room.ui.noSpeeches')"
-                  />
-                  <div class="room__speech-input">
-                    <div v-if="canSpeak" class="room__speak-form">
-                      <el-input
-                        v-model="speechInput"
-                        type="textarea"
-                        :rows="3"
-                        maxlength="120"
-                        show-word-limit
-                        :placeholder="t('room.ui.speakPlaceholder')"
-                      />
-                      <el-button type="primary" :disabled="!speechInput.trim()" @click="handleSubmitSpeech">
-                        {{ t("room.ui.submitSpeech") }}
-                      </el-button>
+                <div class="room__speech-order">
+                  <div
+                    v-for="entry in speechDisplayEntries"
+                    :key="entry.playerId"
+                    :class="[
+                      'room__speech-entry',
+                      `room__speech-entry--${entry.status}`,
+                      { 'room__speech-entry--expandable': entry.hasContent }
+                    ]"
+                    @click="entry.hasContent && handleToggleSpeech(entry.playerId)"
+                  >
+                    <div class="room__speech-entry-header">
+                      <span class="room__speech-entry-name">{{ entry.displayName }}</span>
+                      <el-tag
+                        v-if="entry.status !== 'spoken'"
+                        :type="entry.status === 'active' ? 'success' : entry.status === 'eliminated' ? 'danger' : 'info'"
+                        size="small"
+                        class="room__speech-entry-tag"
+                      >
+                        {{ entry.statusLabel }}
+                      </el-tag>
                     </div>
-                    <el-alert v-else :title="t('room.ui.waitSpeech')" type="info" show-icon />
+                    <div
+                      class="room__speech-entry-content"
+                      :class="{
+                        'room__speech-entry-content--expanded': entry.isExpanded,
+                        'room__speech-entry-content--empty': !entry.hasContent
+                      }"
+                    >
+                      <template v-if="entry.hasContent">
+                        <span>{{ entry.isExpanded ? entry.content : entry.preview }}</span>
+                      </template>
+                      <template v-else>
+                        <span>{{ entry.statusLabel }}</span>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div class="room__speech-editor">
+                  <el-input
+                    v-model="speechInput"
+                    type="textarea"
+                    :rows="3"
+                    maxlength="120"
+                    show-word-limit
+                    :placeholder="currentSpeechPlaceholder"
+                    :disabled="!canSpeak"
+                  />
+                  <div class="room__speech-editor-actions">
+                    <el-button
+                      type="primary"
+                      :disabled="!canSpeak || !speechInput.trim()"
+                      @click="handleSubmitSpeech"
+                    >
+                      {{ t("room.ui.submitSpeech") }}
+                    </el-button>
+                    <span v-if="!canSpeak && speechInputHint" class="room__speech-editor-hint">
+                      {{ speechInputHint }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -530,6 +565,7 @@ import type {
   DirectMessage,
   SessionTimer,
   UndercoverAssignmentView,
+  UndercoverSpeech,
   UndercoverStateView,
   WerewolfAssignmentView,
   WerewolfPrivateInfo,
@@ -561,6 +597,9 @@ const { currentRoom, messages, directMessages, socketConnected } = storeToRefs(r
 const messageInput = ref("");
 const chatContainer = ref<HTMLDivElement | null>(null);
 const speechInput = ref("");
+const expandedSpeechPlayerId = ref<number | null>(null);
+const speakingOrder = ref<number[]>([]);
+const speakingOrderSignature = ref<string | null>(null);
 const witchPoisonTarget = ref<number | null>(null);
 const aiForm = reactive({ style: "", displayName: "" });
 const addingAi = ref(false);
@@ -588,9 +627,101 @@ const timerIntervalId = ref<number | null>(null);
 
 const currentPhase = computed(() => gameState.value?.phase ?? "preparing");
 const werewolfStage = computed(() => (isWerewolf.value ? werewolfState.value?.stage ?? "" : ""));
-const activeSpeakerId = computed(() =>
+const serverActiveSpeakerId = computed(() =>
   (isUndercover.value ? undercoverState.value?.current_player_id : werewolfState.value?.current_player_id) ?? null
 );
+
+const speechMap = computed(() => {
+  const map = new Map<number, UndercoverSpeech>();
+  speeches.value.forEach((speech) => {
+    map.set(speech.player_id, speech);
+  });
+  return map;
+});
+
+const speakingOrderList = computed(() => {
+  if (!isUndercover.value) {
+    return [];
+  }
+  const assignmentsList = undercoverState.value?.assignments ?? [];
+  if (!assignmentsList.length) {
+    return [];
+  }
+  const ids = assignmentsList.map((assignment) => assignment.playerId);
+  const knownOrder = speakingOrder.value.filter((playerId) => ids.includes(playerId));
+  const missing = ids.filter((playerId) => !knownOrder.includes(playerId));
+  return [...knownOrder, ...missing];
+});
+
+watch(
+  () => {
+    const sessionId = gameSession.value?.id ?? null;
+    const startedAt = gameSession.value?.startedAt ?? null;
+    const assignmentsList = undercoverState.value?.assignments ?? [];
+    const playerSignature = assignmentsList
+      .map((assignment) => assignment.playerId)
+      .sort((a, b) => a - b)
+      .join(",");
+    return {
+      enabled: isUndercover.value,
+      sessionId,
+      startedAt,
+      playerSignature,
+    };
+  },
+  ({ enabled, sessionId, startedAt, playerSignature }) => {
+    if (!enabled) {
+      speakingOrder.value = [];
+      speakingOrderSignature.value = null;
+      return;
+    }
+    if (!sessionId || !playerSignature) {
+      return;
+    }
+    const signature = `${sessionId}:${startedAt ?? ""}:${playerSignature}`;
+    if (speakingOrderSignature.value === signature && speakingOrder.value.length) {
+      return;
+    }
+    const assignmentsList = undercoverState.value?.assignments ?? [];
+    if (!assignmentsList.length) {
+      return;
+    }
+    const ids = assignmentsList.map((assignment) => assignment.playerId);
+    const seed = computeSpeakingSeed(sessionId, startedAt, ids);
+    speakingOrder.value = shuffleWithSeed(ids, seed);
+    speakingOrderSignature.value = signature;
+    expandedSpeechPlayerId.value = null;
+  },
+  { immediate: true }
+);
+
+const derivedUndercoverSpeakerId = computed(() => {
+  if (!isUndercover.value || currentPhase.value !== "speaking") {
+    return null;
+  }
+  const order = speakingOrderList.value;
+  if (!order.length) {
+    return null;
+  }
+  for (const playerId of order) {
+    const assignment = assignmentMap.value.get(playerId);
+    const isAlive = assignment && "isAlive" in assignment ? assignment.isAlive : true;
+    if (!isAlive) {
+      continue;
+    }
+    if (!speechMap.value.has(playerId)) {
+      return playerId;
+    }
+  }
+  return null;
+});
+
+const activeSpeakerId = computed(() => {
+  if (!isUndercover.value) {
+    return serverActiveSpeakerId.value;
+  }
+  return serverActiveSpeakerId.value ?? derivedUndercoverSpeakerId.value;
+});
 
 const profile = computed(() => authStore.profile);
 const selfPlayer = computed(() =>
@@ -605,6 +736,14 @@ const assignments = computed<(UndercoverAssignmentView | WerewolfAssignmentView)
     return werewolfState.value?.assignments ?? [];
   }
   return [];
+});
+
+const assignmentMap = computed(() => {
+  const map = new Map<number, UndercoverAssignmentView | WerewolfAssignmentView>();
+  assignments.value.forEach((assignment) => {
+    map.set(assignment.playerId, assignment);
+  });
+  return map;
 });
 
 const playerStatusMap = computed(() => {
@@ -628,6 +767,8 @@ const privateTargetName = computed(() =>
 const selfAssignment = computed(() =>
   assignments.value.find((assignment) => assignment.playerId === selfPlayer.value?.id) ?? null
 );
+
+const isSelfAlive = computed(() => selfAssignment.value?.isAlive ?? true);
 
 const factionKey = computed(() => {
   const role = (selfAssignment.value as any)?.role ?? selfPlayer.value?.role ?? null;
@@ -763,6 +904,16 @@ watch(
   }
 );
 
+watch(
+  speeches,
+  () => {
+    if (expandedSpeechPlayerId.value && !speechMap.value.has(expandedSpeechPlayerId.value)) {
+      expandedSpeechPlayerId.value = null;
+    }
+  },
+  { deep: true }
+);
+
 const aliveAssignments = computed(() => assignments.value.filter((assignment) => assignment.isAlive));
 const speeches = computed(() => (gameState.value && Array.isArray((gameState.value as any).speeches) ? (gameState.value as any).speeches : []));
 const hasVoted = computed(() => Boolean((gameState.value as any)?.voteSummary?.selfTarget));
@@ -893,9 +1044,92 @@ const isSpeakingStage = computed(() =>
   (isWerewolf.value && werewolfStage.value === "day.discussion")
 );
 
-const canSpeak = computed(() =>
-  isSpeakingStage.value && selfPlayer.value && selfPlayer.value.id === activeSpeakerId.value
+const speechStatusLabels = computed(() => ({
+  pending: t("room.ui.speechStatus.pending"),
+  speaking: t("room.ui.speechStatus.speaking"),
+  eliminated: t("room.ui.speechStatus.eliminated"),
+  spoken: t("room.ui.speechStatus.spoken"),
+}));
+
+const speechDisplayEntries = computed(() => {
+  if (!isUndercover.value) {
+    return [];
+  }
+  const order = speakingOrderList.value;
+  if (!order.length) {
+    return [];
+  }
+  const labels = speechStatusLabels.value;
+  return order.map((playerId) => {
+    const assignment = assignmentMap.value.get(playerId) as UndercoverAssignmentView | undefined;
+    const displayName = assignment?.displayName ?? resolvePlayerName(playerId);
+    const isAlive = assignment?.isAlive ?? true;
+    const speech = speechMap.value.get(playerId) ?? null;
+    const rawContent = speech?.content?.trim() ?? "";
+    let status: "pending" | "active" | "eliminated" | "spoken";
+    if (!isAlive) {
+      status = "eliminated";
+    } else if (rawContent) {
+      status = "spoken";
+    } else if (activeSpeakerId.value === playerId) {
+      status = "active";
+    } else {
+      status = "pending";
+    }
+    const showContent = status === "spoken";
+    const content = showContent && speech ? speech.content : "";
+    return {
+      playerId,
+      displayName,
+      status,
+      statusLabel:
+        status === "spoken"
+          ? labels.spoken
+          : status === "active"
+            ? labels.speaking
+            : status === "eliminated"
+              ? labels.eliminated
+              : labels.pending,
+      hasContent: showContent,
+      content,
+      preview: showContent && content ? buildPreview(content) : "",
+      isExpanded: expandedSpeechPlayerId.value === playerId,
+    };
+  });
+});
+
+const currentSpeechPlaceholder = computed(() =>
+  canSpeak.value ? t("room.ui.speakPlaceholder") : t("room.ui.speakDisabledPlaceholder")
 );
+
+const speechInputHint = computed(() => {
+  if (canSpeak.value) {
+    return "";
+  }
+  if (!isSelfAlive.value) {
+    return t("room.ui.speechHintEliminated");
+  }
+  if (!isSpeakingStage.value) {
+    return t("room.ui.speechHintInactive");
+  }
+  if (activeSpeakerId.value && selfPlayer.value && activeSpeakerId.value !== selfPlayer.value.id) {
+    return t("room.ui.speechHintWaiting", { name: resolvePlayerName(activeSpeakerId.value) });
+  }
+  return t("room.ui.waitSpeech");
+});
+
+const canSpeak = computed(() => {
+  if (!isSpeakingStage.value) {
+    return false;
+  }
+  if (!selfPlayer.value || !activeSpeakerId.value) {
+    return false;
+  }
+  if (!isSelfAlive.value) {
+    return false;
+  }
+  return selfPlayer.value.id === activeSpeakerId.value;
+});
 
 function translateRole(role?: string | null) {
   if (!role) {
@@ -1318,6 +1552,13 @@ function handleSubmitSpeech() {
   speechInput.value = "";
 }
 
+function handleToggleSpeech(playerId: number) {
+  if (!speechMap.value.has(playerId)) {
+    return;
+  }
+  expandedSpeechPlayerId.value = expandedSpeechPlayerId.value === playerId ? null : playerId;
+}
+
 function handleVote(targetId: number) {
   if (hasVoted.value) {
     ElMessage.info(t("room.messages.voteDone"));
@@ -1411,6 +1652,52 @@ function resolvePlayerName(playerId: number) {
     fallback?.displayName ??
     t("room.ui.playerFallback", { id: playerId })
   );
+}
+
+function computeSpeakingSeed(sessionId: number | null, startedAt: string | null, players: number[]): number {
+  const base = Number(sessionId ?? 0);
+  const timestamp = startedAt ? Date.parse(startedAt) : 0;
+  const normalizedTime = Number.isFinite(timestamp) ? timestamp : 0;
+  const checksum = players.reduce((acc, id, index) => acc + id * (index + 1), 0);
+  const rawSeed = base * 1000003 + normalizedTime + checksum;
+  const modulo = 2147483647;
+  const normalized = rawSeed % modulo;
+  if (normalized <= 0) {
+    return (normalized + modulo - 1) || 1;
+  }
+  return normalized;
+}
+
+function createSeededRandom(seed: number) {
+  let state = seed % 2147483647;
+  if (state <= 0) {
+    state += 2147483646;
+  }
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return (state - 1) / 2147483646;
+  };
+}
+
+function shuffleWithSeed<T>(values: T[], seed: number): T[] {
+  if (!values.length) {
+    return [];
+  }
+  const result = values.slice();
+  const random = createSeededRandom(seed || 1);
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function buildPreview(content: string, limit = 60): string {
+  const normalized = content.trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit)}...`;
 }
 </script>
 
@@ -1551,31 +1838,123 @@ function resolvePlayerName(playerId: number) {
   margin-bottom: 16px;
 }
 
-.room__speech-box {
-  display: flex;
-  flex-wrap: wrap;
+.room__phase-block--speaking {
   gap: 16px;
-  align-items: flex-start;
 }
 
-.room__speech-history {
-  flex: 1 1 320px;
-  min-width: 260px;
-  max-height: 260px;
+.room__current-speaker {
+  margin: 0;
+  font-weight: 500;
+}
+
+.room__speech-order {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 320px;
   overflow-y: auto;
   padding-right: 4px;
 }
 
-.room__speech-history :deep(.el-empty) {
-  margin: 0;
+.room__speech-entry {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  background: var(--el-color-white);
+  padding: 12px;
+  box-shadow: var(--el-box-shadow-extra-light);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.room__speech-input {
-  flex: 1 1 280px;
-  min-width: 240px;
+.room__speech-entry--expandable {
+  cursor: pointer;
+}
+
+.room__speech-entry--expandable:hover {
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.room__speech-entry--active {
+  border-color: var(--el-color-success);
+  box-shadow: 0 0 0 1px rgba(103, 194, 58, 0.25);
+}
+
+.room__speech-entry--eliminated {
+  border-color: var(--el-color-danger);
+  background-color: rgba(245, 108, 108, 0.08);
+}
+
+.room__speech-entry--pending {
+  border-style: dashed;
+  color: var(--el-text-color-secondary);
+}
+
+.room__speech-entry--active .room__speech-entry-content {
+  color: var(--el-color-success);
+  font-weight: 500;
+}
+
+.room__speech-entry--eliminated .room__speech-entry-content {
+  color: var(--el-color-danger);
+  font-weight: 500;
+}
+
+.room__speech-entry--pending .room__speech-entry-content {
+  color: var(--el-text-color-secondary);
+}
+
+.room__speech-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room__speech-entry-name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.room__speech-entry-tag {
+  margin-left: auto;
+}
+
+.room__speech-entry-content {
+  margin-top: 8px;
+  color: var(--el-text-color-regular);
+  line-height: 1.5;
+  max-height: 3.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.room__speech-entry-content--expanded {
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.room__speech-entry-content--empty {
+  color: var(--el-text-color-disabled);
+}
+
+.room__speech-editor {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.room__speech-editor-actions {
+  display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.room__speech-editor-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .room__speak-form {
