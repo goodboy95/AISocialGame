@@ -29,6 +29,9 @@
           <el-result icon="info" title="开发中..." sub-title="狼人杀配置模块正在建设中" />
         </div>
       </el-tab-pane>
+      <el-tab-pane label="提示词管理" name="prompts">
+        <ai-prompt-template-manager />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -37,6 +40,7 @@
 import { ref } from 'vue';
 import UndercoverWordBankManager from './UndercoverWordBankManager.vue';
 import UndercoverAiRoleManager from './UndercoverAiRoleManager.vue';
+import AiPromptTemplateManager from './AiPromptTemplateManager.vue';
 
 const activeGame = ref('undercover');
 const undercoverTab = ref('word-bank');

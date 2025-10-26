@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aisocialgame.backend.dto.ManageDtos;
@@ -96,6 +97,38 @@ public class ManageController {
     @DeleteMapping("/undercover/roles/{id}/")
     public ResponseEntity<Void> deleteUndercoverRole(@PathVariable("id") long id) {
         manageService.deleteUndercoverRole(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/prompts/")
+    public List<ManageDtos.AiPromptTemplateView> listPrompts(
+            @RequestParam(value = "game_type", required = false) String gameType,
+            @RequestParam(value = "role_key", required = false) String roleKey,
+            @RequestParam(value = "phase_key", required = false) String phaseKey) {
+        return manageService.listPromptTemplates(gameType, roleKey, phaseKey);
+    }
+
+    @GetMapping("/prompts/dictionary/")
+    public ManageDtos.AiPromptDictionary promptDictionary() {
+        return manageService.promptDictionary();
+    }
+
+    @PostMapping("/prompts/")
+    public ResponseEntity<ManageDtos.AiPromptTemplateView> createPrompt(
+            @Valid @RequestBody ManageDtos.AiPromptTemplatePayload payload) {
+        return ResponseEntity.ok(manageService.createPromptTemplate(payload));
+    }
+
+    @PatchMapping("/prompts/{id}/")
+    public ResponseEntity<ManageDtos.AiPromptTemplateView> updatePrompt(
+            @PathVariable("id") long id,
+            @Valid @RequestBody ManageDtos.AiPromptTemplatePayload payload) {
+        return ResponseEntity.ok(manageService.updatePromptTemplate(id, payload));
+    }
+
+    @DeleteMapping("/prompts/{id}/")
+    public ResponseEntity<Void> deletePrompt(@PathVariable("id") long id) {
+        manageService.deletePromptTemplate(id);
         return ResponseEntity.noContent().build();
     }
 }

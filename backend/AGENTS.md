@@ -6,6 +6,7 @@
 - JWT-secured endpoints expect `/api` prefix; WebSocket endpoints live under `/ws/rooms/{id}` and require a JWT passed via the `token` query param.
 - For a detailed breakdown of the project structure, see `projectStructure.md` in the root directory.
 - Management APIs live under `/manage/**` (`ManageController` + `ManageService`) and are guarded by the new `ROLE_ADMIN` authority backed by the `UserAccount.isAdmin` flag.
+- AI 提示词模板通过 `AiPromptService` 统一读取，表结构 `ai_prompt_templates` 以 `(game_type, role_key, phase_key)` 唯一组合区分场景，`ManageController` 暴露 `/manage/prompts/**` 接口供后台维护。
 
 ## Build & run
 - Install Java 21. Use the Maven Wrapper shipped in the repo.

@@ -50,6 +50,7 @@ graph TD
     B1a5 --> B1a5f[WordPair.java];
     B1a5 --> B1a5g[AiModelConfig.java];
     B1a5 --> B1a5h[UndercoverAiRole.java];
+    B1a5 --> B1a5i[AiPromptTemplate.java];
     B1a6 --> B1a6a[RealtimeWebSocketConfig.java];
     B1a6 --> B1a6b[RoomRealtimeEvents.java];
     B1a6 --> B1a6c[RoomRealtimeListener.java];
@@ -64,6 +65,7 @@ graph TD
     B1a7 --> B1a7f[WordPairRepository.java];
     B1a7 --> B1a7g[AiModelConfigRepository.java];
     B1a7 --> B1a7h[UndercoverAiRoleRepository.java];
+    B1a7 --> B1a7i[AiPromptTemplateRepository.java];
     B1a8 --> B1a8a[AccountUserDetails.java];
     B1a8 --> B1a8b[AccountUserDetailsService.java];
     B1a8 --> B1a8c[JwtAuthenticationFilter.java];
@@ -74,6 +76,7 @@ graph TD
     B1a9 --> B1a9d[UserService.java];
     B1a9 --> B1a9e[WordPairService.java];
     B1a9 --> B1a9f[ManageService.java];
+    B1a9 --> B1a9g[AiPromptService.java];
 
     C --> C1[src];
     C --> C2[public];
@@ -138,6 +141,7 @@ graph TD
     H1d --> H1d2[UndercoverAiRoleManager.vue];
   - `UndercoverWordBankManager.vue`: 复用主站的词库管理界面，与原页面保持一致。
     H1d --> H1d4[GameConfigPanel.vue];
+    H1d --> H1d5[AiPromptTemplateManager.vue];
     H1f --> H1f1[AdminDashboard.vue];
     H1g --> H1g1[index.ts];
     H1h --> H1h1[auth.ts];
@@ -182,7 +186,7 @@ graph TD
 - **MetaDtos.java**: 定义元数据相关的 DTO。
 - **RoomDtos.java**: 定义游戏房间相关的 DTO。
 - **WordPairDtos.java**: 定义词汇对相关的 DTO。
-- **ManageDtos.java**: 定义管理后台使用的请求与响应结构，包括模型配置、AI 角色等数据。
+- **ManageDtos.java**: 定义管理后台使用的请求与响应结构，包括模型配置、AI 角色、提示词模板及其元数据。
 
 #### `entity` (实体)
 - **GameSession.java**: 表示一局游戏会话的实体。
@@ -193,6 +197,7 @@ graph TD
 - **WordPair.java**: 词汇对的实体。
 - **AiModelConfig.java**: 管理后台使用的 AI 模型配置实体，保存名称、BaseURL 与 Token。
 - **UndercoverAiRole.java**: “谁是卧底”用的 AI 角色配置实体，绑定模型与性格描述。
+- **AiPromptTemplate.java**: 存储 AI 系统提示词模板的实体，以游戏、角色、阶段三元组唯一索引对应的提示词文本。
 
 #### `realtime` (实时通信)
 - **RealtimeWebSocketConfig.java**: 配置 WebSocket，启用实时通信功能。
@@ -211,6 +216,7 @@ graph TD
 - **WordPairRepository.java**: 提供对 `WordPair` 实体的数据库操作。
 - **AiModelConfigRepository.java**: 提供对 `AiModelConfig` 实体的数据库操作。
 - **UndercoverAiRoleRepository.java**: 提供对 `UndercoverAiRole` 实体的数据库操作。
+- **AiPromptTemplateRepository.java**: 提供对 `AiPromptTemplate` 实体的数据库操作。
 
 #### `security` (安全)
 - **AccountUserDetails.java**: 实现了 Spring Security 的 `UserDetails` 接口，封装用户信息并在管理员账号时附加 `ROLE_ADMIN` 权限。
@@ -224,12 +230,13 @@ graph TD
 - **RoomService.java**: 处理游戏房间相关的业务逻辑。
 - **UserService.java**: 处理用户相关的业务逻辑，负责 `UserAccount` 的注册、导出及 `is_admin` 字段的序列化。
 - **WordPairService.java**: 处理词汇对相关的业务逻辑。
-- **ManageService.java**: 管理后台核心服务，封装 AI 模型配置与“谁是卧底”AI 角色的增删改查。
+- **ManageService.java**: 管理后台核心服务，封装 AI 模型、AI 角色与提示词模板的增删改查及字典聚合。
+- **AiPromptService.java**: 核心提示词服务，按游戏/角色/阶段检索数据库模板并注入 AI 性格等上下文，提供内置兜底模板。
 
 ### `src/main/resources`
 - **application.yml**: Spring Boot 应用的默认配置，包括数据库、JWT、房间编号等参数。
 - **logback-spring.xml**: 日志输出与级别配置。
-- **migration/**: 存放 MySQL DDL 迁移脚本（如 `20251025_manage_module.sql`），用于在启动时同步 `is_admin` 字段以及 AI 管理相关数据表。
+- **migration/**: 存放 MySQL DDL 迁移脚本（如 `20251025_manage_module.sql`、`20251026_ai_prompts.sql`），用于在启动时同步 `is_admin` 字段、AI 管理配置以及提示词模板表。
 
 ## Frontend (前端)
 
@@ -302,10 +309,11 @@ graph TD
   - `AiModelConfigManager.vue`: 管理 AI 大模型配置的增删改查。
   - `UndercoverAiRoleManager.vue`: 维护“谁是卧底”可用的 AI 角色及行为描述。
   - `UndercoverWordBankManager.vue`: 复用主站的词库管理界面，与原页面保持一致。
-  - `GameConfigPanel.vue`: 搭建游戏配置选项卡，包含“谁是卧底”“狼人杀”分组。
+  - `GameConfigPanel.vue`: 搭建游戏配置选项卡，包含“谁是卧底”“狼人杀”分组及“提示词管理”入口。
+  - `AiPromptTemplateManager.vue`: 提供提示词模板的筛选、创建、编辑与删除界面，支持按游戏/角色/阶段维护模板。
 - **src/api/**:
   - `http.ts`: axios 实例与错误通知封装。
-  - `manage.ts`: 管理接口（AI 模型 / AI 角色）的 REST 客户端。
+  - `manage.ts`: 管理接口（AI 模型 / AI 角色 / 提示词模板）的 REST 客户端。
   - `wordPairs.ts`: 复用词库 CRUD/导入导出的 API 调用。
   - `auth.ts`: 刷新 Token、获取个人资料。
 - **src/store/**:

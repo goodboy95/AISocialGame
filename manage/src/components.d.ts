@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AiModelConfigManager: typeof import('./components/AiModelConfigManager.vue')['default']
+    AiPromptTemplateManager: typeof import('./components/AiPromptTemplateManager.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']

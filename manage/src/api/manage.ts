@@ -40,6 +40,45 @@ export interface ManageOverview {
   undercoverRoles: UndercoverAiRole[];
 }
 
+export interface AiPromptTemplate {
+  id: number;
+  game_type: string;
+  role_key: string;
+  phase_key: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiPromptTemplatePayload {
+  game_type: string;
+  role_key?: string;
+  phase_key: string;
+  content: string;
+}
+
+export interface AiPromptDictionary {
+  games: AiPromptGameOption[];
+  default_role_key: string;
+}
+
+export interface AiPromptGameOption {
+  key: string;
+  label: string;
+  phases: AiPromptPhaseOption[];
+  roles: AiPromptRoleOption[];
+}
+
+export interface AiPromptPhaseOption {
+  key: string;
+  label: string;
+}
+
+export interface AiPromptRoleOption {
+  key: string;
+  label: string;
+}
+
 export async function fetchOverview(): Promise<ManageOverview> {
   const { data } = await http.get<ManageOverview>("/manage/overview/");
   return data;
@@ -81,4 +120,39 @@ export async function updateUndercoverRole(id: number, payload: UndercoverAiRole
 
 export async function deleteUndercoverRole(id: number): Promise<void> {
   await http.delete(`/manage/undercover/roles/${id}/`);
+}
+
+export async function fetchPromptDictionary(): Promise<AiPromptDictionary> {
+  const { data } = await http.get<AiPromptDictionary>("/manage/prompts/dictionary/");
+  return data;
+}
+
+export async function fetchPromptTemplates(params?: {
+  game_type?: string;
+  role_key?: string;
+  phase_key?: string;
+}): Promise<AiPromptTemplate[]> {
+  const { data } = await http.get<AiPromptTemplate[]>("/manage/prompts/", {
+    params
+  });
+  return data;
+}
+
+export async function createPromptTemplate(
+  payload: AiPromptTemplatePayload
+): Promise<AiPromptTemplate> {
+  const { data } = await http.post<AiPromptTemplate>("/manage/prompts/", payload);
+  return data;
+}
+
+export async function updatePromptTemplate(
+  id: number,
+  payload: AiPromptTemplatePayload
+): Promise<AiPromptTemplate> {
+  const { data } = await http.patch<AiPromptTemplate>(`/manage/prompts/${id}/`, payload);
+  return data;
+}
+
+export async function deletePromptTemplate(id: number): Promise<void> {
+  await http.delete(`/manage/prompts/${id}/`);
 }
