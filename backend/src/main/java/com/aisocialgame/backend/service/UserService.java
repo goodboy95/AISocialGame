@@ -55,6 +55,7 @@ public class UserService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setDisplayName(displayName != null ? displayName : username);
+        user.setAdmin(false);
         return userRepository.save(user);
     }
 
@@ -69,7 +70,8 @@ public class UserService {
                 user.getEmail(),
                 user.getDisplayName(),
                 user.getAvatar(),
-                user.getBio());
+                user.getBio(),
+                user.isAdmin());
     }
 
     @Transactional

@@ -8,6 +8,7 @@
 graph TD
     A[AISocialGame] --> B[backend];
     A --> C[frontend];
+    A --> H[manage];
     A --> D[doc];
     A --> E[.gitignore];
     A --> F[docker-compose.yml];
@@ -35,16 +36,20 @@ graph TD
     B1a3 --> B1a3c[MetaController.java];
     B1a3 --> B1a3d[RoomController.java];
     B1a3 --> B1a3e[WordPairController.java];
+    B1a3 --> B1a3f[ManageController.java];
     B1a4 --> B1a4a[AuthDtos.java];
     B1a4 --> B1a4b[MetaDtos.java];
     B1a4 --> B1a4c[RoomDtos.java];
     B1a4 --> B1a4d[WordPairDtos.java];
+    B1a4 --> B1a4e[ManageDtos.java];
     B1a5 --> B1a5a[GameSession.java];
     B1a5 --> B1a5b[RefreshToken.java];
     B1a5 --> B1a5c[Room.java];
     B1a5 --> B1a5d[RoomPlayer.java];
     B1a5 --> B1a5e[UserAccount.java];
     B1a5 --> B1a5f[WordPair.java];
+    B1a5 --> B1a5g[AiModelConfig.java];
+    B1a5 --> B1a5h[UndercoverAiRole.java];
     B1a6 --> B1a6a[RealtimeWebSocketConfig.java];
     B1a6 --> B1a6b[RoomRealtimeEvents.java];
     B1a6 --> B1a6c[RoomRealtimeListener.java];
@@ -57,6 +62,8 @@ graph TD
     B1a7 --> B1a7d[RoomRepository.java];
     B1a7 --> B1a7e[UserRepository.java];
     B1a7 --> B1a7f[WordPairRepository.java];
+    B1a7 --> B1a7g[AiModelConfigRepository.java];
+    B1a7 --> B1a7h[UndercoverAiRoleRepository.java];
     B1a8 --> B1a8a[AccountUserDetails.java];
     B1a8 --> B1a8b[AccountUserDetailsService.java];
     B1a8 --> B1a8c[JwtAuthenticationFilter.java];
@@ -66,6 +73,7 @@ graph TD
     B1a9 --> B1a9c[RoomService.java];
     B1a9 --> B1a9d[UserService.java];
     B1a9 --> B1a9e[WordPairService.java];
+    B1a9 --> B1a9f[ManageService.java];
 
     C --> C1[src];
     C --> C2[public];
@@ -98,7 +106,6 @@ graph TD
     C1f --> C1f3[RegisterPage.vue];
     C1f --> C1f4[RoomPage.vue];
     C1f --> C1f5[StatsPage.vue];
-    C1f --> C1f6[WordBankAdminPage.vue];
     C1g --> C1g1[index.ts];
     C1h --> C1h1[notifications.ts];
     C1h --> C1h2[realtime.ts];
@@ -111,6 +118,31 @@ graph TD
     C1k --> C1k1[rooms.ts];
     C1k --> C1k2[user.ts];
     C1k --> C1k3[word-pairs.ts];
+
+    H --> H1[src];
+    H --> H2[package.json];
+    H --> H3[vite.config.ts];
+    H1 --> H1a[App.vue];
+    H1 --> H1b[main.ts];
+    H1 --> H1c[api];
+    H1 --> H1d[components];
+    H1 --> H1e[i18n];
+    H1 --> H1f[pages];
+    H1 --> H1g[router];
+    H1 --> H1h[store];
+    H1 --> H1i[styles];
+    H1c --> H1c1[http.ts];
+    H1c --> H1c2[manage.ts];
+    H1c --> H1c3[auth.ts];
+    H1d --> H1d1[AiModelConfigManager.vue];
+    H1d --> H1d2[UndercoverAiRoleManager.vue];
+  - `UndercoverWordBankManager.vue`: 复用主站的词库管理界面，与原页面保持一致。
+    H1d --> H1d4[GameConfigPanel.vue];
+    H1f --> H1f1[AdminDashboard.vue];
+    H1g --> H1g1[index.ts];
+    H1h --> H1h1[auth.ts];
+    H1h --> H1h2[index.ts];
+    H1i --> H1i1[global.scss];
 ```
 
 ## 根目录文件
@@ -143,20 +175,24 @@ graph TD
 - **MetaController.java**: 提供元数据相关的 API，如获取应用版本信息。
 - **RoomController.java**: 处理游戏房间相关的 API 请求，如创建、加入、离开房间。
 - **WordPairController.java**: 管理词汇对的 API，用于游戏内容的管理。
+- **ManageController.java**: 管理后台入口，提供 AI 模型及 AI 角色相关的 CRUD 接口（仅管理员可访问）。
 
 #### `dto` (数据传输对象)
 - **AuthDtos.java**: 定义用于认证流程的数据传输对象。
 - **MetaDtos.java**: 定义元数据相关的 DTO。
 - **RoomDtos.java**: 定义游戏房间相关的 DTO。
 - **WordPairDtos.java**: 定义词汇对相关的 DTO。
+- **ManageDtos.java**: 定义管理后台使用的请求与响应结构，包括模型配置、AI 角色等数据。
 
 #### `entity` (实体)
 - **GameSession.java**: 表示一局游戏会话的实体。
 - **RefreshToken.java**: 存储刷新 token 的实体，用于实现持久化登录。
 - **Room.java**: 游戏房间的实体。
 - **RoomPlayer.java**: 房间内玩家的实体。
-- **UserAccount.java**: 用户账户的实体。
+- **UserAccount.java**: 用户账户的实体，包含 `isAdmin` 字段用于判定管理员权限。
 - **WordPair.java**: 词汇对的实体。
+- **AiModelConfig.java**: 管理后台使用的 AI 模型配置实体，保存名称、BaseURL 与 Token。
+- **UndercoverAiRole.java**: “谁是卧底”用的 AI 角色配置实体，绑定模型与性格描述。
 
 #### `realtime` (实时通信)
 - **RealtimeWebSocketConfig.java**: 配置 WebSocket，启用实时通信功能。
@@ -173,19 +209,27 @@ graph TD
 - **RoomRepository.java**: 提供对 `Room` 实体的数据库操作。
 - **UserRepository.java**: 提供对 `UserAccount` 实体的数据库操作。
 - **WordPairRepository.java**: 提供对 `WordPair` 实体的数据库操作。
+- **AiModelConfigRepository.java**: 提供对 `AiModelConfig` 实体的数据库操作。
+- **UndercoverAiRoleRepository.java**: 提供对 `UndercoverAiRole` 实体的数据库操作。
 
 #### `security` (安全)
-- **AccountUserDetails.java**: 实现了 Spring Security 的 `UserDetails` 接口，封装了用户账户信息。
+- **AccountUserDetails.java**: 实现了 Spring Security 的 `UserDetails` 接口，封装用户信息并在管理员账号时附加 `ROLE_ADMIN` 权限。
 - **AccountUserDetailsService.java**: 实现了 `UserDetailsService` 接口，用于从数据库加载用户信息。
 - **JwtAuthenticationFilter.java**: JWT 认证过滤器，在每个请求中验证 JWT 的有效性。
-- **JwtService.java**: 提供生成和验证 JWT 的服务。
+  - **JwtService.java**: 提供生成和验证 JWT 的服务，同时在令牌中写入 `is_admin` 声明供前端使用。
 
 #### `service` (服务)
 - **AuthService.java**: 处理认证相关的业务逻辑。
 - **JsonUtils.java**: 提供 JSON 序列化和反序列化的工具类。
 - **RoomService.java**: 处理游戏房间相关的业务逻辑。
-- **UserService.java**: 处理用户相关的业务逻辑。
+- **UserService.java**: 处理用户相关的业务逻辑，负责 `UserAccount` 的注册、导出及 `is_admin` 字段的序列化。
 - **WordPairService.java**: 处理词汇对相关的业务逻辑。
+- **ManageService.java**: 管理后台核心服务，封装 AI 模型配置与“谁是卧底”AI 角色的增删改查。
+
+### `src/main/resources`
+- **application.yml**: Spring Boot 应用的默认配置，包括数据库、JWT、房间编号等参数。
+- **logback-spring.xml**: 日志输出与级别配置。
+- **migration/**: 存放 MySQL DDL 迁移脚本（如 `20251025_manage_module.sql`），用于在启动时同步 `is_admin` 字段以及 AI 管理相关数据表。
 
 ## Frontend (前端)
 
@@ -223,7 +267,6 @@ graph TD
 - **RegisterPage.vue**: 用户注册页面。
 - **RoomPage.vue**: 游戏房间页面，是游戏进行的核心界面。
 - **StatsPage.vue**: 统计页面，展示用户的游戏数据。
-- **WordBankAdminPage.vue**: 词汇库管理页面，用于管理游戏词汇。
 
 #### `router` (路由)
 - **index.ts**: 配置应用的路由规则，将 URL 映射到对应的页面组件。
@@ -237,12 +280,37 @@ graph TD
 - **meta.ts**: 管理元数据相关的状态。
 - **notifications.ts**: 管理通知相关的状态。
 - **rooms.ts**: 管理游戏房间相关的状态。
-- **user.ts**: 管理用户认证和信息的全局状态。
+- **user.ts**: 管理用户认证和信息的全局状态，负责维护 access/refresh token 及 `is_admin` 属性。
 
 #### `styles`
 - **global.scss**: 全局 SCSS 样式文件。
 
 #### `types` (类型定义)
 - **rooms.ts**: 定义游戏房间相关的数据类型。
-- **user.ts**: 定义用户相关的数据类型。
+- **user.ts**: 定义用户相关的数据类型（包含 `is_admin` 标记）。
 - **word-pairs.ts**: 定义词汇对相关的数据类型。
+
+## Manage (管理后台)
+
+管理后台基于 Vue 3 + Vite 构建，复用与主站一致的技术栈，并通过共享 LocalStorage 中的 JWT 凭证判断管理员身份。主要结构如下：
+
+- **package.json / vite.config.ts**: 定义管理模块的依赖、构建插件以及自动导入 Element Plus 组件的配置。
+- **src/main.ts**: 挂载应用，注册 Pinia、Vue Router 以及 `i18n`。
+- **src/App.vue**: 全局布局与权限判定，展示管理员信息并在未授权时给出提示。
+- **src/pages/AdminDashboard.vue**: 管理后台首页，按照“基础功能管理 / AI 模型配置管理 / 游戏配置”划分入口。
+- **src/components/**:
+  - `AiModelConfigManager.vue`: 管理 AI 大模型配置的增删改查。
+  - `UndercoverAiRoleManager.vue`: 维护“谁是卧底”可用的 AI 角色及行为描述。
+  - `UndercoverWordBankManager.vue`: 复用主站的词库管理界面，与原页面保持一致。
+  - `GameConfigPanel.vue`: 搭建游戏配置选项卡，包含“谁是卧底”“狼人杀”分组。
+- **src/api/**:
+  - `http.ts`: axios 实例与错误通知封装。
+  - `manage.ts`: 管理接口（AI 模型 / AI 角色）的 REST 客户端。
+  - `wordPairs.ts`: 复用词库 CRUD/导入导出的 API 调用。
+  - `auth.ts`: 刷新 Token、获取个人资料。
+- **src/store/**:
+  - `auth.ts`: 读取主站的存储令牌、刷新 access token、校验 `is_admin`。
+  - `index.ts`: Pinia 实例。
+- **src/i18n/**: 继承主站的多语言配置以复用现有字典。
+- **src/styles/global.scss**: 管理后台的全局样式调整。
+

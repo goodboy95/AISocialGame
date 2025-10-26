@@ -9,7 +9,7 @@ export const messages = {
       register: "注册",
       lobby: "大厅",
       stats: "战绩",
-      manage: "管理后台",
+      wordBank: "词库管理",
       logout: "退出登录",
     },
     room: {
@@ -327,7 +327,7 @@ export const messages = {
       register: "Sign Up",
       lobby: "Lobby",
       stats: "Stats",
-      manage: "Admin Console",
+      wordBank: "Word Bank",
       logout: "Log out",
     },
     room: {

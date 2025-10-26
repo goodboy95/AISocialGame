@@ -40,6 +40,9 @@ public class UserAccount {
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
+    @Column(name = "is_admin", nullable = false)
+    private boolean isAdmin = false;
+
     @OneToMany(mappedBy = "owner")
     private Set<Room> ownedRooms = new HashSet<>();
 
@@ -113,5 +116,13 @@ public class UserAccount {
 
     public void setOwnedRooms(Set<Room> ownedRooms) {
         this.ownedRooms = ownedRooms;
+    }
+
+    public boolean isAdmin() {
+        return isAdmin;
+    }
+
+    public void setAdmin(boolean admin) {
+        isAdmin = admin;
     }
 }

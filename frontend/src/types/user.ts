@@ -5,6 +5,7 @@ export interface UserProfile {
   display_name: string | null;
   avatar: string | null;
   bio: string | null;
+  is_admin: boolean;
 }
 
 export interface UserMembershipSnapshot {

@@ -33,6 +33,7 @@ public class JwtService {
                 .expiration(Date.from(expiry))
                 .claim("username", user.getUsername())
                 .claim("display_name", user.getDisplayName())
+                .claim("is_admin", user.isAdmin())
                 .signWith(Keys.hmacShaKeyFor(properties.getSecret().getBytes()))
                 .compact();
     }

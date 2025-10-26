@@ -29,7 +29,8 @@ public final class AuthDtos {
             String email,
             @JsonProperty("display_name") String displayName,
             String avatar,
-            String bio) {}
+            String bio,
+            @JsonProperty("is_admin") boolean isAdmin) {}
 
     public record UserMembershipSnapshot(
             long roomId,

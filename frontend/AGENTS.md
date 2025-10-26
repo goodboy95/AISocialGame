@@ -20,6 +20,7 @@
 - Keep REST clients under `src/api`; wrap HTTP calls in functions returning typed promises.
 - Respect the existing normalizer helpers in `rooms` store when adding new backend fields (handle both snake_case & camelCase).
 - Component SCSS should import shared variables from `src/styles/theme.scss` instead of redefining colours.
+- `UserProfile` now exposes `is_admin`; keep it in sync when extending auth flows or persisting profile data so the Manage shortcut renders correctly.
 
 ## Testing & quality
 - No automated tests are configured yet. If you add Vitest/Cypress, extend `package.json` scripts and document usage in `frontend/README.md`.
@@ -30,6 +31,8 @@
 - `.env` files drive API/WebSocket base URLs (`VITE_API_BASE_URL`, `VITE_WS_BASE_URL`). Update docs when adding new variables.
 - WebSocket connections require a JWT token; the helper automatically appends `token` query params using the auth store.
 - Update `src/router/index.ts` if you introduce new pages, and add route guards for authenticated sections.
+- Admins reach the new management frontend via the top-right link; the URL can be overridden with `VITE_MANAGE_BASE_URL` (defaults to `/manage`).
+- The in-lobby word bank page has been removed in favour of the management console—reuse the API clients under `src/api/wordPairs.ts` if you need game-side previews.
 
 ## Documentation & PR notes
 - Keep `frontend/README.md` and `doc/` in sync with UI or workflow changes.

@@ -10,13 +10,8 @@
         <el-space size="large" class="nav-actions">
           <el-button type="primary" link @click="goTo('lobby')">{{ t("nav.lobby") }}</el-button>
           <el-button type="primary" link @click="goTo('stats')">{{ t("nav.stats") }}</el-button>
-          <el-button
-            v-if="isLoggedIn"
-            type="primary"
-            link
-            @click="goTo('word-bank-admin')"
-          >
-            {{ t("nav.wordBank") }}
+          <el-button v-if="isAdmin" type="primary" link @click="openManage">
+            {{ t("nav.manage") }}
           </el-button>
           <template v-if="!isLoggedIn">
             <el-button type="primary" link @click="goTo('login')">{{ t("nav.login") }}</el-button>
@@ -36,8 +31,8 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item @click="goTo('word-bank-admin')">
-                    {{ t("nav.wordBank") }}
+                  <el-dropdown-item @click="openManage">
+                    {{ t("nav.manage") }}
                   </el-dropdown-item>
                   <el-dropdown-item @click="goTo('stats')">{{ t("nav.stats") }}</el-dropdown-item>
                   <el-dropdown-item divided @click="handleLogout">{{ t("nav.logout") }}</el-dropdown-item>
@@ -72,6 +67,7 @@ import GlobalNotifications from "./components/GlobalNotifications.vue";
 const authStore = useAuthStore();
 const { profile } = storeToRefs(authStore);
 const isLoggedIn = computed(() => Boolean(profile.value));
+const isAdmin = computed(() => profile.value?.is_admin === true);
 const displayName = computed(
   () => profile.value?.display_name || profile.value?.username || ""
 );
@@ -97,6 +93,22 @@ function handleLocaleChange(value: SupportedLocale) {
 async function handleLogout() {
   await authStore.logout();
   router.push({ name: "login" });
+}
+
+const manageBaseUrl =
+  (import.meta.env.VITE_MANAGE_BASE_URL as string | undefined)?.trim() ?? "/manage";
+
+function openManage() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const resolved =
+    manageBaseUrl.startsWith("http://") || manageBaseUrl.startsWith("https://")
+      ? manageBaseUrl
+      : `${window.location.origin.replace(/\/$/, "")}${
+          manageBaseUrl.startsWith("/") ? manageBaseUrl : `/${manageBaseUrl}`
+        }`;
+  window.open(resolved, "_blank", "noreferrer");
 }
 </script>
 

@@ -33,12 +33,6 @@ const routes: RouteRecordRaw[] = [
     path: "/stats",
     name: "stats",
     component: () => import("../pages/StatsPage.vue")
-  },
-  {
-    path: "/admin/word-bank",
-    name: "word-bank-admin",
-    component: () => import("../pages/WordBankAdminPage.vue"),
-    meta: { requiresAuth: true }
   }
 ];
 

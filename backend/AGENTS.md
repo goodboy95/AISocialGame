@@ -5,6 +5,7 @@
 - Key packages: `controller`, `service`, `realtime`, `security`, `entity`, `dto`, `repository`, `config`.
 - JWT-secured endpoints expect `/api` prefix; WebSocket endpoints live under `/ws/rooms/{id}` and require a JWT passed via the `token` query param.
 - For a detailed breakdown of the project structure, see `projectStructure.md` in the root directory.
+- Management APIs live under `/manage/**` (`ManageController` + `ManageService`) and are guarded by the new `ROLE_ADMIN` authority backed by the `UserAccount.isAdmin` flag.
 
 ## Build & run
 - Install Java 21. Use the Maven Wrapper shipped in the repo.
@@ -28,6 +29,7 @@
 - Public endpoints are explicitly listed in `SecurityConfig`. Update both the config and tests if you add new anonymous routes.
 - JWT secrets and TTLs are injected via environment variables (`JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`). Never hardcode secrets.
 - WebSocket access is authenticated in `WebSocketAccessTokenInterceptor`; any new channel must perform equivalent validation.
+- Adjusting database schema requires adding a matching MySQL-compatible migration script under `src/main/resources/migration/`; remember to include alterations (e.g. `is_admin`, AI 模型/角色表) when evolving entities.
 
 ## Documentation & PR notes
 - Update `backend/README.md` when adding new modules, endpoints, or environment variables.
