@@ -13,3 +13,4 @@ dist/
 backend/staticfiles/
 backend/media/
 frontend/node_modules/
+/backend/.m2

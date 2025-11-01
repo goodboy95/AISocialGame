@@ -26,6 +26,43 @@
 - For repository-only logic prefer `@DataJpaTest` with in-memory H2.
 - WebSocket behaviour is mediated through `RoomRealtimeEvents` and `RoomRealtimeListener`; consider publishing events in tests to assert broadcast payloads.
 
+## Auth smoke test flow
+1. From `backend/`, ensure Java 21 is available (`./mvnw -v`) and decide on the datasource; for quick checks export the following to stick with an in-memory H2 schema:
+   ```bash
+   export SPRING_DATASOURCE_URL="jdbc:h2:mem:testdb"
+   export SPRING_DATASOURCE_USERNAME="sa"
+   export SPRING_DATASOURCE_PASSWORD=""
+   export SPRING_DATASOURCE_DRIVER="org.h2.Driver"
+   export SPRING_DATASOURCE_TYPE="com.zaxxer.hikari.HikariDataSource"
+   ```
+   If you lack write access to `/opt/seekerhut/aisocialgame/logs`, either create the directories with elevated privileges or override logging by pointing `LOGGING_CONFIG` (or `LOGBACK_CONFIGURATION_FILE`) at a console-only config placed in the project root.
+2. Launch the API with `./mvnw spring-boot:run` and wait until the logs report “Tomcat started on port 8100 (http) with context path '/api'”. Leave the process running.
+3. In another shell, exercise registration:
+   ```bash
+   curl -s -o /tmp/register.json -w "%{http_code}\n" \
+     http://127.0.0.1:8100/api/auth/register/ \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"tester","email":"tester@example.com","password":"Passw0rd!","display_name":"Tester"}'
+   ```
+   Expect a `200` status and a JSON profile in `/tmp/register.json`.
+4. Verify login token issuance:
+   ```bash
+   curl -s -o /tmp/login.json -w "%{http_code}\n" \
+     http://127.0.0.1:8100/api/auth/token/ \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"tester","password":"Passw0rd!"}'
+   ```
+   Confirm the response body contains both `access` and `refresh` fields.
+5. Validate the access token against `/auth/me/` (replace the subshell with your preferred JSON parser if `python3` is unavailable):
+   ```bash
+   ACCESS=$(python3 -c 'import json,sys;print(json.load(open("/tmp/login.json"))["access"])')
+   curl -s -o /tmp/me.json -w "%{http_code}\n" \
+     http://127.0.0.1:8100/api/auth/me/ \
+     -H "Authorization: Bearer ${ACCESS}"
+   ```
+   A `200` status with the previously registered profile confirms the flow.
+6. When finished, stop the Spring process (`Ctrl+C` in the run shell). Because the run used an in-memory H2 instance, the test data vanishes after shutdown. If you require persistence, swap the datasource exports for your MySQL configuration before starting the service.
+
 ## Security considerations
 - Public endpoints are explicitly listed in `SecurityConfig`. Update both the config and tests if you add new anonymous routes.
 - JWT secrets and TTLs are injected via environment variables (`JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`). Never hardcode secrets.
