@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.aisocialgame.backend.service.game.undercover.UndercoverSessionState;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -30,6 +31,9 @@ public class UndercoverGameState {
     private List<Long> speakingOrder = new ArrayList<>();
 
     private TimerPayload timer;
+
+    @JsonProperty("undercover_session")
+    private UndercoverSessionState undercoverSession;
 
     public String getPhase() {
         return phase;
@@ -101,6 +105,14 @@ public class UndercoverGameState {
 
     public void setTimer(TimerPayload timer) {
         this.timer = timer;
+    }
+
+    public UndercoverSessionState getUndercoverSession() {
+        return undercoverSession;
+    }
+
+    public void setUndercoverSession(UndercoverSessionState undercoverSession) {
+        this.undercoverSession = undercoverSession;
     }
 
     public Assignment findAssignment(Long playerId) {
