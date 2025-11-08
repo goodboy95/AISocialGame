@@ -70,6 +70,8 @@
 - Adjusting database schema requires adding a matching MySQL-compatible migration script under `src/main/resources/migration/`; remember to include alterations (e.g. `is_admin`, AI 模型/角色表) when evolving entities.
 
 ## Documentation & PR notes
+- 前端在开发或联调接口时，请参考 `backend/apidoc/` 下的接口文档文件。
+- 后端新增、删除或调整接口时，务必同步更新对应的 `backend/apidoc` 文档，以保持前后端一致。
 - Update `backend/README.md` when adding new modules, endpoints, or environment variables.
 - Keep architectural docs in `doc/` aligned with any significant backend change.
 - Follow conventional commit summaries (≤72 characters) and include a brief description of affected modules in the body when submitting PRs.
