@@ -1,5 +1,9 @@
-<configuration scan="true" scanPeriod="60 seconds" debug="false">  
-    <property name="logPath" value="/opt/seekerhut/aisocialgame/logs" />
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <springProperty scope="context"
+                    name="ResolvedLogPath"
+                    source="app.log-path"
+                    defaultValue="./logs"/>
+    <property name="logPath" value="${ResolvedLogPath}" />
     <property name="logLevel" value="ALL" />
     <contextName>logtest</contextName>
     

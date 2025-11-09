@@ -13,6 +13,7 @@
 - Start the app: `./mvnw spring-boot:run`
 - Run the test suite: `./mvnw test`
 - Docker services can be launched from the repository root using `docker-compose up --build`.
+- 若要启用真实 AI 发言，请同时配置 `APP_AI_BASE_URL`、`APP_AI_TOKEN` 与 `APP_AI_MODEL_NAME`，否则 AI 会使用保守的本地占位发言。
 
 ## Code style & conventions
 - Follow typical Spring conventions: controllers should remain thin, heavy logic belongs in the service layer.
@@ -35,7 +36,7 @@
    export SPRING_DATASOURCE_DRIVER="org.h2.Driver"
    export SPRING_DATASOURCE_TYPE="com.zaxxer.hikari.HikariDataSource"
    ```
-   If you lack write access to `/opt/seekerhut/aisocialgame/logs`, either create the directories with elevated privileges or override logging by pointing `LOGGING_CONFIG` (or `LOGBACK_CONFIGURATION_FILE`) at a console-only config placed in the project root.
+   日志默认写入 `backend/logs`，如需指向其他目录可在启动前设置 `APP_LOG_PATH=/path/to/logs`（记得保证可写权限）。
 2. Launch the API with `./mvnw spring-boot:run` and wait until the logs report “Tomcat started on port 8100 (http) with context path '/api'”. Leave the process running.
 3. In another shell, exercise registration:
    ```bash

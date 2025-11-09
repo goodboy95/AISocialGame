@@ -26,7 +26,7 @@
 ## AI 玩家
 
 - 后端通过 `/api/meta/styles/` 暴露预置的 AI 风格，供前端下拉选择。添加 AI 玩家时，`RoomService` 将随机生成名称、席位并标记 `isAi=true`，在广播时与真实玩家一致。【F:backend/src/main/java/com/aisocialgame/backend/controller/MetaController.java†L16-L58】【F:backend/src/main/java/com/aisocialgame/backend/service/RoomService.java†L126-L167】
-- AI 的实际对话逻辑尚未接入模型，当前仅在游戏状态中预留 `aiStyle` 与发言占位。扩展时可在实时监听器中植入策略，将生成的消息通过 `RoomRealtimeEvents` 推送给房间成员。
+- `UndercoverGameManager` 会在 AI 轮到发言时，使用 `AiSpeechService` 基于当前阶段、历史发言与 AI 风格组装提示词，随后通过可配置的 `APP_AI_BASE_URL` / `APP_AI_TOKEN` / `APP_AI_MODEL_NAME` 调用大模型生成自然语言；若未配置则回退到内置占位发言，保证流程不中断。【F:backend/src/main/java/com/aisocialgame/backend/service/game/UndercoverGameManager.java†L172-L520】【F:backend/src/main/java/com/aisocialgame/backend/service/ai/AiSpeechService.java†L1-L109】
 
 ## 词库与批量操作
 

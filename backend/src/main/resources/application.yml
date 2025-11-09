@@ -25,6 +25,11 @@ security:
     access-token-ttl: ${JWT_ACCESS_TTL:PT1H}
     refresh-token-ttl: ${JWT_REFRESH_TTL:P7D}
 app:
+  log-path: ${APP_LOG_PATH:./logs}
+  ai-model:
+    base-url: ${APP_AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai/}
+    token: ${APP_AI_TOKEN:AIzaSyDAzuA3U3JqB7tqXrDgriC-CnnmHuEg2Tk}
+    model-name: ${APP_AI_MODEL_NAME:gemini-2.5-pro}
   ai-styles:
     - key: storyteller
       label: "故事王"

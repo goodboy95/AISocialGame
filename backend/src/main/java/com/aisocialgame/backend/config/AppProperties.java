@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 public class AppProperties {
 
     private List<AiStyleProperty> aiStyles = new ArrayList<>();
+    private AiModelProperties aiModel = new AiModelProperties();
 
     public List<AiStyleProperty> getAiStyles() {
         return aiStyles;
@@ -18,6 +19,29 @@ public class AppProperties {
 
     public void setAiStyles(List<AiStyleProperty> aiStyles) {
         this.aiStyles = aiStyles;
+    }
+
+    public AiModelProperties getAiModel() {
+        return aiModel;
+    }
+
+    public void setAiModel(AiModelProperties aiModel) {
+        this.aiModel = aiModel != null ? aiModel : new AiModelProperties();
+    }
+
+    public AiStyleProperty findAiStyle(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        return aiStyles.stream()
+                .filter(style -> key.equalsIgnoreCase(style.getKey()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public String describeAiStyle(String key) {
+        AiStyleProperty style = findAiStyle(key);
+        return style != null ? style.getDescription() : null;
     }
 
     public static class AiStyleProperty {
@@ -47,6 +71,41 @@ public class AppProperties {
 
         public void setDescription(String description) {
             this.description = description;
+        }
+    }
+
+    public static class AiModelProperties {
+        private String baseUrl = "";
+        private String token = "";
+        private String modelName = "";
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getToken() {
+            return token;
+        }
+
+        public void setToken(String token) {
+            this.token = token;
+        }
+
+        public String getModelName() {
+            return modelName;
+        }
+
+        public void setModelName(String modelName) {
+            this.modelName = modelName;
+        }
+
+        public boolean isConfigured() {
+            return baseUrl != null && !baseUrl.isBlank()
+                    && modelName != null && !modelName.isBlank();
         }
     }
 }

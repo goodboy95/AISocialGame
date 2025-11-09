@@ -40,6 +40,7 @@ import com.aisocialgame.backend.service.GameScheduler;
 import com.aisocialgame.backend.service.GameSessionMapper;
 import com.aisocialgame.backend.service.JsonUtils;
 import com.aisocialgame.backend.realtime.RoomRealtimeEvents;
+import com.aisocialgame.backend.service.ai.AiSpeechService;
 import com.aisocialgame.backend.service.game.undercover.UndercoverSessionState;
 import com.aisocialgame.backend.service.game.undercover.UndercoverStage;
 
@@ -57,6 +58,7 @@ public class UndercoverGameManager {
     private final GameScheduler scheduler;
     private final TransactionTemplate transactionTemplate;
     private final WordPairRepository wordPairRepository;
+    private final AiSpeechService aiSpeechService;
 
     private final Map<Long, Map<Long, String>> speechDrafts = new ConcurrentHashMap<>();
 
@@ -67,7 +69,8 @@ public class UndercoverGameManager {
             ApplicationEventPublisher eventPublisher,
             GameScheduler scheduler,
             PlatformTransactionManager transactionManager,
-            WordPairRepository wordPairRepository) {
+            WordPairRepository wordPairRepository,
+            AiSpeechService aiSpeechService) {
         this.roomPlayerRepository = roomPlayerRepository;
         this.gameSessionRepository = gameSessionRepository;
         this.gameSessionMapper = gameSessionMapper;
@@ -75,6 +78,7 @@ public class UndercoverGameManager {
         this.scheduler = scheduler;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.wordPairRepository = wordPairRepository;
+        this.aiSpeechService = aiSpeechService;
     }
 
     public void initializeSession(GameSession session) {
@@ -318,7 +322,7 @@ public class UndercoverGameManager {
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
-        String content = transactionTemplate.execute(status -> {
+        AiSpeechTriggerPayload payload = transactionTemplate.execute(status -> {
             GameSession session = gameSessionRepository.findById(sessionId).orElse(null);
             if (session == null) {
                 return null;
@@ -329,13 +333,32 @@ public class UndercoverGameManager {
                 return null;
             }
             UndercoverGameState.Assignment assignment = state.findAssignment(playerId);
-            if (assignment == null) {
+            if (assignment == null || !assignment.isAlive()) {
                 return null;
             }
-            String word = assignment.getWord() != null ? assignment.getWord() : "这一轮的关键词";
-            return String.format("%s觉得这个词可以这样描述：%s。", assignment.getDisplayName(), word);
+            List<AiSpeechService.SpeechSample> samples = buildRecentSpeechSamples(state);
+            UndercoverSessionState sessionState = state.getUndercoverSession();
+            String stage = sessionState != null && sessionState.getStage() != null
+                    ? sessionState.getStage().name()
+                    : state.getPhase();
+            AiSpeechService.AiSpeechRequest request = new AiSpeechService.AiSpeechRequest(
+                    session.getRoom() != null ? session.getRoom().getName() : null,
+                    assignment.getDisplayName(),
+                    assignment.getRole(),
+                    assignment.getWord(),
+                    assignment.getAiStyle(),
+                    state.getRound(),
+                    stage,
+                    samples);
+            String fallback = buildFallbackSpeech(assignment);
+            return new AiSpeechTriggerPayload(request, fallback);
         });
-        if (content != null) {
+        if (payload == null) {
+            return;
+        }
+        String content = aiSpeechService.generateSpeech(payload.request())
+                .orElse(payload.fallback());
+        if (content != null && !content.isBlank()) {
             submitSpeech(sessionId, playerId, false, true, content);
         }
     }
@@ -710,6 +733,41 @@ public class UndercoverGameManager {
         return null;
     }
 
+    private List<AiSpeechService.SpeechSample> buildRecentSpeechSamples(UndercoverGameState state) {
+        List<UndercoverGameState.Speech> speeches = state.getSpeeches();
+        if (speeches == null || speeches.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, String> nameMap = state.getAssignments().stream()
+                .filter(assignment -> assignment.getPlayerId() != null)
+                .collect(Collectors.toMap(
+                        UndercoverGameState.Assignment::getPlayerId,
+                        UndercoverGameState.Assignment::getDisplayName,
+                        (existing, replacement) -> existing));
+        int start = Math.max(0, speeches.size() - 4);
+        List<AiSpeechService.SpeechSample> samples = new ArrayList<>();
+        for (int i = start; i < speeches.size(); i++) {
+            UndercoverGameState.Speech speech = speeches.get(i);
+            Long playerId = speech.getPlayerId();
+            String speaker = nameMap.getOrDefault(playerId, playerId != null ? "玩家" + playerId : "未知玩家");
+            String content = speech.getContent() != null ? speech.getContent() : "";
+            samples.add(new AiSpeechService.SpeechSample(speaker, speech.isAi(), content));
+        }
+        return List.copyOf(samples);
+    }
+
+    private String buildFallbackSpeech(UndercoverGameState.Assignment assignment) {
+        if (assignment == null) {
+            return "（AI暂时缺席本轮发言）";
+        }
+        String name = assignment.getDisplayName() != null ? assignment.getDisplayName() : "AI玩家";
+        String word = assignment.getWord();
+        if (word == null || word.isBlank()) {
+            word = "这一轮的关键词";
+        }
+        return String.format("%s觉得这个词可以这样描述：%s。", name, word);
+    }
+
     private int intValue(Map<String, Object> source, String key, int fallback) {
         Object value = source != null ? source.get(key) : null;
         if (value instanceof Number number) {
@@ -762,6 +820,10 @@ public class UndercoverGameManager {
         String text = String.valueOf(value);
         return text.isBlank() ? fallback : text;
     }
+
+    private record AiSpeechTriggerPayload(
+            AiSpeechService.AiSpeechRequest request,
+            String fallback) {}
 
     private record AssignmentBundle(
             List<UndercoverGameState.Assignment> legacyAssignments,

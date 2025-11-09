@@ -48,6 +48,8 @@ JWT 相关参数可通过环境变量覆写：
 
 额外参数：
 
+- `APP_LOG_PATH`：日志输出目录，默认写入 `backend/logs`。
+- `APP_AI_BASE_URL` / `APP_AI_TOKEN` / `APP_AI_MODEL_NAME`：配置 AI 玩家调用的大模型接口地址、鉴权 Token 与模型名称；留空则退回本地占位发言。
 - `AI_SOCIAL_ROOM_CODE_LENGTH`：房号长度，默认 6。【F:backend/src/main/resources/application.yml†L1-L44】
 - `AI_SOCIAL_DEFAULT_ENGINE`：默认游戏引擎（`undercover` 或 `werewolf`）。
 

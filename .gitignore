@@ -14,3 +14,4 @@ backend/staticfiles/
 backend/media/
 frontend/node_modules/
 /backend/.m2
+backend/logs/
