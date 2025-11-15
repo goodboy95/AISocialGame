@@ -1,0 +1,12 @@
+{
+  "name": "aisocialgame-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "ws": "^8.18.0"
+  }
+}
