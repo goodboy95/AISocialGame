@@ -15,9 +15,11 @@
 docker-compose up --build
 ```
 
-- 后端：`http://socialgame.seekerhut.com/api`
-- WebSocket：`ws://socialgame.seekerhut.com/ws`
+- 后端：`http://localhost/api`
+- WebSocket：`ws://localhost/api/ws`
 - 前端：`http://localhost:5100`
+
+> Compose 会同时启动一个 `gateway`（nginx）容器监听宿主机 80 端口，负责将 `/` 请求代理到前端、`/api/*` 与 `/ws/*` 代理到后端。如需复现旧文档中的 `http://socialgame.seekerhut.com` 域名，可在本地 `hosts` 文件写入 `127.0.0.1 socialgame.seekerhut.com` 即可沿用同一配置。
 
 首次执行会自动构建 Spring Boot Jar 与安装前端依赖。要停止服务可使用 `docker-compose down`。
 
@@ -66,8 +68,8 @@ npm run dev
 1. 注册账号并登录获取 JWT：
 
    ```bash
-   http POST http://socialgame.seekerhut.com/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
-   http POST http://socialgame.seekerhut.com/api/auth/token/ username=alice password=Passw0rd!
+   http POST http://localhost/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
+   http POST http://localhost/api/auth/token/ username=alice password=Passw0rd!
    ```
 
 2. 使用 `Authorization: Bearer <token>` 调用受保护接口。

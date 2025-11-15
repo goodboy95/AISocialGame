@@ -35,16 +35,64 @@ doc/       # 设计文档与阶段总结
 
    根据实际情况修改前端请求的 API 地址等配置。后端默认使用内存数据库，可通过环境变量覆盖。
 
-### 本地启动（Docker Compose）
+### 使用 Docker Compose 启动全栈（编译 + 启动全流程）
 
-```bash
-docker-compose up --build
-```
+1. **准备环境变量与代码**
+   ```bash
+   git clone https://github.com/xxx/AISocialGame.git
+   cd AISocialGame
+   cp frontend/.env.example frontend/.env
+   ```
+   如需自定义 API / WebSocket 地址，可直接修改 `frontend/.env`，也可以保留默认的 `/api`、`/api/ws` 以便使用内置的 nginx 代理。
 
-- 前端默认运行在 `http://localhost:5100`
-- 后端 REST API 位于 `http://socialgame.seekerhut.com/api`
+2. **构建开发镜像（可选，但推荐首次执行）**
+   ```bash
+   # 新版 Docker CLI
+   docker compose build
+   # 旧版 CLI
+   docker-compose build
+   ```
+   该步骤会按 `infra/docker/dev/backend.Dockerfile` 与 `frontend.Dockerfile` 创建开发镜像，并同步宿主机 UID/GID，避免容器写入的文件变为 root 权限。
 
-首次启动会构建 Spring Boot 可执行包并安装前端依赖。
+3. **启动全部服务（包含自动编译）**
+   ```bash
+   docker compose up --build -d
+   # 或 docker-compose up --build -d
+   ```
+   `--build` 可确保当代码或 Dockerfile 变更时重新编译镜像。第一次运行时后端会自动下载 Maven 依赖、前端会执行 `npm install` 并生成 Vite 产物。
+
+4. **检查容器状态**
+   ```bash
+   docker compose ps
+   ```
+   预期输出：
+   - `aisocialgame_backend_1`：Spring Boot 服务，监听 `8100`
+   - `aisocialgame_frontend_1`：Vite Dev Server，监听 `5100`
+   - `aisocialgame_gateway_1`：nginx 入口，监听 `80`
+
+5. **实时查看日志（排查编译或启动问题）**
+   ```bash
+   docker compose logs -f backend
+   docker compose logs -f frontend
+   ```
+   后端日志中出现 `Started AiSocialGameApplication` 即代表 Spring Boot 成功启动；前端日志出现 `VITE ready in ...` 表示 Vite 服务就绪。
+
+6. **访问应用**
+   - Web 入口：`http://localhost/`（通过 nginx 统一转发）
+   - 直接访问前端：`http://localhost:5100/`
+   - REST API：`http://localhost/api/**`
+   - WebSocket：`ws://localhost/api/ws/rooms/{id}?token=<JWT>`
+   如需继续使用演示域名，可在 `hosts` 中添加 `127.0.0.1 socialgame.seekerhut.com` 并以该域名访问。
+
+7. **停止与清理**
+   ```bash
+   docker compose down        # 停止服务但保留镜像与数据卷
+   docker compose down -v     # 同时清理数据卷（会删除 H2/MySQL 数据）
+   ```
+
+> 首次启动若提示 Vite 无法写入 `node_modules/.vite`，请在宿主机执行 `sudo chown -R $USER:$USER frontend/node_modules`，然后重新 `docker compose up --build`.
+
+> `docker-compose 1.29.x` 在较新 Docker Engine 上偶发 `KeyError: 'ContainerConfig'`；如果遇到，可升级到 `docker compose` v2 或执行 `docker-compose rm <service>` 后再运行 `docker-compose up --build`.
 
 ### 直接运行后端（可选）
 
@@ -61,7 +109,7 @@ npm install
 npm run dev
 ```
 
-> 提示：若未在 `.env` 中显式设置 `VITE_WS_BASE_URL`，前端会优先基于 `VITE_API_BASE_URL` 自动推导 WebSocket 基础地址（例如 `http://socialgame.seekerhut.com/api` 会映射到 `ws://socialgame.seekerhut.com/ws`），若未配置 API 地址，则回退到当前访问域名的 `/ws`。
+> 提示：若未在 `.env` 中显式设置 `VITE_WS_BASE_URL`，前端会优先基于 `VITE_API_BASE_URL` 或当前页面地址推导 WebSocket 基础地址，并自动附加 API 前缀（例如 `http://localhost/api` 会映射到 `ws://localhost/api/ws`）。若未配置 API 地址，则回退到当前访问域名的 `/ws`。
 
 ### 直接运行管理前端（可选）
 
@@ -79,10 +127,10 @@ npm run dev
 
    ```bash
    # 注册用户
-   http POST http://socialgame.seekerhut.com/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
+   http POST http://localhost/api/auth/register/ username=alice password=Passw0rd! display_name=Alice
 
    # 登录获取 JWT
-   http POST http://socialgame.seekerhut.com/api/auth/token/ username=alice password=Passw0rd!
+   http POST http://localhost/api/auth/token/ username=alice password=Passw0rd!
    ```
 
    登录成功后将返回 `access`、`refresh` 令牌，后续请求在 Header 中携带 `Authorization: Bearer <access>`。
@@ -90,8 +138,8 @@ npm run dev
 2. **创建并加入房间**：
 
    ```bash
-   http POST http://socialgame.seekerhut.com/api/rooms/ name="Alice 的房间" max_players:=6 Authorization:"Bearer <access>"
-   http POST http://socialgame.seekerhut.com/api/rooms/{id}/join/ Authorization:"Bearer <access>"
+   http POST http://localhost/api/rooms/ name="Alice 的房间" max_players:=6 Authorization:"Bearer <access>"
+   http POST http://localhost/api/rooms/{id}/join/ Authorization:"Bearer <access>"
    ```
 
    创建成功会返回房间 ID 与房号 (`code`)，可通过 `POST /api/rooms/join-by-code/` 邀请其他成员加入。

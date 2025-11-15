@@ -15,7 +15,7 @@
 
 ```bash
 npm install    # 安装依赖
-npm run dev    # 本地开发，默认端口 5173
+npm run dev    # 本地开发，默认端口 5100
 npm run build  # 生产构建
 npm run preview  # 预览构建结果
 ```
@@ -44,11 +44,11 @@ src/
 复制 `.env.example` 为 `.env` 并根据后端部署地址调整：
 
 ```ini
-VITE_API_BASE_URL=http://socialgame.seekerhut.com/api
-VITE_WS_BASE_URL=ws://socialgame.seekerhut.com/ws
+VITE_API_BASE_URL=http://localhost/api
+VITE_WS_BASE_URL=ws://localhost/api/ws
 ```
 
-- 若未设置 `VITE_WS_BASE_URL`，`RoomRealtimeClient` 会尝试根据 `VITE_API_BASE_URL` 或当前页面地址推导 WebSocket 入口。【F:frontend/src/services/realtime.ts†L9-L44】
+- 若未设置 `VITE_WS_BASE_URL`，`RoomRealtimeClient` 会尝试根据 `VITE_API_BASE_URL` 或当前页面地址推导 WebSocket 入口，并保留 API 前缀（例如 `/api` 会映射到 `/api/ws`）。【F:frontend/src/services/realtime.ts†L9-L44】
 - `VITE_API_BASE_URL` 会作为 axios 基础地址，并在 Pinia `user` Store 中附加 JWT Header。【F:frontend/src/api/http.ts†L1-L56】
 
 ## 状态管理

@@ -20,7 +20,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5101,
-    allowedHosts: ['socialgame.seekerhut.com']
+    allowedHosts: ['socialgame.seekerhut.com', 'localhost']
   },
   resolve: {
     alias: {

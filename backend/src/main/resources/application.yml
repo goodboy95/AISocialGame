@@ -40,3 +40,11 @@ app:
     - key: prankster
       label: "恶作剧达人"
       description: "总是用搞怪的方式发表观点，令人哭笑不得的 AI。"
+  cors:
+    allowed-origins:
+      - http://localhost
+      - http://127.0.0.1
+      - http://socialgame.seekerhut.com
+      - https://socialgame.seekerhut.com
+      - "*"
+    allow-credentials: false

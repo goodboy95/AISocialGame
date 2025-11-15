@@ -23,19 +23,38 @@ function ensureWsPath(parsed: URL): URL {
   return parsed;
 }
 
-function normalizeCandidate(candidate: string): string | null {
-  if (!candidate.trim()) {
+function resolveBaseForRelativeUrls(): string {
+  if (typeof window !== "undefined" && window.location) {
+    return window.location.origin;
+  }
+  return "http://localhost";
+}
+
+function parseUrl(candidate: string): URL {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) {
+    return new URL(candidate);
+  }
+  return new URL(candidate, resolveBaseForRelativeUrls());
+}
+
+function normalizeCandidate(candidate?: string | null): string | null {
+  if (!candidate) {
+    return null;
+  }
+  const trimmed = candidate.trim();
+  if (!trimmed) {
     return null;
   }
   try {
-    const parsed = new URL(candidate);
+    const parsed = parseUrl(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+    }
     if (typeof window !== "undefined" && window.location) {
       const isSecurePage = window.location.protocol === "https:";
       if (isSecurePage && parsed.protocol === "ws:") {
         parsed.protocol = "wss:";
       }
-    }
-    if (typeof window !== "undefined") {
       const pageHost = window.location.hostname;
       if (!isLocalHostname(pageHost) && isLocalHostname(parsed.hostname)) {
         console.warn(
@@ -43,6 +62,9 @@ function normalizeCandidate(candidate: string): string | null {
         );
         return null;
       }
+    }
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+      parsed.protocol = parsed.protocol.endsWith("s:") ? "wss:" : "ws:";
     }
     ensureWsPath(parsed);
     return sanitizeUrl(parsed.toString());
@@ -52,40 +74,53 @@ function normalizeCandidate(candidate: string): string | null {
   }
 }
 
-function determineBaseUrl(options: RealtimeOptions = {}): string {
-  const candidates = [options.baseUrl, import.meta.env.VITE_WS_BASE_URL as string | undefined].filter(
-    (value): value is string => Boolean(value && value.trim())
-  );
+function applyApiPrefixIfNeeded(url: string, apiBase?: string | null): string {
+  if (!apiBase || !apiBase.trim()) {
+    return url;
+  }
+  try {
+    const apiParsed = parseUrl(apiBase.trim());
+    const prefix = apiParsed.pathname.replace(/\/$/, "");
+    if (!prefix || prefix === "/") {
+      return url;
+    }
+    const parsed = new URL(url);
+    if (parsed.hostname !== apiParsed.hostname || parsed.port !== apiParsed.port) {
+      return url;
+    }
+    if (!/^\/ws\/?$/i.test(parsed.pathname)) {
+      return url;
+    }
+    parsed.pathname = `${prefix}/ws`;
+    return sanitizeUrl(parsed.toString());
+  } catch (error) {
+    console.warn("Failed to align websocket path with API prefix", error);
+    return url;
+  }
+}
 
-  for (const candidate of candidates) {
+function determineBaseUrl(options: RealtimeOptions = {}): string {
+  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  const manualCandidates = [options.baseUrl, import.meta.env.VITE_WS_BASE_URL as string | undefined];
+
+  for (const candidate of manualCandidates) {
     const normalized = normalizeCandidate(candidate);
     if (normalized) {
-      return normalized;
+      return applyApiPrefixIfNeeded(normalized, apiBase);
     }
   }
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (apiBase && apiBase.trim()) {
-    try {
-      const parsed = new URL(apiBase);
-      parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-      const suffix = parsed.pathname.endsWith("/api") ? parsed.pathname.slice(0, -4) : parsed.pathname;
-      parsed.pathname = `${suffix.replace(/\/$/, "")}/ws`;
-      const normalized = normalizeCandidate(parsed.toString());
-      if (normalized) {
-        return normalized;
-      }
-    } catch (error) {
-      console.warn("Unable to derive websocket base from VITE_API_BASE_URL", error);
-    }
+  const derived = normalizeCandidate(apiBase);
+  if (derived) {
+    return applyApiPrefixIfNeeded(derived, apiBase);
   }
 
   if (typeof window !== "undefined" && window.location) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws`;
+    return applyApiPrefixIfNeeded(`${protocol}//${window.location.host}/ws`, apiBase);
   }
 
-  return "ws://socialgame.seekerhut.com/ws";
+  return "ws://localhost/ws";
 }
 
 function buildUrl(base: string, path: string, token?: string) {

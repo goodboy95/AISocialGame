@@ -203,6 +203,20 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
       return { playerId, targetId, timestamp };
     })
     .filter((item: any): item is { playerId: number; targetId: number; timestamp: string } => Boolean(item));
+  const playerVotesRaw = pickValue<Record<string, number | null>>(state, "player_votes", "playerVotes") ?? {};
+  const playerVotes: Record<number, number | null> = {};
+  Object.entries(playerVotesRaw).forEach(([key, value]) => {
+    const playerId = Number(key);
+    if (!Number.isFinite(playerId)) {
+      return;
+    }
+    if (value === null || value === undefined) {
+      playerVotes[playerId] = null;
+    } else {
+      const targetId = Number(value);
+      playerVotes[playerId] = Number.isFinite(targetId) ? targetId : null;
+    }
+  });
   return {
     phase: String(pickValue<string>(state, "phase") ?? "preparing"),
     round: Number(pickValue<number>(state, "round") ?? 1),
@@ -233,7 +247,8 @@ function normalizeUndercoverState(state: any): UndercoverStateView {
     })(),
     word_pair: pickValue<any>(state, "word_pair", "wordPair") ?? {},
     aiVoteReveals,
-    winner: pickValue<string>(state, "winner") ?? undefined
+    winner: pickValue<string>(state, "winner") ?? undefined,
+    player_votes: playerVotes
   };
 }
 
@@ -661,6 +676,7 @@ export const useRoomsStore = defineStore("rooms", {
       }
       const content = String((payload as any).content ?? "");
       const isAi = Boolean((payload as any).isAi ?? (payload as any).is_ai ?? false);
+      const round = Number((payload as any).round ?? state.round ?? 1);
       const existingIndex = state.speeches.findIndex(
         (speech) => speech.player_id === playerId && speech.timestamp === timestamp
       );
@@ -670,11 +686,13 @@ export const useRoomsStore = defineStore("rooms", {
           content,
           is_ai: isAi,
           timestamp,
+          round,
         });
       } else {
         state.speeches[existingIndex] = {
           ...state.speeches[existingIndex],
           content,
+          round,
         };
       }
     },
@@ -700,6 +718,10 @@ export const useRoomsStore = defineStore("rooms", {
       } else {
         state.aiVoteReveals[existingIndex] = entry;
       }
+      if (!state.player_votes) {
+        state.player_votes = {};
+      }
+      state.player_votes[playerId] = Number.isFinite(targetId) ? targetId : null;
     },
     disconnectSocket() {
       this.socket?.close();

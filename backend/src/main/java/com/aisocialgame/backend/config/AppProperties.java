@@ -12,6 +12,7 @@ public class AppProperties {
 
     private List<AiStyleProperty> aiStyles = new ArrayList<>();
     private AiModelProperties aiModel = new AiModelProperties();
+    private CorsProperties cors = new CorsProperties();
 
     public List<AiStyleProperty> getAiStyles() {
         return aiStyles;
@@ -27,6 +28,14 @@ public class AppProperties {
 
     public void setAiModel(AiModelProperties aiModel) {
         this.aiModel = aiModel != null ? aiModel : new AiModelProperties();
+    }
+
+    public CorsProperties getCors() {
+        return cors;
+    }
+
+    public void setCors(CorsProperties cors) {
+        this.cors = cors != null ? cors : new CorsProperties();
     }
 
     public AiStyleProperty findAiStyle(String key) {
@@ -106,6 +115,27 @@ public class AppProperties {
         public boolean isConfigured() {
             return baseUrl != null && !baseUrl.isBlank()
                     && modelName != null && !modelName.isBlank();
+        }
+    }
+
+    public static class CorsProperties {
+        private List<String> allowedOrigins = new ArrayList<>(List.of("*"));
+        private boolean allowCredentials = false;
+
+        public List<String> getAllowedOrigins() {
+            return allowedOrigins;
+        }
+
+        public void setAllowedOrigins(List<String> allowedOrigins) {
+            this.allowedOrigins = allowedOrigins != null ? allowedOrigins : new ArrayList<>();
+        }
+
+        public boolean isAllowCredentials() {
+            return allowCredentials;
+        }
+
+        public void setAllowCredentials(boolean allowCredentials) {
+            this.allowCredentials = allowCredentials;
         }
     }
 }

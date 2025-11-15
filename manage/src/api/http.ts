@@ -14,7 +14,7 @@ function resolveBaseURL(): string {
       return `${origin}/api`;
     }
   }
-  return "http://socialgame.seekerhut.com/api";
+  return "http://localhost/api";
 }
 
 const baseURL = resolveBaseURL();

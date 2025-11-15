@@ -6,27 +6,67 @@ import axios from "axios";
  * feature modules stay lean.
  */
 
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1"];
+
+function isLocalHostname(hostname: string): boolean {
+  if (!hostname) {
+    return false;
+  }
+  const normalized = hostname.toLowerCase();
+  return LOCAL_HOSTS.includes(normalized) || normalized.endsWith(".local");
+}
+
+function normalizeConfiguredBase(candidate?: string | null): string | null {
+  if (!candidate) {
+    return null;
+  }
+  const trimmed = candidate.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const base = new URL(
+      trimmed,
+      typeof window !== "undefined" && window.location ? window.location.origin : "http://localhost"
+    );
+    if (typeof window !== "undefined" && window.location) {
+      const pageHost = window.location.hostname;
+      if (!isLocalHostname(pageHost) && isLocalHostname(base.hostname)) {
+        console.warn(
+          `Ignoring API base URL '${candidate}' because it points to a local host while the page runs on '${pageHost}'.`
+        );
+        return null;
+      }
+    }
+    base.pathname = base.pathname.replace(/\/$/, "");
+    return base.toString();
+  } catch (error) {
+    console.warn(`Ignoring invalid API base URL '${candidate}'`, error);
+    return null;
+  }
+}
+
 /**
  * Determines the correct API base URL by inspecting the Vite configuration and falling back to a
  * sensible local default.
  */
 function resolveBaseURL(): string {
-  const envBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (envBase && envBase.trim()) {
+  const envBase = normalizeConfiguredBase(import.meta.env.VITE_API_BASE_URL as string | undefined);
+  if (envBase) {
     return envBase;
   }
 
   if (typeof window !== "undefined" && window.location) {
     const origin = window.location.origin.replace(/\/$/, "");
     const hostname = window.location.hostname.toLowerCase();
-    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    const isLocalHost = isLocalHostname(hostname);
 
     if (!import.meta.env.DEV || !isLocalHost) {
       return `${origin}/api`;
     }
   }
 
-  return "http://socialgame.seekerhut.com/api";
+  return "http://localhost/api";
 }
 
 const baseURL = resolveBaseURL();

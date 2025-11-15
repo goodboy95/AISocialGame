@@ -702,7 +702,51 @@ const sessionTimer = computed(() => room.value?.gameSession?.timer ?? null);
 const timerRemaining = ref<number | null>(null);
 const timerIntervalId = ref<number | null>(null);
 
-const currentPhase = computed(() => gameState.value?.phase ?? "preparing");
+const normalizedUndercoverPhase = computed(() => {
+  if (!isUndercover.value) {
+    return null;
+  }
+  const phase = (gameState.value as UndercoverStateView | null)?.phase;
+  return typeof phase === "string" && phase.trim().length ? phase.trim().toLowerCase() : null;
+});
+
+const normalizedUndercoverTimerStage = computed(() => {
+  if (!isUndercover.value) {
+    return null;
+  }
+  const timer = sessionTimer.value;
+  if (!timer) {
+    return null;
+  }
+  const metadataStage = (() => {
+    const metadata = timer.metadata as Record<string, unknown> | undefined;
+    if (!metadata) {
+      return null;
+    }
+    const rawStage = metadata.stage ?? metadata.Stage;
+    return typeof rawStage === "string" && rawStage.trim().length ? rawStage.trim().toLowerCase() : null;
+  })();
+  if (metadataStage) {
+    return metadataStage;
+  }
+  const timerPhase = typeof timer.phase === "string" ? timer.phase.trim().toLowerCase() : null;
+  return timerPhase && timerPhase.length ? timerPhase : null;
+});
+
+const currentPhase = computed(() => {
+  if (isUndercover.value) {
+    const phase = normalizedUndercoverPhase.value;
+    const timerStage = normalizedUndercoverTimerStage.value;
+    if (phase === "discussion" || timerStage === "discussion" || timerStage === "speaking") {
+      return "speaking";
+    }
+    if (phase) {
+      return phase;
+    }
+    return "preparing";
+  }
+  return gameState.value?.phase ?? "preparing";
+});
 const werewolfStage = computed(() => (isWerewolf.value ? werewolfState.value?.stage ?? "" : ""));
 const serverActiveSpeakerId = computed(() =>
   (isUndercover.value ? undercoverState.value?.current_player_id : werewolfState.value?.current_player_id) ?? null
@@ -710,8 +754,12 @@ const serverActiveSpeakerId = computed(() =>
 
 const speechMap = computed(() => {
   const map = new Map<number, UndercoverSpeech>();
+  const currentRound = Number((gameState.value as any)?.round ?? 1);
   speeches.value.forEach((speech) => {
-    map.set(speech.player_id, speech);
+    const speechRound = Number((speech as any)?.round ?? currentRound);
+    if (speechRound === currentRound) {
+      map.set(speech.player_id, speech);
+    }
   });
   return map;
 });
@@ -992,8 +1040,25 @@ watch(
 );
 
 const aliveAssignments = computed(() => assignments.value.filter((assignment) => assignment.isAlive));
-const hasVoted = computed(() => Boolean((gameState.value as any)?.voteSummary?.selfTarget));
-const voteTarget = computed(() => (gameState.value as any)?.voteSummary?.selfTarget ?? null);
+const playerVotes = computed<Record<number, number | null>>(() => {
+  if (!isUndercover.value) {
+    return {};
+  }
+  return undercoverState.value?.player_votes ?? {};
+});
+const hasVoted = computed(() => {
+  if (!selfPlayer.value) {
+    return false;
+  }
+  return Object.prototype.hasOwnProperty.call(playerVotes.value, selfPlayer.value.id);
+});
+const voteTarget = computed(() => {
+  if (!selfPlayer.value) {
+    return null;
+  }
+  const target = playerVotes.value[selfPlayer.value.id];
+  return typeof target === "number" ? target : null;
+});
 const aiStyles = computed(() => metaStore.aiStyles);
 const canKickPlayers = computed(() => Boolean(room.value?.isOwner) && room.value?.status === "waiting");
 
@@ -1115,10 +1180,20 @@ const currentSpeakerName = computed(() => {
   );
 });
 
-const isSpeakingStage = computed(() =>
-  (isUndercover.value && currentPhase.value === "speaking") ||
-  (isWerewolf.value && werewolfStage.value === "day.discussion")
-);
+const isSpeakingStage = computed(() => {
+  if (isUndercover.value) {
+    const phase = normalizedUndercoverPhase.value;
+    if (phase === "speaking" || phase === "discussion") {
+      return true;
+    }
+    const timerStage = normalizedUndercoverTimerStage.value;
+    if (timerStage === "discussion" || timerStage === "speaking") {
+      return true;
+    }
+    return false;
+  }
+  return isWerewolf.value && werewolfStage.value === "day.discussion";
+});
 
 const speechStatusLabels = computed(() => ({
   pending: t("room.ui.speechStatus.pending"),

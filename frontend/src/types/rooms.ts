@@ -36,6 +36,7 @@ export interface UndercoverSpeech {
   content: string;
   is_ai: boolean;
   timestamp: string;
+  round?: number;
 }
 
 export interface UndercoverVoteSummary {
@@ -59,6 +60,7 @@ export interface UndercoverStateView {
   };
   aiVoteReveals?: { playerId: number; targetId: number; timestamp: string }[];
   winner?: string;
+  player_votes?: Record<number, number | null>;
 }
 
 export interface WerewolfAssignmentView {

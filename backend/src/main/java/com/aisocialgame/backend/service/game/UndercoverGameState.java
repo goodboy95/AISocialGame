@@ -32,6 +32,14 @@ public class UndercoverGameState {
 
     private TimerPayload timer;
 
+    @JsonProperty("speech_rounds")
+    private Map<Long, Integer> speechRounds = new HashMap<>();
+
+    @JsonProperty("player_votes")
+    private Map<Long, Long> playerVotes = new HashMap<>();
+
+    private String winner;
+
     @JsonProperty("undercover_session")
     private UndercoverSessionState undercoverSession;
 
@@ -129,7 +137,56 @@ public class UndercoverGameState {
         if (playerId == null) {
             return false;
         }
-        return speeches.stream().anyMatch(speech -> playerId.equals(speech.getPlayerId()));
+        int currentRound = Math.max(1, round);
+        return speechRounds.getOrDefault(playerId, 0) >= currentRound;
+    }
+
+    public void markSpeech(Long playerId) {
+        if (playerId == null) {
+            return;
+        }
+        speechRounds.put(playerId, Math.max(1, round));
+    }
+
+    public Map<Long, Long> getPlayerVotes() {
+        return playerVotes;
+    }
+
+    public void setPlayerVotes(Map<Long, Long> playerVotes) {
+        this.playerVotes = playerVotes != null ? playerVotes : new HashMap<>();
+    }
+
+    public void clearPlayerVotes() {
+        this.playerVotes.clear();
+    }
+
+    public boolean hasVote(Long playerId) {
+        if (playerId == null) {
+            return false;
+        }
+        return playerVotes.containsKey(playerId);
+    }
+
+    public Long findVote(Long playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        return playerVotes.get(playerId);
+    }
+
+    public void recordVote(Long playerId, Long targetId) {
+        if (playerId == null) {
+            return;
+        }
+        playerVotes.put(playerId, targetId);
+    }
+
+    public String getWinner() {
+        return winner;
+    }
+
+    public void setWinner(String winner) {
+        this.winner = winner;
     }
 
     public static class Assignment {
@@ -221,6 +278,8 @@ public class UndercoverGameState {
 
         private String timestamp;
 
+        private int round;
+
         public Speech() {}
 
         public Speech(Long playerId, String content, boolean ai, String timestamp) {
@@ -260,6 +319,14 @@ public class UndercoverGameState {
 
         public void setTimestamp(String timestamp) {
             this.timestamp = timestamp;
+        }
+
+        public int getRound() {
+            return round;
+        }
+
+        public void setRound(int round) {
+            this.round = round;
         }
     }
 

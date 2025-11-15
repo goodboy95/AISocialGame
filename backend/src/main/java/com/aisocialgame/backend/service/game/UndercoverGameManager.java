@@ -49,6 +49,7 @@ public class UndercoverGameManager {
 
     private static final Logger log = LoggerFactory.getLogger(UndercoverGameManager.class);
     private static final long HUMAN_SPEECH_SECONDS = 60L;
+    private static final long DEFAULT_VOTE_SECONDS = 30L;
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
     private final RoomPlayerRepository roomPlayerRepository;
@@ -140,15 +141,25 @@ public class UndercoverGameManager {
                     }
                     if (deadline != null) {
                         payload.setCountdownDeadline(deadline.getEpochSecond());
+                    } else {
+                        payload.setCountdownDeadline(null);
                     }
                     Map<String, Object> metadata = new LinkedHashMap<>(payload.getMetadata());
                     if (currentPlayer != null) {
                         metadata.put("current_player_id", currentPlayer);
+                    } else {
+                        metadata.remove("current_player_id");
                     }
+                    metadata.put("stage", UndercoverStage.DISCUSSION.name());
                     payload.setMetadata(metadata);
                 }
+                sessionState.setStage(UndercoverStage.DISCUSSION);
+                Instant now = Instant.now();
+                sessionState.getTimeline().add(new UndercoverSessionState.TimelineEvent("DISCUSSION_STARTED", state.getRound(), now));
                 sessionStateRef.set(sessionState);
             }
+            state.setPhase("speaking");
+            managed.setPhase("speaking");
             if (currentPlayer != null) {
                 currentPlayerRef.set(currentPlayer);
             }
@@ -180,6 +191,10 @@ public class UndercoverGameManager {
         AtomicLong nextPlayerRef = new AtomicLong(0);
         AtomicBoolean nextIsAi = new AtomicBoolean(false);
         AtomicLong nextDurationRef = new AtomicLong(HUMAN_SPEECH_SECONDS);
+        AtomicBoolean votingStarted = new AtomicBoolean(false);
+        AtomicLong votingDurationRef = new AtomicLong(0L);
+        AtomicReference<List<Long>> votingAiPlayersRef = new AtomicReference<>(List.of());
+        AtomicReference<UndercoverSessionState> stageBroadcastRef = new AtomicReference<>();
         transactionTemplate.executeWithoutResult(status -> {
             GameSession session = gameSessionRepository.findById(sessionId).orElse(null);
             if (session == null) {
@@ -219,7 +234,9 @@ public class UndercoverGameManager {
                     content,
                     assignment.isAi() || fromAi,
                     FORMATTER.format(now));
+            speech.setRound(state.getRound());
             state.getSpeeches().add(speech);
+            state.markSpeech(playerId);
             speechRef.set(speech);
             if (sessionState != null) {
                 if (sessionState.getStage() == UndercoverStage.ROLE_DISTRIBUTION) {
@@ -253,6 +270,13 @@ public class UndercoverGameManager {
                 }
             } else {
                 speechDrafts.remove(sessionId);
+                if (sessionState != null) {
+                    VotingPhaseContext context = startVotingPhase(session, state, sessionState, sessionConfig);
+                    votingStarted.set(true);
+                    votingDurationRef.set(context.durationSeconds());
+                    votingAiPlayersRef.set(context.aiVoters());
+                    stageBroadcastRef.set(sessionState);
+                }
             }
             state.setTimer(timerPayload);
             session.setDeadlineAt(deadline);
@@ -304,6 +328,155 @@ public class UndercoverGameManager {
                 long duration = Math.max(nextDurationRef.get(), 5L);
                 scheduler.schedule(sessionId, () -> autoSubmitSpeech(sessionId, nextPlayerId), Duration.ofSeconds(duration));
             }
+        }
+        UndercoverSessionState stagedState = stageBroadcastRef.get();
+        if (roomId > 0 && stagedState != null && snapshot != null) {
+            broadcastEvent(roomId, "game.undercover.stage", buildStageBroadcastPayload(stagedState, snapshot));
+        }
+        if (roomId > 0 && votingStarted.get()) {
+            long voteDuration = Math.max(votingDurationRef.get(), 5L);
+            scheduler.schedule(sessionId, () -> finalizeVoting(sessionId, true), Duration.ofSeconds(voteDuration));
+            List<Long> aiVoters = votingAiPlayersRef.get();
+            for (Long aiPlayerId : aiVoters) {
+                if (aiPlayerId != null) {
+                    scheduler.executeAsync(() -> triggerAiVote(sessionId, aiPlayerId));
+                }
+            }
+        }
+    }
+
+    public void submitVote(long sessionId, long playerId, Long targetId, boolean autoAssigned, boolean fromAi) {
+        AtomicReference<RoomDtos.GameSessionSnapshot> snapshotRef = new AtomicReference<>();
+        AtomicLong roomIdRef = new AtomicLong();
+        AtomicReference<StageTransition> transitionRef = new AtomicReference<>();
+        AtomicReference<UndercoverSessionState> stageBroadcastRef = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> voteRevealRef = new AtomicReference<>();
+        transactionTemplate.executeWithoutResult(status -> {
+            GameSession session = gameSessionRepository.findById(sessionId).orElse(null);
+            if (session == null) {
+                log.warn("Attempted to submit vote for missing session {}", sessionId);
+                return;
+            }
+            Room room = session.getRoom();
+            roomIdRef.set(room.getId());
+            UndercoverGameState state = Optional.ofNullable(JsonUtils.fromJson(session.getStateJson(), UndercoverGameState.class))
+                    .orElseGet(UndercoverGameState::new);
+            if (!"voting".equals(state.getPhase())) {
+                log.debug("Ignoring vote from {} because phase is {}", playerId, state.getPhase());
+                return;
+            }
+            UndercoverSessionState sessionState = state.getUndercoverSession();
+            UndercoverSessionState.Config sessionConfig = sessionState != null ? sessionState.getConfig() : null;
+            UndercoverGameState.Assignment assignment = state.findAssignment(playerId);
+            if (assignment == null || !assignment.isAlive()) {
+                log.debug("Ignoring vote from ineligible player {}", playerId);
+                return;
+            }
+            if (state.hasVote(playerId)) {
+                log.debug("Player {} already voted in session {}", playerId, sessionId);
+                return;
+            }
+            Long sanitizedTarget = sanitizeVoteTarget(state, playerId, targetId, sessionConfig);
+            state.recordVote(playerId, sanitizedTarget);
+            UndercoverGameState.VoteSummary voteSummary = state.getVoteSummary();
+            voteSummary.setSubmitted(state.getPlayerVotes().size());
+            Map<String, Integer> tally = new HashMap<>(voteSummary.getTally());
+            String key = sanitizedTarget != null ? String.valueOf(sanitizedTarget) : "abstain";
+            tally.merge(key, 1, Integer::sum);
+            voteSummary.setTally(tally);
+            voteSummary.setSelfTarget(null);
+            if (sessionState != null) {
+                UndercoverSessionState.VoteHistory history = ensureCurrentVoteHistory(sessionState);
+                if (history != null) {
+                    UndercoverSessionState.VoteBallot ballot = new UndercoverSessionState.VoteBallot();
+                    ballot.setFrom(playerId);
+                    ballot.setTo(sanitizedTarget);
+                    ballot.setAutoAssigned(autoAssigned);
+                    ballot.setReason(autoAssigned ? "auto" : "manual");
+                    history.getBallots().add(ballot);
+                }
+            }
+            if (assignment.isAi() || fromAi) {
+                Map<String, Object> reveal = new HashMap<>();
+                reveal.put("playerId", playerId);
+                reveal.put("targetId", sanitizedTarget);
+                reveal.put("timestamp", Instant.now().toString());
+                voteRevealRef.set(reveal);
+            }
+            if (state.getPlayerVotes().size() >= voteSummary.getRequired()) {
+                StageTransition transition = resolveVotingPhase(session, state, sessionState, sessionConfig);
+                transitionRef.set(transition);
+                if (sessionState != null) {
+                    stageBroadcastRef.set(sessionState);
+                }
+            }
+            session.setStateJson(JsonUtils.toJsonObject(state));
+            session.setUpdatedAt(Instant.now());
+            gameSessionRepository.save(session);
+            snapshotRef.set(gameSessionMapper.toSnapshot(session));
+        });
+        long roomId = roomIdRef.get();
+        RoomDtos.GameSessionSnapshot snapshot = snapshotRef.get();
+        if (snapshot != null && roomId > 0) {
+            broadcastEvent(roomId, "undercover.state_updated", Map.of("session", snapshot));
+        }
+        Map<String, Object> reveal = voteRevealRef.get();
+        if (reveal != null && roomId > 0) {
+            broadcastEvent(roomId, "undercover.vote_cast", Map.of("payload", reveal));
+        }
+        StageTransition transition = transitionRef.get();
+        if (transition != null) {
+            scheduler.cancel(sessionId);
+            scheduleNextStage(sessionId, transition);
+        }
+        UndercoverSessionState stagedState = stageBroadcastRef.get();
+        if (stagedState != null && roomId > 0 && snapshot != null) {
+            broadcastEvent(roomId, "game.undercover.stage", buildStageBroadcastPayload(stagedState, snapshot));
+        }
+    }
+
+    private void finalizeVoting(long sessionId, boolean timeout) {
+        AtomicReference<RoomDtos.GameSessionSnapshot> snapshotRef = new AtomicReference<>();
+        AtomicLong roomIdRef = new AtomicLong();
+        AtomicReference<StageTransition> transitionRef = new AtomicReference<>();
+        AtomicReference<UndercoverSessionState> stageBroadcastRef = new AtomicReference<>();
+        transactionTemplate.executeWithoutResult(status -> {
+            GameSession session = gameSessionRepository.findById(sessionId).orElse(null);
+            if (session == null) {
+                return;
+            }
+            Room room = session.getRoom();
+            roomIdRef.set(room.getId());
+            UndercoverGameState state = Optional.ofNullable(JsonUtils.fromJson(session.getStateJson(), UndercoverGameState.class))
+                    .orElseGet(UndercoverGameState::new);
+            if (!"voting".equals(state.getPhase())) {
+                return;
+            }
+            UndercoverSessionState sessionState = state.getUndercoverSession();
+            UndercoverSessionState.Config sessionConfig = sessionState != null ? sessionState.getConfig() : null;
+            StageTransition transition = resolveVotingPhase(session, state, sessionState, sessionConfig);
+            transitionRef.set(transition);
+            if (sessionState != null) {
+                stageBroadcastRef.set(sessionState);
+            }
+            session.setStateJson(JsonUtils.toJsonObject(state));
+            session.setUpdatedAt(Instant.now());
+            gameSessionRepository.save(session);
+            snapshotRef.set(gameSessionMapper.toSnapshot(session));
+        });
+        long roomId = roomIdRef.get();
+        RoomDtos.GameSessionSnapshot snapshot = snapshotRef.get();
+        if (snapshot != null && roomId > 0) {
+            broadcastEvent(roomId, "undercover.state_updated", Map.of("session", snapshot));
+        }
+        StageTransition transition = transitionRef.get();
+        if (transition != null) {
+            scheduler.cancel(sessionId);
+            scheduleNextStage(sessionId, transition);
+        }
+        UndercoverSessionState stagedState = stageBroadcastRef.get();
+        if (stagedState != null && roomId > 0 && snapshot != null) {
+            broadcastEvent(roomId, "game.undercover.stage", buildStageBroadcastPayload(stagedState, snapshot));
         }
     }
 
@@ -361,6 +534,42 @@ public class UndercoverGameManager {
         if (content != null && !content.isBlank()) {
             submitSpeech(sessionId, playerId, false, true, content);
         }
+    }
+
+    private void triggerAiVote(long sessionId, long playerId) {
+        try {
+            Thread.sleep(1200);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        Long target = transactionTemplate.execute(status -> {
+            GameSession session = gameSessionRepository.findById(sessionId).orElse(null);
+            if (session == null) {
+                return null;
+            }
+            UndercoverGameState state = Optional.ofNullable(JsonUtils.fromJson(session.getStateJson(), UndercoverGameState.class))
+                    .orElseGet(UndercoverGameState::new);
+            if (!"voting".equals(state.getPhase())) {
+                return null;
+            }
+            if (state.hasVote(playerId)) {
+                return null;
+            }
+            UndercoverGameState.Assignment assignment = state.findAssignment(playerId);
+            if (assignment == null || !assignment.isAlive()) {
+                return null;
+            }
+            List<Long> candidates = state.getAssignments().stream()
+                    .filter(a -> a.isAlive() && a.getPlayerId() != null && !a.getPlayerId().equals(playerId))
+                    .map(UndercoverGameState.Assignment::getPlayerId)
+                    .toList();
+            if (candidates.isEmpty()) {
+                return null;
+            }
+            Random random = new Random();
+            return candidates.get(random.nextInt(candidates.size()));
+        });
+        submitVote(sessionId, playerId, target, true, true);
     }
 
     private void autoSubmitSpeech(long sessionId, long playerId) {
@@ -895,6 +1104,331 @@ public class UndercoverGameManager {
         return null;
     }
 
+    private VotingPhaseContext startVotingPhase(
+            GameSession session,
+            UndercoverGameState state,
+            UndercoverSessionState sessionState,
+            UndercoverSessionState.Config config) {
+        int duration = Math.max(resolveVoteSeconds(config), 5);
+        Instant deadline = Instant.now().plusSeconds(duration);
+        state.setPhase("voting");
+        session.setPhase("voting");
+        state.setCurrentPlayerId(null);
+        session.setCurrentPlayerId(null);
+        state.clearPlayerVotes();
+        UndercoverGameState.VoteSummary summary = state.getVoteSummary();
+        summary.setSubmitted(0);
+        summary.setSelfTarget(null);
+        summary.setRequired(Math.max(1, countAlivePlayers(state)));
+        summary.setTally(new HashMap<>());
+        state.setTimer(buildVoteTimerPayload(duration, UndercoverStage.VOTE_MAIN));
+        session.setDeadlineAt(deadline);
+        Instant now = Instant.now();
+        if (sessionState != null) {
+            sessionState.setStage(UndercoverStage.VOTE_MAIN);
+            UndercoverSessionState.PhasePayload payload = sessionState.getPhasePayload();
+            if (payload != null) {
+                payload.setCountdownDeadline(deadline.getEpochSecond());
+                Map<String, Object> metadata = new LinkedHashMap<>(payload.getMetadata());
+                metadata.put("stage", UndercoverStage.VOTE_MAIN.name());
+                metadata.remove("current_player_id");
+                payload.setMetadata(metadata);
+                payload.setPkCandidates(null);
+            }
+            sessionState.getTimeline().add(new UndercoverSessionState.TimelineEvent("VOTE_MAIN_STARTED", state.getRound(), now));
+            UndercoverSessionState.VoteHistory history = new UndercoverSessionState.VoteHistory();
+            history.setRound(state.getRound());
+            history.setType(UndercoverSessionState.VoteType.MAIN);
+            sessionState.getVoteHistory().add(history);
+        }
+        List<Long> aiVoters = state.getAssignments().stream()
+                .filter(assignment -> assignment.isAlive() && assignment.isAi())
+                .map(UndercoverGameState.Assignment::getPlayerId)
+                .filter(Objects::nonNull)
+                .toList();
+        return new VotingPhaseContext(duration, aiVoters);
+    }
+
+    private StageTransition resolveVotingPhase(
+            GameSession session,
+            UndercoverGameState state,
+            UndercoverSessionState sessionState,
+            UndercoverSessionState.Config config) {
+        Instant now = Instant.now();
+        Map<String, Integer> tally = state.getVoteSummary().getTally();
+        Map<Long, Integer> normalized = new HashMap<>();
+        tally.forEach((key, value) -> {
+            if ("abstain".equalsIgnoreCase(key)) {
+                return;
+            }
+            try {
+                Long playerId = Long.parseLong(key);
+                normalized.merge(playerId, value, Integer::sum);
+            } catch (NumberFormatException ignored) {
+                // skip invalid entries
+            }
+        });
+        Long eliminated = pickEliminationTarget(state, normalized);
+        if (eliminated == null) {
+            eliminated = pickRandomAlivePlayer(state);
+        }
+        List<Long> eliminatedList = eliminated != null ? List.of(eliminated) : List.of();
+        applyElimination(session, state, sessionState, eliminatedList, now);
+        if (sessionState != null) {
+            UndercoverSessionState.VoteHistory history = ensureCurrentVoteHistory(sessionState);
+            if (history != null) {
+                history.setResolvedAt(now.getEpochSecond());
+                UndercoverSessionState.VoteResult result = history.getResult();
+                result.setEliminated(eliminatedList);
+                List<Long> survivors = state.getAssignments().stream()
+                        .filter(assignment -> assignment.isAlive() && assignment.getPlayerId() != null)
+                        .map(UndercoverGameState.Assignment::getPlayerId)
+                        .toList();
+                result.setSurvivors(survivors);
+                result.setMethod("majority");
+            }
+        }
+        String winner = determineWinner(state);
+        if (winner != null) {
+            concludeGame(session, state, sessionState, winner, now);
+            return new StageTransition(null, false, 0, true);
+        }
+        state.setPhase("speaking");
+        session.setPhase("speaking");
+        state.setRound(state.getRound() + 1);
+        session.setRoundNumber(state.getRound());
+        if (sessionState != null) {
+            sessionState.setRound(state.getRound());
+            sessionState.setStage(UndercoverStage.DISCUSSION);
+            sessionState.getTimeline().add(new UndercoverSessionState.TimelineEvent("DISCUSSION_STARTED", state.getRound(), now));
+        }
+        state.getVoteSummary().setSubmitted(0);
+        state.getVoteSummary().setSelfTarget(null);
+        state.getVoteSummary().setRequired(Math.max(1, countAlivePlayers(state)));
+        state.getVoteSummary().setTally(new HashMap<>());
+        state.clearPlayerVotes();
+        Long nextSpeaker = determineNextSpeaker(state, null);
+        state.setCurrentPlayerId(nextSpeaker);
+        session.setCurrentPlayerId(nextSpeaker);
+        UndercoverGameState.Assignment nextAssignment = nextSpeaker != null ? state.findAssignment(nextSpeaker) : null;
+        boolean nextIsAi = nextAssignment != null && nextAssignment.isAi();
+        int discussionSeconds = resolveDiscussionSeconds(config);
+        long duration = Math.max(discussionSeconds, 5);
+        UndercoverGameState.TimerPayload timerPayload = null;
+        Instant deadline = null;
+        if (!nextIsAi && nextSpeaker != null) {
+            deadline = Instant.now().plusSeconds(duration);
+            timerPayload = buildTimerPayload(nextSpeaker, config);
+        }
+        state.setTimer(timerPayload);
+        session.setDeadlineAt(deadline);
+        updatePhasePayload(sessionState, UndercoverStage.DISCUSSION, nextSpeaker, deadline);
+        return new StageTransition(nextSpeaker, nextIsAi, duration, false);
+    }
+
+    private void updatePhasePayload(UndercoverSessionState sessionState, UndercoverStage stage, Long currentPlayerId, Instant deadline) {
+        if (sessionState == null) {
+            return;
+        }
+        UndercoverSessionState.PhasePayload payload = sessionState.getPhasePayload();
+        if (payload == null) {
+            return;
+        }
+        if (deadline != null) {
+            payload.setCountdownDeadline(deadline.getEpochSecond());
+        } else {
+            payload.setCountdownDeadline(null);
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>(payload.getMetadata());
+        if (stage != null) {
+            metadata.put("stage", stage.name());
+        }
+        if (currentPlayerId != null) {
+            metadata.put("current_player_id", currentPlayerId);
+        } else {
+            metadata.remove("current_player_id");
+        }
+        payload.setMetadata(metadata);
+    }
+
+    private int resolveDiscussionSeconds(UndercoverSessionState.Config config) {
+        if (config != null && config.getRoundConfig() != null) {
+            return Math.max(config.getRoundConfig().getDiscussionSeconds(), 5);
+        }
+        return (int) HUMAN_SPEECH_SECONDS;
+    }
+
+    private int resolveVoteSeconds(UndercoverSessionState.Config config) {
+        if (config != null && config.getRoundConfig() != null) {
+            return Math.max(config.getRoundConfig().getVoteSeconds(), (int) DEFAULT_VOTE_SECONDS);
+        }
+        return (int) DEFAULT_VOTE_SECONDS;
+    }
+
+    private int countAlivePlayers(UndercoverGameState state) {
+        return (int) state.getAssignments().stream()
+                .filter(assignment -> assignment.isAlive() && assignment.getPlayerId() != null)
+                .count();
+    }
+
+    private Long pickRandomAlivePlayer(UndercoverGameState state) {
+        List<Long> alive = state.getAssignments().stream()
+                .filter(assignment -> assignment.isAlive() && assignment.getPlayerId() != null)
+                .map(UndercoverGameState.Assignment::getPlayerId)
+                .toList();
+        if (alive.isEmpty()) {
+            return null;
+        }
+        Random random = new Random();
+        return alive.get(random.nextInt(alive.size()));
+    }
+
+    private Long pickEliminationTarget(UndercoverGameState state, Map<Long, Integer> tally) {
+        if (tally.isEmpty()) {
+            return null;
+        }
+        int maxVotes = tally.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<Long> candidates = tally.entrySet().stream()
+                .filter(entry -> entry.getValue() == maxVotes)
+                .map(Map.Entry::getKey)
+                .filter(id -> {
+                    UndercoverGameState.Assignment assignment = state.findAssignment(id);
+                    return assignment != null && assignment.isAlive();
+                })
+                .toList();
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        if (candidates.size() == 1) {
+            return candidates.get(0);
+        }
+        Random random = new Random();
+        return candidates.get(random.nextInt(candidates.size()));
+    }
+
+    private void applyElimination(
+            GameSession session,
+            UndercoverGameState state,
+            UndercoverSessionState sessionState,
+            List<Long> eliminated,
+            Instant timestamp) {
+        if (eliminated == null || eliminated.isEmpty()) {
+            return;
+        }
+        for (Long playerId : eliminated) {
+            if (playerId == null) {
+                continue;
+            }
+            UndercoverGameState.Assignment assignment = state.findAssignment(playerId);
+            if (assignment != null) {
+                assignment.setAlive(false);
+            }
+            if (sessionState != null) {
+                UndercoverSessionState.PlayerState playerState = sessionState.findPlayer(playerId);
+                if (playerState != null) {
+                    playerState.setAlive(false);
+                }
+                UndercoverSessionState.TimelineEvent event = new UndercoverSessionState.TimelineEvent("PLAYER_ELIMINATED", state.getRound(), timestamp);
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("player_id", playerId);
+                event.setMetadata(metadata);
+                sessionState.getTimeline().add(event);
+            }
+            roomPlayerRepository.findById(playerId).ifPresent(player -> {
+                if (player.getRoom().getId().equals(session.getRoom().getId())) {
+                    player.setAlive(false);
+                    roomPlayerRepository.save(player);
+                }
+            });
+        }
+    }
+
+    private String determineWinner(UndercoverGameState state) {
+        long aliveSpies = state.getAssignments().stream()
+                .filter(assignment -> assignment.isAlive() && "spy".equalsIgnoreCase(String.valueOf(assignment.getRole())))
+                .count();
+        long aliveCivilians = state.getAssignments().stream()
+                .filter(assignment -> assignment.isAlive() && !"spy".equalsIgnoreCase(String.valueOf(assignment.getRole())))
+                .count();
+        if (aliveSpies == 0) {
+            return "civilian";
+        }
+        if (aliveSpies >= aliveCivilians) {
+            return "undercover";
+        }
+        return null;
+    }
+
+    private void concludeGame(
+            GameSession session,
+            UndercoverGameState state,
+            UndercoverSessionState sessionState,
+            String winner,
+            Instant timestamp) {
+        state.setWinner(winner);
+        state.setTimer(null);
+        state.setPhase("result");
+        session.setPhase("result");
+        session.setStatus(GameSession.Status.FINISHED);
+        session.setDeadlineAt(null);
+        if (sessionState != null) {
+            sessionState.setStage(UndercoverStage.GAME_END);
+            sessionState.getTimeline().add(new UndercoverSessionState.TimelineEvent("GAME_ENDED", state.getRound(), timestamp));
+        }
+    }
+
+    private Long sanitizeVoteTarget(
+            UndercoverGameState state,
+            long playerId,
+            Long targetId,
+            UndercoverSessionState.Config config) {
+        if (targetId == null) {
+            return null;
+        }
+        UndercoverGameState.Assignment target = state.findAssignment(targetId);
+        if (target == null || !target.isAlive()) {
+            return null;
+        }
+        boolean allowSelfVote = true;
+        if (config != null && config.getRoundConfig() != null) {
+            allowSelfVote = config.getRoundConfig().isAllowSelfVote();
+        }
+        if (!allowSelfVote && targetId.equals(playerId)) {
+            return null;
+        }
+        return targetId;
+    }
+
+    private void scheduleNextStage(long sessionId, StageTransition transition) {
+        if (transition == null || transition.gameFinished()) {
+            return;
+        }
+        Long nextSpeakerId = transition.nextSpeakerId();
+        if (nextSpeakerId == null) {
+            return;
+        }
+        if (transition.nextSpeakerIsAi()) {
+            scheduler.executeAsync(() -> triggerAiSpeech(sessionId, nextSpeakerId));
+        } else {
+            long duration = Math.max(transition.discussionDurationSeconds(), 5L);
+            scheduler.schedule(sessionId, () -> autoSubmitSpeech(sessionId, nextSpeakerId), Duration.ofSeconds(duration));
+        }
+    }
+
+    private UndercoverSessionState.VoteHistory ensureCurrentVoteHistory(UndercoverSessionState sessionState) {
+        if (sessionState == null) {
+            return null;
+        }
+        List<UndercoverSessionState.VoteHistory> history = sessionState.getVoteHistory();
+        if (history.isEmpty()) {
+            UndercoverSessionState.VoteHistory created = new UndercoverSessionState.VoteHistory();
+            created.setRound(sessionState.getRound());
+            history.add(created);
+            return created;
+        }
+        return history.get(history.size() - 1);
+    }
+
     private UndercoverGameState.TimerPayload buildTimerPayload(Long playerId, UndercoverSessionState.Config config) {
         if (playerId == null) {
             return null;
@@ -913,6 +1447,30 @@ public class UndercoverGameManager {
         metadata.put("stage", UndercoverStage.DISCUSSION.name());
         payload.setMetadata(metadata);
         return payload;
+    }
+
+    private UndercoverGameState.TimerPayload buildVoteTimerPayload(int durationSeconds, UndercoverStage stage) {
+        UndercoverGameState.TimerPayload payload = new UndercoverGameState.TimerPayload();
+        payload.setPhase("voting");
+        payload.setDuration(Math.max(durationSeconds, 5));
+        Map<String, Object> defaultAction = new HashMap<>();
+        defaultAction.put("type", "auto_vote");
+        payload.setDefaultAction(defaultAction);
+        payload.setDescription("等待玩家投票");
+        Map<String, Object> metadata = new HashMap<>();
+        if (stage != null) {
+            metadata.put("stage", stage.name());
+        } else {
+            metadata.put("stage", UndercoverStage.VOTE_MAIN.name());
+        }
+        payload.setMetadata(metadata);
+        return payload;
+    }
+
+    private record VotingPhaseContext(long durationSeconds, List<Long> aiVoters) {
+    }
+
+    private record StageTransition(Long nextSpeakerId, boolean nextSpeakerIsAi, long discussionDurationSeconds, boolean gameFinished) {
     }
 
     private void broadcastEvent(long roomId, String event, Map<String, Object> payload) {

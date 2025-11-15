@@ -3,23 +3,48 @@ version: "3.9"
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: infra/docker/dev
+      dockerfile: backend.Dockerfile
+    image: aisocialgame-backend-dev
+    working_dir: /workspace/backend
     volumes:
-      - ./backend:/app
+      - ./backend:/workspace/backend
+      - backend-m2:/home/developer/.m2
+    command: bash -lc "./mvnw spring-boot:run"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_DRIVER: org.h2.Driver
     ports:
-      - "8000:8000"
+      - "8100:8100"
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    env_file:
-      - frontend/.env.example
+      context: infra/docker/dev
+      dockerfile: frontend.Dockerfile
+    image: aisocialgame-frontend-dev
+    working_dir: /workspace/frontend
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend:/workspace/frontend
+    command: bash -lc "npm install && npm run dev -- --host 0.0.0.0 --port 5100"
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_WS_BASE_URL: /api/ws
     ports:
-      - "5173:5173"
+      - "5100:5100"
     depends_on:
       - backend
+
+  gateway:
+    image: nginx:1.25
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  backend-m2:

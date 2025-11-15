@@ -44,6 +44,7 @@ public class RoomGameEventService {
         return switch (event) {
             case "submit_speech" -> handleSubmitSpeech(roomId, user, payload);
             case "update_speech_draft" -> handleUpdateDraft(roomId, user, payload);
+            case "submit_vote" -> handleSubmitVote(roomId, user, payload);
             default -> false;
         };
     }
@@ -83,6 +84,34 @@ public class RoomGameEventService {
                 .map(String::valueOf)
                 .orElse("");
         undercoverGameManager.updateSpeechDraft(context.session().getId(), context.player().getId(), content);
+        return true;
+    }
+
+    private boolean handleSubmitVote(long roomId, UserAccount user, Map<String, Object> payload) {
+        GameContext context = resolveContext(roomId, user);
+        if (context == null) {
+            return false;
+        }
+        if (!"undercover".equalsIgnoreCase(context.session().getEngine())) {
+            return false;
+        }
+        Long targetId = Optional.ofNullable(payload)
+                .map(map -> map.get("payload"))
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .map(map -> map.get("target_id"))
+                .map(value -> {
+                    if (value instanceof Number number) {
+                        return number.longValue();
+                    }
+                    try {
+                        return Long.parseLong(String.valueOf(value));
+                    } catch (NumberFormatException ignored) {
+                        return null;
+                    }
+                })
+                .orElse(null);
+        undercoverGameManager.submitVote(context.session().getId(), context.player().getId(), targetId, false, false);
         return true;
     }
 
