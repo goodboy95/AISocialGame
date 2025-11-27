@@ -1,0 +1,25 @@
+spring:
+  config:
+    import: classpath:prompt.yml
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:aisocial}
+    password: ${SPRING_DATASOURCE_PASSWORD:aisocial_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: false
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+server:
+  port: 8080
+
+app:
+  auth:
+    token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}

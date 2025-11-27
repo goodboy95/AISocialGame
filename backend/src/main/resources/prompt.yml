@@ -1,0 +1,29 @@
+prompts:
+  aiName:
+    adjectives:
+      - "机敏的"
+      - "神秘的"
+      - "俏皮的"
+      - "沉稳的"
+      - "勇敢的"
+      - "灵光一闪的"
+      - "幽默的"
+      - "谨慎的"
+      - "率真的"
+      - "冷静的"
+    suffixes:
+      - "玩家"
+      - "侦探"
+      - "旅人"
+      - "观察家"
+      - "解谜人"
+      - "吟游者"
+      - "思考者"
+      - "夜行者"
+      - "梦者"
+      - "挑战者"
+
+  aiTalk:
+    descriptionTemplate: "%s，我觉得这个词很特别。"
+    suspicionTemplate: "我怀疑%s号，感觉他说得不太对劲。"
+    voteLogTemplate: "%s（AI）已完成投票"

@@ -1,0 +1,85 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: aisocial-mysql
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    environment:
+      MYSQL_DATABASE: aisocial
+      MYSQL_USER: aisocial
+      MYSQL_PASSWORD: aisocial_pass
+      MYSQL_ROOT_PASSWORD: root_pass_aisocial
+    ports:
+      - "3307:3306"
+    volumes:
+      - ${AISOCIAL_MYSQL_DATA_DIR:-/var/lib/aisocialgame/mysql}:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot_pass_aisocial"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aisocial
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: aisocial-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - ${AISOCIAL_REDIS_DATA_DIR:-/var/lib/aisocialgame/redis}:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aisocial
+
+  backend:
+    image: eclipse-temurin:21-jre
+    container_name: aisocial-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: aisocial
+      SPRING_DATASOURCE_PASSWORD: aisocial_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      APP_AUTH_TOKEN_TTL_HOURS: 168
+      JAVA_OPTS: ""
+      SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/
+    working_dir: /app
+    command: ["sh", "-c", "java ${JAVA_OPTS} -jar /app/app.jar"]
+    volumes:
+      - ./backend/target/ai-social-game-0.0.1-SNAPSHOT.jar:/app/app.jar:ro
+      - ./backend/src/main/resources/application.yml:/app/config/application.yml:ro
+      - ./backend/src/main/resources/prompt.yml:/app/config/prompt.yml:ro
+    networks:
+      - aisocial
+
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: aisocial-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - aisocial
+
+networks:
+  aisocial:
+    driver: bridge
