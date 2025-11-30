@@ -19,7 +19,7 @@
   - `src/test/resources/application-test.yml`：测试 profile，使用 H2 内存库并禁用 Redis 自动配置。
   - `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker`：强制 Mockito 使用子类 mock maker，避免容器内 JVMTI 限制导致的测试失败。
   - `src/main/resources/application.yml`：应用配置（端口 8080、MySQL/Redis 连接、JPA ddl-auto、token TTL），通过 `spring.config.import` 引入 `prompt.yml`。
-  - `src/main/resources/prompt.yml`：AI 名称词库与提示词模板（描述、怀疑、投票日志等），业务代码全部从该配置读取。
+  - `src/main/resources/prompt.yml`：AI 名称词库、外部取名接口提示词，以及发言/怀疑/投票日志模板，业务代码全部从该配置读取。
   - `target/ai-social-game-0.0.1-SNAPSHOT.jar`：打包产物（由 Docker 构建阶段生成）。
 
 - `frontend/`

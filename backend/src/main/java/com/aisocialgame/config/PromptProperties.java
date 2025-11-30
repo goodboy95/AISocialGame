@@ -35,6 +35,7 @@ public class PromptProperties {
     }
 
     public static class AiName {
+        private static final String DEFAULT_REMOTE_PROMPT = "你是社交推理游戏的取名助手，根据人物设定和风格生成 2-6 个字的中文昵称，不要带标点或空格，仅返回昵称本身。";
         private static final List<String> DEFAULT_ADJECTIVES = List.of(
                 "机敏的", "神秘的", "俏皮的", "沉稳的", "勇敢的",
                 "灵光一闪的", "幽默的", "谨慎的", "率真的", "冷静的"
@@ -45,8 +46,17 @@ public class PromptProperties {
                 "吟游者", "思考者", "夜行者", "梦者", "挑战者"
         );
 
+        private String remotePrompt = DEFAULT_REMOTE_PROMPT;
         private List<String> adjectives = DEFAULT_ADJECTIVES;
         private List<String> suffixes = DEFAULT_SUFFIXES;
+
+        public String getRemotePrompt() {
+            return StringUtils.hasText(remotePrompt) ? remotePrompt : DEFAULT_REMOTE_PROMPT;
+        }
+
+        public void setRemotePrompt(String remotePrompt) {
+            this.remotePrompt = remotePrompt;
+        }
 
         public List<String> getAdjectives() {
             return CollectionUtils.isEmpty(adjectives) ? DEFAULT_ADJECTIVES : adjectives;

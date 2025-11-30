@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -42,10 +43,13 @@ public class AiNameService {
             return null;
         }
         try {
-            var payload = Map.of(
-                    "persona", persona.getName(),
-                    "style", persona.getTrait()
-            );
+            Map<String, Object> payload = new HashMap<>();
+            String prompt = promptProperties.getAiName().getRemotePrompt();
+            if (StringUtils.hasText(prompt)) {
+                payload.put("prompt", prompt);
+            }
+            payload.put("persona", persona.getName());
+            payload.put("style", persona.getTrait());
             var response = restTemplate.postForObject(aiNameEndpoint, payload, AiNameResponse.class);
             if (response != null && StringUtils.hasText(response.getName())) {
                 return response.getName().trim();
