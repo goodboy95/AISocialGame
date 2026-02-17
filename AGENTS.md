@@ -1,5 +1,5 @@
 - 项目名: AISocialGame
-- 前端技术栈: 需自行识别，然后填写到这里
+- 前端技术栈: React 18 + TypeScript + Vite + React Router + TanStack Query + Tailwind CSS + shadcn/ui
 - 后端技术栈: Java Spring boot
 - 测试服域名: aisocialgame.seekerhut.com
 - 正式服域名: aisocialgame.aienie.com

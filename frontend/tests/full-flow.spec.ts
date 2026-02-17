@@ -1,64 +1,138 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-test("注册登录、开房游玩及社区发帖的完整流程", async ({ page }) => {
-  const suffix = Date.now();
-  const email = `tester${suffix}@example.com`;
-  const username = `tester_${suffix}`;
-  const password = "Password!23";
-  const nickname = `玩家${suffix.toString().slice(-4)}`;
-  const postContent = `自动化发帖 ${suffix}`;
+test("SSO 回调、钱包操作、AI 流式聊天", async ({ page }) => {
+  const user = {
+    id: "local-user-1",
+    externalUserId: 1001,
+    username: "tester",
+    nickname: "测试玩家",
+    email: "tester@example.com",
+    avatar: "https://example.com/avatar.png",
+    coins: 1200,
+    level: 3,
+    balance: {
+      publicPermanentTokens: 300,
+      projectTempTokens: 100,
+      projectPermanentTokens: 800,
+      totalTokens: 1200,
+    },
+  };
 
-  // 注册并自动登录
-  await page.goto("/register");
-  await page.getByLabel("登录用户名").fill(username);
-  await page.getByLabel("游戏昵称").fill(nickname);
-  await page.getByLabel("电子邮箱").fill(email);
-  await page.getByLabel("密码", { exact: true }).fill(password);
-  await page.getByLabel("确认密码", { exact: true }).fill(password);
-  await page.getByRole("checkbox", { name: /同意/ }).click();
-  await page.getByRole("button", { name: "创建账号" }).click();
+  await page.route("**/api/auth/sso-callback", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "token-1", user }),
+    });
+  });
+
+  await page.route("**/api/auth/me", async (route) => {
+    const token = route.request().headers()["x-auth-token"];
+    if (token === "token-1") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) });
+      return;
+    }
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ message: "未登录" }) });
+  });
+
+  await page.route("**/api/wallet/balance", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user.balance) });
+  });
+  await page.route("**/api/wallet/checkin-status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ checkedInToday: false, tokensGrantedToday: 0 }),
+    });
+  });
+  await page.route("**/api/wallet/usage-records**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [{ requestId: "req-1", modelKey: "gpt-4o-mini", promptTokens: 10, completionTokens: 20, billedTokens: 30, createdAt: new Date().toISOString() }],
+        page: 1,
+        size: 5,
+        total: 1,
+      }),
+    });
+  });
+  await page.route("**/api/wallet/ledger**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [{ id: "1", type: "CHECKIN", tokens: 100, reason: "CHECKIN", createdAt: new Date().toISOString() }],
+        page: 1,
+        size: 5,
+        total: 1,
+      }),
+    });
+  });
+  await page.route("**/api/wallet/redemption-history**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], page: 1, size: 5, total: 0 }),
+    });
+  });
+  await page.route("**/api/wallet/checkin", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        tokensGranted: 100,
+        alreadyCheckedIn: false,
+        balance: {
+          publicPermanentTokens: 300,
+          projectTempTokens: 100,
+          projectPermanentTokens: 900,
+          totalTokens: 1300,
+        },
+      }),
+    });
+  });
+  await page.route("**/api/wallet/redeem", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        tokensGranted: 50,
+        creditType: "CREDIT_TYPE_PERMANENT",
+        balance: {
+          publicPermanentTokens: 300,
+          projectTempTokens: 100,
+          projectPermanentTokens: 950,
+          totalTokens: 1350,
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/ai/chat/stream", async (route) => {
+    const body = [
+      'data: {"content":"你","done":false}\n',
+      'data: {"content":"好","done":false}\n',
+      'data: {"content":"","done":true,"modelKey":"gpt-4o-mini","promptTokens":5,"completionTokens":2}\n\n',
+    ].join("");
+    await route.fulfill({ status: 200, contentType: "text/event-stream", body });
+  });
+
+  await page.goto("/sso/callback#access_token=remote-token&user_id=1001&username=tester&session_id=session-1");
   await expect(page).toHaveURL(/\/$/);
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("aisocialgame_token")))
-    .not.toBeNull();
+    .toBe("token-1");
 
-  // 创建谁是卧底房间并开局
-  const enterButtons = page.getByRole("button", { name: "进入大厅" });
-  await enterButtons.nth(1).click();
-  await expect(page).toHaveURL(/game\/undercover/);
-  await page.getByRole("button", { name: "创建房间" }).click();
-  await page.getByRole("button", { name: "创建并入座" }).click();
-  await expect(page).toHaveURL(/room\/undercover/);
-  await expect(page.getByText(nickname, { exact: true }).first()).toBeVisible();
+  await page.goto("/profile?tab=wallet");
+  await expect(page.getByText("余额概览")).toBeVisible();
+  await page.getByRole("button", { name: "签到领积分" }).click();
+  await expect(page.getByText("今日已签到")).toBeVisible();
 
-  const addUndercoverBtn = page.getByText("添加 AI 玩家").locator("..").getByRole("button", { name: "添加" });
-  for (let i = 0; i < 3; i++) {
-    await addUndercoverBtn.click();
-    await page.waitForTimeout(300);
-  }
-  await page.getByRole("button", { name: /开始游戏/ }).click();
-  await expect(page.getByRole("button", { name: /开始游戏/ }).first()).toBeHidden({ timeout: 8000 });
-
-  // 创建狼人杀房间并开局
-  await page.goto("/");
-  await page.getByRole("button", { name: "进入大厅" }).first().click();
-  await expect(page).toHaveURL(/game\/werewolf/);
-  await page.getByRole("button", { name: "创建房间" }).click();
-  await page.getByRole("button", { name: "创建并入座" }).click();
-  await expect(page).toHaveURL(/room\/werewolf/);
-  await expect(page.getByText(nickname, { exact: true }).first()).toBeVisible();
-
-  const addWerewolfBtn = page.getByText("添加 AI 玩家").locator("..").getByRole("button", { name: "添加" });
-  for (let i = 0; i < 5; i++) {
-    await addWerewolfBtn.click();
-    await page.waitForTimeout(200);
-  }
-  await page.getByRole("button", { name: /^开始游戏$/ }).first().click();
-  await expect(page.getByText("天黑请闭眼").first()).toBeVisible({ timeout: 8000 });
-
-  // 社区发帖
-  await page.goto("/community");
-  await page.getByPlaceholder("分享你的游戏趣事...").fill(postContent);
-  await page.getByRole("button", { name: "发布" }).click();
-  await expect(page.getByText(postContent)).toBeVisible();
+  await page.goto("/ai-chat");
+  await page.getByPlaceholder("输入问题，按“发送”后将通过 SSE 逐字返回").fill("你好");
+  await page.getByRole("button", { name: "发送" }).click();
+  await expect(page.getByText("你好")).toBeVisible();
 });

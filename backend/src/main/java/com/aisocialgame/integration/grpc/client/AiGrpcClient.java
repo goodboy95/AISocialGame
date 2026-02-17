@@ -3,16 +3,23 @@ package com.aisocialgame.integration.grpc.client;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
 import com.aisocialgame.integration.grpc.dto.AiChatResult;
+import com.aisocialgame.integration.grpc.dto.AiEmbeddingsResult;
 import com.aisocialgame.integration.grpc.dto.AiModelOptionDto;
+import com.aisocialgame.integration.grpc.dto.AiOcrParams;
+import com.aisocialgame.integration.grpc.dto.AiOcrResult;
 import fireflychat.ai.v1.AiGatewayServiceGrpc;
 import fireflychat.ai.v1.ChatCompletionsRequest;
 import fireflychat.ai.v1.ChatMessage;
+import fireflychat.ai.v1.EmbeddingsRequest;
 import fireflychat.ai.v1.ListModelsRequest;
+import fireflychat.ai.v1.OcrOutputType;
+import fireflychat.ai.v1.OcrParseRequest;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -71,6 +78,72 @@ public class AiGrpcClient {
         }
     }
 
+    public AiEmbeddingsResult embeddings(String projectKey,
+                                         long userId,
+                                         String sessionId,
+                                         String model,
+                                         List<String> input,
+                                         boolean normalize) {
+        try {
+            EmbeddingsRequest.Builder builder = EmbeddingsRequest.newBuilder()
+                    .setRequestId(UUID.randomUUID().toString())
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setSessionId(sessionId == null ? "" : sessionId)
+                    .setModel(model == null ? "" : model)
+                    .setNormalize(normalize);
+            if (input != null) {
+                for (String item : input) {
+                    if (StringUtils.hasText(item)) {
+                        builder.addInput(item);
+                    }
+                }
+            }
+            var response = aiStub.embeddings(builder.build());
+            List<List<Float>> vectors = response.getVectorsList().stream()
+                    .map(vector -> vector.getValuesList().stream().toList())
+                    .toList();
+            return new AiEmbeddingsResult(
+                    response.getModelKey(),
+                    response.getDimensions(),
+                    vectors,
+                    response.getPromptTokens()
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public AiOcrResult ocrParse(String projectKey,
+                                long userId,
+                                String sessionId,
+                                String model,
+                                AiOcrParams params) {
+        try {
+            OcrParseRequest.Builder builder = OcrParseRequest.newBuilder()
+                    .setRequestId(UUID.randomUUID().toString())
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setSessionId(sessionId == null ? "" : sessionId)
+                    .setModel(model == null ? "" : model)
+                    .setImageUrl(normalize(params.imageUrl()))
+                    .setImageBase64(normalize(params.imageBase64()))
+                    .setDocumentUrl(normalize(params.documentUrl()))
+                    .setPages(normalize(params.pages()))
+                    .setOutputType(parseOutputType(params.outputType()));
+            var response = aiStub.ocrParse(builder.build());
+            return new AiOcrResult(
+                    response.getRequestId(),
+                    response.getModelKey(),
+                    toOutputTypeText(response.getOutputType()),
+                    response.getContent(),
+                    response.getRawJson()
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
     private ApiException toApiException(StatusRuntimeException ex) {
         Status.Code code = ex.getStatus().getCode();
         HttpStatus status = switch (code) {
@@ -86,5 +159,28 @@ public class AiGrpcClient {
             message = "AI 服务调用失败";
         }
         return new ApiException(status, message);
+    }
+
+    private OcrOutputType parseOutputType(String outputType) {
+        if (!StringUtils.hasText(outputType)) {
+            return OcrOutputType.OCR_OUTPUT_TYPE_TEXT;
+        }
+        return switch (outputType.trim().toUpperCase()) {
+            case "JSON" -> OcrOutputType.OCR_OUTPUT_TYPE_JSON;
+            case "MARKDOWN" -> OcrOutputType.OCR_OUTPUT_TYPE_MARKDOWN;
+            default -> OcrOutputType.OCR_OUTPUT_TYPE_TEXT;
+        };
+    }
+
+    private String toOutputTypeText(OcrOutputType outputType) {
+        return switch (outputType) {
+            case OCR_OUTPUT_TYPE_JSON -> "JSON";
+            case OCR_OUTPUT_TYPE_MARKDOWN -> "MARKDOWN";
+            default -> "TEXT";
+        };
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 }

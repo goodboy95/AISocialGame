@@ -17,11 +17,12 @@ public class WebConfig {
                         .allowedOrigins(
                                 "http://localhost:5173",
                                 "http://localhost:4173",
+                                "http://localhost:10030",
                                 "http://localhost",
-                                "http://socialgame.seekerhut.com",
-                                "http://socialgame.seekerhut.com:80",
-                                "http://socialgame.seekerhut.com:8080",
-                                "https://socialgame.seekerhut.com")
+                                "http://aisocialgame.seekerhut.com",
+                                "http://aisocialgame.seekerhut.com:10030",
+                                "http://aisocialgame.seekerhut.com:20030",
+                                "https://aisocialgame.seekerhut.com")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);

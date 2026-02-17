@@ -1,13 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, setAuthToken } from "@/services/api";
-import { AuthResponse, User } from "@/types";
+import { AuthResponse, SsoCallbackData, User } from "@/types";
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (account: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string, nickname: string) => Promise<void>;
+  redirectToSsoLogin: () => Promise<void>;
+  redirectToSsoRegister: () => Promise<void>;
+  ssoCallback: (payload: SsoCallbackData) => Promise<void>;
   logout: () => void;
   displayName: string;
   avatar: string;
@@ -15,7 +16,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const LOCAL_TOKEN_KEY = "aisocialgame_token";
+export const LOCAL_TOKEN_KEY = "aisocialgame_token";
 const LOCAL_GUEST_KEY = "aisocialgame_guest_name";
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -38,22 +39,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [token]);
 
-  const login = async (account: string, password: string) => {
-    setLoading(true);
-    const res: AuthResponse = await authApi.login(account, password);
+  const applyAuthResponse = (res: AuthResponse) => {
     localStorage.setItem(LOCAL_TOKEN_KEY, res.token);
     setToken(res.token);
     setUser(res.user);
-    setLoading(false);
   };
 
-  const register = async (username: string, email: string, password: string, nickname: string) => {
+  const ssoCallback = async (payload: SsoCallbackData) => {
     setLoading(true);
-    const res: AuthResponse = await authApi.register({ username, email, password, nickname });
-    localStorage.setItem(LOCAL_TOKEN_KEY, res.token);
-    setToken(res.token);
-    setUser(res.user);
-    setLoading(false);
+    try {
+      const res: AuthResponse = await authApi.ssoCallback(payload);
+      applyAuthResponse(res);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const redirectToSsoLogin = async () => {
+    const urls = await authApi.getSsoUrl();
+    window.location.href = urls.loginUrl;
+  };
+
+  const redirectToSsoRegister = async () => {
+    const urls = await authApi.getSsoUrl();
+    window.location.href = urls.registerUrl;
   };
 
   const logout = () => {
@@ -82,8 +91,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     token,
     loading,
-    login,
-    register,
+    redirectToSsoLogin,
+    redirectToSsoRegister,
+    ssoCallback,
     logout,
     displayName,
     avatar,

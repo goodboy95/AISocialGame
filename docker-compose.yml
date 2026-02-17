@@ -47,7 +47,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "20030:20030"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: aisocial
@@ -64,6 +64,8 @@ services:
       USER_GRPC_ADDR: ${USER_GRPC_ADDR:-consul:///aienie-userservice-grpc}
       BILLING_GRPC_ADDR: ${BILLING_GRPC_ADDR:-consul:///aienie-payservice-grpc}
       AI_GRPC_ADDR: ${AI_GRPC_ADDR:-consul:///aienie-aiservice-grpc}
+      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:10030/sso/callback}
+      SERVER_PORT: ${SERVER_PORT:-20030}
       JAVA_OPTS: ""
       SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/
     working_dir: /app
@@ -81,7 +83,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "10030:80"
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro

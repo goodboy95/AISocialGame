@@ -1,10 +1,12 @@
 package com.aisocialgame.service;
 
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.dto.AuthResponse;
 import com.aisocialgame.dto.AuthUserView;
+import com.aisocialgame.dto.SsoUrlResponse;
 import com.aisocialgame.exception.ApiException;
+import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
-import com.aisocialgame.integration.grpc.dto.AuthSessionResult;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
 import com.aisocialgame.model.User;
@@ -15,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -27,46 +31,47 @@ public class AuthService {
     private final TokenStore tokenStore;
     private final UserGrpcClient userGrpcClient;
     private final BalanceService balanceService;
+    private final AppProperties appProperties;
+    private final ConsulHttpServiceDiscovery consulHttpServiceDiscovery;
 
     public AuthService(UserRepository userRepository,
                        TokenStore tokenStore,
                        UserGrpcClient userGrpcClient,
-                       BalanceService balanceService) {
+                       BalanceService balanceService,
+                       AppProperties appProperties,
+                       ConsulHttpServiceDiscovery consulHttpServiceDiscovery) {
         this.userRepository = userRepository;
         this.tokenStore = tokenStore;
         this.userGrpcClient = userGrpcClient;
         this.balanceService = balanceService;
+        this.appProperties = appProperties;
+        this.consulHttpServiceDiscovery = consulHttpServiceDiscovery;
     }
 
-    public AuthResponse register(String username,
-                                 String email,
-                                 String password,
-                                 String nickname,
-                                 String ipAddress,
-                                 String userAgent) {
-        String normalizedEmail = normalizeEmail(email);
-        String normalizedNickname = nickname == null ? "" : nickname.trim();
-        String resolvedUsername = resolveRegisterUsername(username, normalizedEmail);
-        String avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" + normalizedNickname.replace(" ", "");
-        AuthSessionResult session = userGrpcClient.register(
-                resolvedUsername,
-                normalizedEmail,
-                password,
-                normalizedNickname,
-                avatar,
-                ipAddress,
-                userAgent
+    public SsoUrlResponse getSsoUrl() {
+        String serviceAddress = consulHttpServiceDiscovery.resolveHttpAddress(appProperties.getSso().getUserServiceName());
+        String base = trimTrailingSlash(serviceAddress);
+        String encodedRedirect = URLEncoder.encode(appProperties.getSso().getCallbackUrl(), StandardCharsets.UTF_8);
+        return new SsoUrlResponse(
+                base + "/sso/login?redirect=" + encodedRedirect,
+                base + "/register?redirect=" + encodedRedirect
         );
-
-        User localUser = upsertLocalUser(session, normalizedNickname);
-        String token = issueToken(localUser);
-        return new AuthResponse(token, buildUserView(localUser));
     }
 
-    public AuthResponse login(String account, String password, String ipAddress, String userAgent) {
-        String resolvedUsername = resolveLoginUsername(account);
-        AuthSessionResult session = userGrpcClient.login(resolvedUsername, password, ipAddress, userAgent);
-        User localUser = upsertLocalUser(session, resolvedUsername);
+    public AuthResponse ssoCallback(long userId, String username, String sessionId, String accessToken) {
+        if (userId <= 0 || !StringUtils.hasText(sessionId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SSO 回调参数不完整");
+        }
+        ExternalUserProfile profile = userGrpcClient.validateSession(userId, sessionId);
+        if (profile == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "SSO 会话无效或已过期");
+        }
+
+        User localUser = upsertLocalUser(profile, username);
+        localUser.setSessionId(sessionId.trim());
+        localUser.setAccessToken(StringUtils.hasText(accessToken) ? accessToken.trim() : "");
+        localUser = userRepository.save(localUser);
+
         String token = issueToken(localUser);
         return new AuthResponse(token, buildUserView(localUser));
     }
@@ -106,14 +111,11 @@ public class AuthService {
         return buildUserView(user);
     }
 
-    private User upsertLocalUser(AuthSessionResult session, String defaultNickname) {
-        ExternalUserProfile profile = session.user();
+    private User upsertLocalUser(ExternalUserProfile profile, String defaultNickname) {
         User local = userRepository.findByExternalUserId(profile.userId())
                 .orElseGet(() -> new User());
         mergeExternalProfile(local, profile, defaultNickname);
-        local.setSessionId(session.sessionId());
-        local.setAccessToken(session.accessToken());
-        return userRepository.save(local);
+        return local;
     }
 
     private void mergeExternalProfile(User local, ExternalUserProfile profile, String defaultNickname) {
@@ -149,42 +151,18 @@ public class AuthService {
         return new AuthUserView(user, snapshot);
     }
 
-    private String resolveLoginUsername(String account) {
-        if (!StringUtils.hasText(account)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "用户名不能为空");
-        }
-        String normalized = account.trim();
-        if (normalized.contains("@")) {
-            return userRepository.findByEmail(normalized.toLowerCase(Locale.ROOT))
-                    .map(User::getUsername)
-                    .filter(StringUtils::hasText)
-                    .orElse(normalized);
-        }
-        return normalized;
-    }
-
-    private String resolveRegisterUsername(String username, String email) {
-        if (StringUtils.hasText(username)) {
-            return username.trim();
-        }
-        int atIndex = email.indexOf("@");
-        if (atIndex > 0) {
-            return email.substring(0, atIndex);
-        }
-        return email;
-    }
-
-    private String normalizeEmail(String email) {
-        if (!StringUtils.hasText(email)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "邮箱不能为空");
-        }
-        return email.trim().toLowerCase(Locale.ROOT);
-    }
-
     private String fallbackNickname(String username) {
         if (StringUtils.hasText(username)) {
             return username;
         }
         return "玩家" + UUID.randomUUID().toString().substring(0, 6);
+    }
+
+    private String trimTrailingSlash(String url) {
+        String normalized = url;
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 }

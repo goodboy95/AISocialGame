@@ -77,6 +77,18 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface SsoUrlResponse {
+  loginUrl: string;
+  registerUrl: string;
+}
+
+export interface SsoCallbackData {
+  accessToken: string;
+  userId: number;
+  username: string;
+  sessionId: string;
+}
+
 export interface AiMessage {
   role: string;
   content: string;
@@ -87,6 +99,30 @@ export interface AiChatResponse {
   modelKey: string;
   promptTokens: number;
   completionTokens: number;
+}
+
+export interface AiEmbeddingsResponse {
+  modelKey: string;
+  dimensions: number;
+  embeddings: number[][];
+  promptTokens: number;
+}
+
+export interface AiOcrParams {
+  imageUrl?: string;
+  imageBase64?: string;
+  documentUrl?: string;
+  model?: string;
+  pages?: string;
+  outputType?: "TEXT" | "MARKDOWN" | "JSON";
+}
+
+export interface AiOcrResponse {
+  requestId: string;
+  modelKey: string;
+  outputType: string;
+  content: string;
+  rawJson?: string;
 }
 
 export interface AiModel {
@@ -110,6 +146,71 @@ export interface AdminIntegrationStatus {
     reachable: boolean;
     message: string;
   }[];
+}
+
+export interface CheckinResponse {
+  success: boolean;
+  tokensGranted: number;
+  alreadyCheckedIn: boolean;
+  errorMessage?: string;
+  balance: {
+    publicPermanentTokens: number;
+    projectTempTokens: number;
+    projectPermanentTokens: number;
+    totalTokens: number;
+    projectTempExpiresAt?: string;
+  };
+}
+
+export interface CheckinStatusResponse {
+  checkedInToday: boolean;
+  lastCheckinDate?: string;
+  tokensGrantedToday: number;
+}
+
+export interface UsageRecord {
+  requestId: string;
+  modelKey: string;
+  promptTokens: number;
+  completionTokens: number;
+  billedTokens: number;
+  createdAt?: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  type: string;
+  tokens: number;
+  reason?: string;
+  createdAt?: string;
+}
+
+export interface RedeemResponse {
+  success: boolean;
+  tokensGranted: number;
+  creditType: string;
+  errorMessage?: string;
+  balance: {
+    publicPermanentTokens: number;
+    projectTempTokens: number;
+    projectPermanentTokens: number;
+    totalTokens: number;
+    projectTempExpiresAt?: string;
+  };
+}
+
+export interface RedemptionRecord {
+  code: string;
+  tokensGranted: number;
+  creditType: string;
+  redeemedAt?: string;
+}
+
+export interface PagedResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  total: number;
 }
 
 export interface GameLogEntry {

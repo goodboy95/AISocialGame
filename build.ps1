@@ -50,11 +50,11 @@ Invoke-Step -Message "Docker compose build & restart" -Action {
     & $composeCmd up -d
 }
 
-Invoke-Step -Message "Playwright smoke (against http://socialgame.seekerhut.com)" -Action {
+Invoke-Step -Message "Playwright smoke (against http://aisocialgame.seekerhut.com:10030)" -Action {
     Push-Location "$repoRoot/frontend"
-    $env:PLAYWRIGHT_BASE_URL = "http://socialgame.seekerhut.com"
+    $env:PLAYWRIGHT_BASE_URL = "http://aisocialgame.seekerhut.com:10030"
     pnpm test:e2e
     Pop-Location
 }
 
-Write-Host "All done. Frontend: http://socialgame.seekerhut.com:80  Backend: http://socialgame.seekerhut.com:8080" -ForegroundColor Green
+Write-Host "All done. Frontend: http://aisocialgame.seekerhut.com:10030  Backend: http://aisocialgame.seekerhut.com:20030" -ForegroundColor Green

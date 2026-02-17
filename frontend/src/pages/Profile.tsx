@@ -3,10 +3,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Coins, Trophy, Clock, LogIn } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import WalletPanel from "@/components/wallet/WalletPanel";
 
 const Profile = () => {
-  const { user, displayName, avatar, logout } = useAuth();
+  const { user, displayName, avatar, logout, redirectToSsoLogin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get("tab") || "wallet";
 
   if (!user) {
     return (
@@ -18,9 +22,7 @@ const Profile = () => {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>请先登录账号以查看个人资产、战绩和等级。游客不会记录长久战绩。</p>
-          <Button asChild>
-            <a href="/login">前往登录</a>
-          </Button>
+          <Button onClick={() => void redirectToSsoLogin()}>前往登录</Button>
         </CardContent>
       </Card>
     );
@@ -82,12 +84,15 @@ const Profile = () => {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="history" className="w-full">
+      <Tabs defaultValue={tab} className="w-full">
         <TabsList className="w-full grid grid-cols-3">
+          <TabsTrigger value="wallet">我的钱包</TabsTrigger>
           <TabsTrigger value="history">对战记录</TabsTrigger>
           <TabsTrigger value="stats">数据统计</TabsTrigger>
-          <TabsTrigger value="assets">我的资产</TabsTrigger>
         </TabsList>
+        <TabsContent value="wallet" className="mt-6">
+          <WalletPanel initialBalance={user.balance} />
+        </TabsContent>
         <TabsContent value="history" className="mt-6">
           <Card>
             <CardHeader className="pb-3">
@@ -102,13 +107,6 @@ const Profile = () => {
           <Card>
             <CardContent className="pt-6 text-sm text-muted-foreground">
               暂未汇总更详细的数据。完成对局后，系统会将胜场计入排行榜。
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="assets">
-          <Card>
-            <CardContent className="pt-6 text-sm text-muted-foreground">
-              资产包括金币与等级，均来源于后端账户数据，重装不会丢失。
             </CardContent>
           </Card>
         </TabsContent>

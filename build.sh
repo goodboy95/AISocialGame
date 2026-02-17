@@ -82,7 +82,7 @@ $COMPOSE pull
 $COMPOSE up -d
 
 step "Wait for services"
-wait_for_http "http://socialgame.seekerhut.com" 40
-wait_for_http "http://socialgame.seekerhut.com:8080/actuator/health" 40
+wait_for_http "http://aisocialgame.seekerhut.com:10030" 40
+wait_for_http "http://aisocialgame.seekerhut.com:20030/actuator/health" 40
 
-echo "All done. Frontend: http://socialgame.seekerhut.com:80  Backend: http://socialgame.seekerhut.com:8080"
+echo "All done. Frontend: http://aisocialgame.seekerhut.com:10030  Backend: http://aisocialgame.seekerhut.com:20030"

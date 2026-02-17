@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Gamepad2, User, LayoutGrid, Coins, Home, Compass, Trophy, Shield } from "lucide-react";
+import { Gamepad2, User, LayoutGrid, Coins, Home, Compass, Trophy, Shield, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 const MainLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, displayName } = useAuth();
+  const { user, logout, displayName, redirectToSsoLogin } = useAuth();
 
   const isActive = (path: string) => {
     return location.pathname === path ? "text-primary" : "text-muted-foreground";
@@ -47,6 +47,9 @@ const MainLayout = () => {
               <Link to="/community" className={`transition-colors hover:text-primary ${isActive("/community")}`}>
                 社区广场
               </Link>
+              <Link to="/ai-chat" className={`transition-colors hover:text-primary ${isActive("/ai-chat")}`}>
+                AI 对话
+              </Link>
               <Link to="/rankings" className={`transition-colors hover:text-primary ${isActive("/rankings")}`}>
                 排行榜
               </Link>
@@ -55,10 +58,14 @@ const MainLayout = () => {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2 md:gap-4">
-            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 md:px-3 md:py-1.5 rounded-full text-xs md:text-sm font-medium">
+            <button
+              type="button"
+              onClick={() => navigate("/profile?tab=wallet")}
+              className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 md:px-3 md:py-1.5 rounded-full text-xs md:text-sm font-medium hover:bg-secondary transition-colors"
+            >
               <Coins className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" />
               <span>{user?.coins ?? 0}</span>
-            </div>
+            </button>
 
             {user ? (
               <DropdownMenu>
@@ -103,7 +110,7 @@ const MainLayout = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button variant="outline" onClick={() => navigate('/login')}>
+              <Button variant="outline" onClick={() => void redirectToSsoLogin()}>
                 登录
               </Button>
             )}
@@ -118,7 +125,7 @@ const MainLayout = () => {
 
       {/* Mobile Bottom Navigation (Scheme 1A) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe">
-        <div className="grid grid-cols-4 h-16">
+        <div className="grid grid-cols-5 h-16">
           <Link to="/" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/")}`}>
             <Home className="h-6 w-6" />
             <span className="text-[10px] font-medium">大厅</span>
@@ -130,6 +137,10 @@ const MainLayout = () => {
           <Link to="/rankings" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/rankings")}`}>
             <Trophy className="h-6 w-6" />
             <span className="text-[10px] font-medium">排行</span>
+          </Link>
+          <Link to="/ai-chat" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/ai-chat")}`}>
+            <MessageCircle className="h-6 w-6" />
+            <span className="text-[10px] font-medium">AI</span>
           </Link>
           <Link to="/profile" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/profile")}`}>
             <User className="h-6 w-6" />

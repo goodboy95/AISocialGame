@@ -51,8 +51,58 @@ message ChatCompletionsResponse {
   int64 completion_tokens = 4;
 }
 
+message EmbeddingsRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  string session_id = 4;
+  string model = 5;
+  repeated string input = 6;
+  bool normalize = 7;
+}
+
+message EmbeddingsResponse {
+  string model_key = 1;
+  int32 dimensions = 2;
+  repeated Embedding vectors = 3;
+  int64 prompt_tokens = 4;
+}
+
+message Embedding {
+  repeated float values = 1;
+}
+
+enum OcrOutputType {
+  OCR_OUTPUT_TYPE_UNSPECIFIED = 0;
+  OCR_OUTPUT_TYPE_TEXT = 1;
+  OCR_OUTPUT_TYPE_MARKDOWN = 2;
+  OCR_OUTPUT_TYPE_JSON = 3;
+}
+
+message OcrParseRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  string session_id = 4;
+  string model = 5;
+  string image_url = 6;
+  string image_base64 = 7;
+  string document_url = 8;
+  string pages = 9;
+  OcrOutputType output_type = 10;
+}
+
+message OcrParseResponse {
+  string request_id = 1;
+  string model_key = 2;
+  OcrOutputType output_type = 3;
+  string content = 4;
+  string raw_json = 5;
+}
+
 service AiGatewayService {
   rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
   rpc ChatCompletions(ChatCompletionsRequest) returns (ChatCompletionsResponse);
+  rpc Embeddings(EmbeddingsRequest) returns (EmbeddingsResponse);
+  rpc OcrParse(OcrParseRequest) returns (OcrParseResponse);
 }
-

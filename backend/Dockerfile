@@ -9,5 +9,5 @@ RUN mvn -DskipTests package
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=builder /app/target/ai-social-game-0.0.1-SNAPSHOT.jar app.jar
-EXPOSE 8080
+EXPOSE 20030
 ENTRYPOINT ["java","-jar","/app/app.jar"]

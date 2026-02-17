@@ -2,13 +2,26 @@ package com.aisocialgame.integration.grpc.client;
 
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
+import com.aisocialgame.integration.grpc.dto.CheckinResult;
+import com.aisocialgame.integration.grpc.dto.CheckinStatusResult;
 import com.aisocialgame.integration.grpc.dto.LedgerEntrySnapshot;
+import com.aisocialgame.integration.grpc.dto.PagedResult;
 import com.aisocialgame.integration.grpc.dto.PagedLedgerSnapshot;
+import com.aisocialgame.integration.grpc.dto.RedeemResult;
+import com.aisocialgame.integration.grpc.dto.RedemptionRecordSnapshot;
+import com.aisocialgame.integration.grpc.dto.UsageRecordSnapshot;
+import fireflychat.billing.v1.BillingCheckinServiceGrpc;
 import fireflychat.billing.v1.BillingBalanceServiceGrpc;
 import fireflychat.billing.v1.BillingQueryServiceGrpc;
+import fireflychat.billing.v1.BillingRedeemCodeServiceGrpc;
+import fireflychat.billing.v1.CheckinRequest;
+import fireflychat.billing.v1.GetCheckinStatusRequest;
 import fireflychat.billing.v1.GetProjectBalanceRequest;
 import fireflychat.billing.v1.GetPublicBalanceRequest;
+import fireflychat.billing.v1.GetRedemptionHistoryRequest;
 import fireflychat.billing.v1.ListLedgerEntriesRequest;
+import fireflychat.billing.v1.ListUsageRecordsRequest;
+import fireflychat.billing.v1.RedeemCodeRequest;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import net.devh.boot.grpc.client.inject.GrpcClient;
@@ -26,6 +39,12 @@ public class BillingGrpcClient {
     @GrpcClient("billing")
     private BillingQueryServiceGrpc.BillingQueryServiceBlockingStub queryStub;
 
+    @GrpcClient("billing")
+    private BillingCheckinServiceGrpc.BillingCheckinServiceBlockingStub checkinStub;
+
+    @GrpcClient("billing")
+    private BillingRedeemCodeServiceGrpc.BillingRedeemCodeServiceBlockingStub redeemCodeStub;
+
     public BalanceSnapshot getBalance(String projectKey, long userId) {
         try {
             var publicResponse = balanceStub.getPublicBalance(GetPublicBalanceRequest.newBuilder()
@@ -42,6 +61,70 @@ public class BillingGrpcClient {
                     projectBalance.getPermanentTokens(),
                     GrpcTimeMapper.toInstant(projectBalance.getTempExpiresAt())
             );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public CheckinResult checkin(String requestId, String projectKey, long userId) {
+        try {
+            var response = checkinStub.checkin(CheckinRequest.newBuilder()
+                    .setRequestId(requestId == null ? "" : requestId)
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .build());
+            long publicTokens = getPublicTokens(userId);
+            BalanceSnapshot balance = toBalanceSnapshot(publicTokens, response.getProjectBalance());
+            return new CheckinResult(
+                    response.getSuccess(),
+                    response.getTokensGranted(),
+                    response.getAlreadyCheckedIn(),
+                    response.getErrorMessage(),
+                    balance
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public CheckinStatusResult getCheckinStatus(String projectKey, long userId) {
+        try {
+            var response = checkinStub.getCheckinStatus(GetCheckinStatusRequest.newBuilder()
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .build());
+            return new CheckinStatusResult(
+                    response.getCheckedInToday(),
+                    GrpcTimeMapper.toInstant(response.getLastCheckinDate()),
+                    response.getTokensGrantedToday()
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public PagedResult<UsageRecordSnapshot> listUsageRecords(String projectKey, long userId, int page, int size) {
+        try {
+            var response = queryStub.listUsageRecords(ListUsageRecordsRequest.newBuilder()
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setPage(page)
+                    .setSize(size)
+                    .build());
+            List<UsageRecordSnapshot> records = response.getRecordsList().stream()
+                    .map(record -> new UsageRecordSnapshot(
+                            record.getId(),
+                            record.getRequestId(),
+                            record.getProjectKey(),
+                            record.getModelKey(),
+                            record.getPromptTokens(),
+                            record.getCompletionTokens(),
+                            record.getBilledTokens(),
+                            GrpcTimeMapper.toInstant(record.getCreatedAt())
+                    ))
+                    .toList();
+            var pageInfo = response.getPageInfo();
+            return new PagedResult<>(pageInfo.getPage(), pageInfo.getSize(), pageInfo.getTotal(), records);
         } catch (StatusRuntimeException ex) {
             throw toApiException(ex);
         }
@@ -79,6 +162,56 @@ public class BillingGrpcClient {
         }
     }
 
+    public PagedResult<LedgerEntrySnapshot> listLedgerEntriesForWallet(long userId, String projectKey, int page, int size) {
+        PagedLedgerSnapshot snapshot = listLedgerEntries(userId, projectKey, page, size);
+        return new PagedResult<>(snapshot.page(), snapshot.size(), snapshot.total(), snapshot.entries());
+    }
+
+    public RedeemResult redeemCode(String requestId, String projectKey, long userId, String code) {
+        try {
+            var response = redeemCodeStub.redeemCode(RedeemCodeRequest.newBuilder()
+                    .setRequestId(requestId == null ? "" : requestId)
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setCode(code == null ? "" : code.trim())
+                    .build());
+            BalanceSnapshot balance = toBalanceSnapshot(response.getPublicPermanentTokens(), response.getProjectBalance());
+            return new RedeemResult(
+                    response.getSuccess(),
+                    response.getTokensGranted(),
+                    response.getCreditType().name(),
+                    response.getErrorMessage(),
+                    balance
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public PagedResult<RedemptionRecordSnapshot> getRedemptionHistory(String projectKey, long userId, int page, int size) {
+        try {
+            var response = redeemCodeStub.getRedemptionHistory(GetRedemptionHistoryRequest.newBuilder()
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setPage(page)
+                    .setSize(size)
+                    .build());
+            List<RedemptionRecordSnapshot> records = response.getRedemptionsList().stream()
+                    .map(item -> new RedemptionRecordSnapshot(
+                            item.getId(),
+                            item.getCode(),
+                            item.getTokensGranted(),
+                            item.getCreditType().name(),
+                            item.getProjectKey(),
+                            GrpcTimeMapper.toInstant(item.getRedeemedAt())
+                    ))
+                    .toList();
+            return new PagedResult<>(response.getPage(), response.getSize(), response.getTotal(), records);
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
     private ApiException toApiException(StatusRuntimeException ex) {
         Status.Code code = ex.getStatus().getCode();
         HttpStatus status = switch (code) {
@@ -94,5 +227,24 @@ public class BillingGrpcClient {
             message = "积分服务调用失败";
         }
         return new ApiException(status, message);
+    }
+
+    private long getPublicTokens(long userId) {
+        var publicResponse = balanceStub.getPublicBalance(GetPublicBalanceRequest.newBuilder()
+                .setUserId(userId)
+                .build());
+        return publicResponse.getPublicPermanentTokens();
+    }
+
+    private BalanceSnapshot toBalanceSnapshot(long publicPermanentTokens, fireflychat.billing.v1.ProjectBalance projectBalance) {
+        if (projectBalance == null) {
+            return new BalanceSnapshot(publicPermanentTokens, 0, 0, null);
+        }
+        return new BalanceSnapshot(
+                publicPermanentTokens,
+                projectBalance.getTempTokens(),
+                projectBalance.getPermanentTokens(),
+                GrpcTimeMapper.toInstant(projectBalance.getTempExpiresAt())
+        );
     }
 }

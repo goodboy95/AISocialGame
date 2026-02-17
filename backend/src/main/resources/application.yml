@@ -20,10 +20,15 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:20030}
 
 app:
   project-key: ${APP_PROJECT_KEY:aisocialgame}
+  consul:
+    address: ${CONSUL_HTTP_ADDR:http://127.0.0.1:8500}
+  sso:
+    user-service-name: ${SSO_USER_SERVICE_NAME:aienie-userservice-http}
+    callback-url: ${SSO_CALLBACK_URL:http://localhost:10030/sso/callback}
   auth:
     token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}
   ai:

@@ -13,10 +13,10 @@ import RoomList from "./pages/RoomList";
 import Lobby from "./pages/Lobby";
 import Profile from "./pages/Profile";
 import Community from "./pages/Community";
+import AiChat from "./pages/AiChat";
 import Rankings from "./pages/Rankings";
 import NotFound from "./pages/NotFound";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
+import SsoCallback from "./pages/SsoCallback";
 import AdminLogin from "./pages/admin/AdminLogin";
 import Dashboard from "./pages/admin/Dashboard";
 import UserAdmin from "./pages/admin/UserAdmin";
@@ -35,9 +35,8 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              {/* Auth Routes (No Layout) */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              {/* SSO callback */}
+              <Route path="/sso/callback" element={<SsoCallback />} />
               <Route path="/admin/login" element={<AdminLogin />} />
 
               {/* Main App Routes */}
@@ -48,6 +47,7 @@ const App = () => (
                 <Route path="/room/:gameId/:roomId" element={<Lobby />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/community" element={<Community />} />
+                <Route path="/ai-chat" element={<AiChat />} />
                 <Route path="/rankings" element={<Rankings />} />
               </Route>
 

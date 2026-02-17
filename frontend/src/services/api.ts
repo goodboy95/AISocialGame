@@ -3,15 +3,27 @@ import {
   AdminAuthResponse,
   AdminIntegrationStatus,
   AiChatResponse,
+  AiEmbeddingsResponse,
   AiMessage,
   AiModel,
+  AiOcrParams,
+  AiOcrResponse,
   AuthResponse,
+  CheckinResponse,
+  CheckinStatusResponse,
   CommunityPost,
   Game,
   GameState,
+  LedgerEntry,
+  PagedResponse,
   Persona,
   PlayerStats,
+  RedeemResponse,
+  RedemptionRecord,
   Room,
+  SsoCallbackData,
+  SsoUrlResponse,
+  UsageRecord,
   User
 } from "@/types";
 
@@ -30,12 +42,12 @@ export const setAuthToken = (token?: string) => {
 };
 
 export const authApi = {
-  async login(account: string, password: string): Promise<AuthResponse> {
-    const res = await api.post("/auth/login", { account, password });
+  async getSsoUrl(): Promise<SsoUrlResponse> {
+    const res = await api.get("/auth/sso-url");
     return res.data;
   },
-  async register(payload: { username: string; email: string; password: string; nickname: string }): Promise<AuthResponse> {
-    const res = await api.post("/auth/register", payload);
+  async ssoCallback(payload: SsoCallbackData): Promise<AuthResponse> {
+    const res = await api.post("/auth/sso-callback", payload);
     return res.data;
   },
   async me(): Promise<User> {
@@ -51,6 +63,98 @@ export const aiApi = {
   },
   async chat(messages: AiMessage[], model?: string): Promise<AiChatResponse> {
     const res = await api.post("/ai/chat", { messages, model });
+    return res.data;
+  },
+  async chatStream(
+    messages: AiMessage[],
+    model: string | undefined,
+    onChunk: (chunk: string) => void,
+    onDone: (result: AiChatResponse) => void,
+  ): Promise<void> {
+    const base = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+    const token = api.defaults.headers.common["X-Auth-Token"] as string | undefined;
+    const response = await fetch(`${base}/ai/chat/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "X-Auth-Token": token } : {}),
+      },
+      body: JSON.stringify({ messages, model }),
+    });
+    if (!response.ok || !response.body) {
+      throw new Error("流式请求失败");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) {
+          continue;
+        }
+        const payload = line.slice(5).trim();
+        if (!payload) {
+          continue;
+        }
+        const data = JSON.parse(payload);
+        if (data.done) {
+          onDone({
+            content: "",
+            modelKey: data.modelKey || "",
+            promptTokens: data.promptTokens || 0,
+            completionTokens: data.completionTokens || 0,
+          });
+        } else {
+          onChunk(data.content || "");
+        }
+      }
+    }
+  },
+  async embeddings(input: string[], model?: string, normalize = true): Promise<AiEmbeddingsResponse> {
+    const res = await api.post("/ai/embeddings", { input, model, normalize });
+    return res.data;
+  },
+  async ocr(params: AiOcrParams): Promise<AiOcrResponse> {
+    const res = await api.post("/ai/ocr", params);
+    return res.data;
+  },
+};
+
+export const walletApi = {
+  async checkin(): Promise<CheckinResponse> {
+    const res = await api.post("/wallet/checkin");
+    return res.data;
+  },
+  async getCheckinStatus(): Promise<CheckinStatusResponse> {
+    const res = await api.get("/wallet/checkin-status");
+    return res.data;
+  },
+  async getBalance(): Promise<User["balance"]> {
+    const res = await api.get("/wallet/balance");
+    return res.data;
+  },
+  async getUsageRecords(page = 1, size = 20): Promise<PagedResponse<UsageRecord>> {
+    const res = await api.get("/wallet/usage-records", { params: { page, size } });
+    return res.data;
+  },
+  async getLedger(page = 1, size = 20): Promise<PagedResponse<LedgerEntry>> {
+    const res = await api.get("/wallet/ledger", { params: { page, size } });
+    return res.data;
+  },
+  async redeemCode(code: string): Promise<RedeemResponse> {
+    const res = await api.post("/wallet/redeem", { code });
+    return res.data;
+  },
+  async getRedemptionHistory(page = 1, size = 20): Promise<PagedResponse<RedemptionRecord>> {
+    const res = await api.get("/wallet/redemption-history", { params: { page, size } });
     return res.data;
   },
 };
