@@ -1,11 +1,11 @@
 package com.aisocialgame.controller;
 
 import com.aisocialgame.dto.AuthResponse;
+import com.aisocialgame.dto.AuthUserView;
 import com.aisocialgame.dto.LoginRequest;
 import com.aisocialgame.dto.RegisterRequest;
-import com.aisocialgame.exception.ApiException;
-import com.aisocialgame.model.User;
 import com.aisocialgame.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,25 +22,33 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        User user = authService.register(request.getEmail(), request.getPassword(), request.getNickname());
-        String token = authService.issueToken(user);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, user));
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,
+                                                 HttpServletRequest httpRequest) {
+        AuthResponse response = authService.register(
+                request.getUsername(),
+                request.getEmail(),
+                request.getPassword(),
+                request.getNickname(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        User user = authService.login(request.getEmail(), request.getPassword());
-        String token = authService.issueToken(user);
-        return ResponseEntity.ok(new AuthResponse(token, user));
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
+                                              HttpServletRequest httpRequest) {
+        AuthResponse response = authService.login(
+                request.getAccount(),
+                request.getPassword(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/me")
-    public ResponseEntity<User> me(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
-        User user = authService.authenticate(token);
-        if (user == null) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "未登录");
-        }
-        return ResponseEntity.ok(user);
+    public ResponseEntity<AuthUserView> me(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
+        return ResponseEntity.ok(authService.currentUserView(token));
     }
 }

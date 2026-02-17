@@ -14,5 +14,25 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 app:
+  project-key: test-project
   auth:
     token-ttl-hours: 24
+  ai:
+    default-model: test-model
+    system-user-id: 1
+  admin:
+    username: admin
+    password: admin123
+    token-ttl-hours: 1
+
+grpc:
+  client:
+    user:
+      address: static://127.0.0.1:19001
+      negotiationType: PLAINTEXT
+    billing:
+      address: static://127.0.0.1:19002
+      negotiationType: PLAINTEXT
+    ai:
+      address: static://127.0.0.1:19003
+      negotiationType: PLAINTEXT

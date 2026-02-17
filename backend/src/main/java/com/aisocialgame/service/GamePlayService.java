@@ -45,17 +45,20 @@ public class GamePlayService {
     private final UndercoverWordRepository undercoverWordRepository;
     private final StatsService statsService;
     private final PromptProperties promptProperties;
+    private final AiGameSpeechService aiGameSpeechService;
 
     public GamePlayService(RoomService roomService,
                            GameStateRepository gameStateRepository,
                            UndercoverWordRepository undercoverWordRepository,
                            StatsService statsService,
-                           PromptProperties promptProperties) {
+                           PromptProperties promptProperties,
+                           AiGameSpeechService aiGameSpeechService) {
         this.roomService = roomService;
         this.gameStateRepository = gameStateRepository;
         this.undercoverWordRepository = undercoverWordRepository;
         this.statsService = statsService;
         this.promptProperties = promptProperties;
+        this.aiGameSpeechService = aiGameSpeechService;
     }
 
     @Transactional
@@ -944,11 +947,11 @@ public class GamePlayService {
     }
 
     private String buildAiDescription(String word) {
-        return formatTemplate(promptProperties.getAiTalk().getDescriptionTemplate(), "%s，我觉得这个词很特别。", word);
+        return aiGameSpeechService.buildDescription(word);
     }
 
     private String buildAiSuspicion(int seatNumber) {
-        return formatTemplate(promptProperties.getAiTalk().getSuspicionTemplate(), "我觉得%s号有问题", seatNumber);
+        return aiGameSpeechService.buildSuspicion(seatNumber);
     }
 
     private String buildAiVoteLog(String displayName) {

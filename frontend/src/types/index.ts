@@ -25,11 +25,20 @@ export interface Game {
 
 export interface User {
   id: string;
+  externalUserId?: number;
+  username?: string;
   nickname: string;
   email?: string;
   avatar: string;
   coins?: number;
   level?: number;
+  balance?: {
+    publicPermanentTokens: number;
+    projectTempTokens: number;
+    projectPermanentTokens: number;
+    totalTokens: number;
+    projectTempExpiresAt?: string;
+  };
 }
 
 export interface Persona {
@@ -66,6 +75,41 @@ export interface Room {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface AiMessage {
+  role: string;
+  content: string;
+}
+
+export interface AiChatResponse {
+  content: string;
+  modelKey: string;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface AiModel {
+  id: number;
+  displayName: string;
+  provider: string;
+  inputRate: number;
+  outputRate: number;
+  type: string;
+}
+
+export interface AdminAuthResponse {
+  token: string;
+  username: string;
+  displayName: string;
+}
+
+export interface AdminIntegrationStatus {
+  services: {
+    service: string;
+    reachable: boolean;
+    message: string;
+  }[];
 }
 
 export interface GameLogEntry {

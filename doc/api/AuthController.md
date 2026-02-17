@@ -3,36 +3,45 @@
 基址：`/api/auth`
 
 ## POST /register
-- **用途**：注册新用户并下发 token。
-- **请求体**
+- 用途：通过 `user-service` 完成注册，并返回本系统 token + 用户资料 + 聚合积分。
+- 请求体：
+  - `username` (string, optional，空时默认取邮箱前缀)
   - `email` (string, required)
   - `password` (string, required, >=6)
   - `nickname` (string, required)
-- **响应 201**
+- 响应 201：
 ```json
 {
   "token": "uuid",
   "user": {
-    "id": "uuid",
-    "email": "string",
-    "nickname": "string",
-    "avatar": "url",
-    "coins": 1000,
+    "id": "local-user-id",
+    "externalUserId": 10001,
+    "username": "demo_user",
+    "nickname": "演示玩家",
+    "email": "demo@example.com",
+    "avatar": "https://...",
     "level": 1,
-    "createdAt": "2025-11-25T00:29:35.592365",
-    "updatedAt": "2025-11-25T00:29:35.592365"
+    "coins": 1200,
+    "balance": {
+      "publicPermanentTokens": 1000,
+      "projectTempTokens": 100,
+      "projectPermanentTokens": 100,
+      "totalTokens": 1200,
+      "projectTempExpiresAt": "2026-02-20T00:00:00Z"
+    }
   }
 }
 ```
-- **说明**：用户信息持久化在 MySQL，`password` 字段不会出现在响应中；登录 token 存储于 Redis，默认有效期 168 小时（`APP_AUTH_TOKEN_TTL_HOURS` 可调）。
 
 ## POST /login
-- **用途**：用户登录。
-- **请求体**：`email`, `password`
-- **响应 200**：同上 `AuthResponse`。
+- 用途：通过 `user-service` 登录并同步会话。
+- 请求体：
+  - `account` (string, required，支持用户名；可传邮箱，系统会尝试映射本地已同步用户名)
+  - `password` (string, required)
+- 响应 200：同 `AuthResponse`。
 
 ## GET /me
-- **用途**：根据 `X-Auth-Token` 读取当前用户信息。
-- **请求头**：`X-Auth-Token: <token>`
-- **响应 200**：`User` 对象。
-- **错误**：401 未登录。*** End Patch
+- 用途：根据 `X-Auth-Token` 校验远端会话并返回当前用户资料与积分。
+- 请求头：`X-Auth-Token: <token>`
+- 响应 200：`AuthUserView`
+- 错误：401 未登录/会话无效。

@@ -1,0 +1,277 @@
+syntax = "proto3";
+
+package fireflychat.user.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "fireflychat.user.v1";
+option java_outer_classname = "UserServiceProto";
+
+// ==================== User Directory ====================
+
+message GetUserBasicRequest {
+  int64 user_id = 1;
+}
+
+message UserBasic {
+  int64 user_id = 1;
+  string username = 2;
+  string email = 3;
+  string avatar_url = 4;
+  bool active = 5;
+  google.protobuf.Timestamp banned_until = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message GetUserBasicResponse {
+  UserBasic user = 1;
+}
+
+message BatchGetUserBasicRequest {
+  repeated int64 user_ids = 1;
+}
+
+message BatchGetUserBasicResponse {
+  map<int64, UserBasic> users = 1;
+}
+
+// ==================== User Preferences ====================
+
+message GetProjectPreferencesRequest {
+  string project_key = 1;
+  int64 user_id = 2;
+}
+
+message ProjectPreferences {
+  string theme = 1;
+  string language = 2;
+  string default_model = 3;
+}
+
+message GetProjectPreferencesResponse {
+  ProjectPreferences preferences = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}
+
+message UpsertProjectPreferencesRequest {
+  // Idempotency key recommended (also carried in gRPC metadata).
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  ProjectPreferences preferences = 4;
+}
+
+message UpsertProjectPreferencesResponse {
+  ProjectPreferences preferences = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}
+
+// ==================== Project Admin ====================
+
+message CheckPermissionRequest {
+  string project_key = 1;
+  int64 user_id = 2;
+  repeated string permissions = 3;
+}
+
+message CheckPermissionResponse {
+  // True only if the user has all requested permissions.
+  bool allowed = 1;
+  repeated string missing_permissions = 2;
+}
+
+// ==================== Email Verification (New) ====================
+
+enum EmailCodePurpose {
+  EMAIL_CODE_PURPOSE_UNSPECIFIED = 0;
+  EMAIL_CODE_PURPOSE_REGISTER = 1;
+  EMAIL_CODE_PURPOSE_LOGIN = 2;
+  EMAIL_CODE_PURPOSE_RESET_PASSWORD = 3;
+  EMAIL_CODE_PURPOSE_BIND_EMAIL = 4;
+}
+
+message SendEmailCodeRequest {
+  string request_id = 1;
+  string email = 2;
+  EmailCodePurpose purpose = 3;
+  string project_key = 4;
+  string ip_address = 5;
+  // Optional: browser fingerprint for rate limiting
+  string browser_id = 6;
+  // Optional: captcha token (CAP). If provided, user-service will verify it.
+  string cap_token = 7;
+}
+
+message SendEmailCodeResponse {
+  bool success = 1;
+  // Cooldown seconds before user can request another code
+  int32 cooldown_seconds = 2;
+  string error_message = 3;
+}
+
+message VerifyEmailCodeRequest {
+  string email = 1;
+  string code = 2;
+  EmailCodePurpose purpose = 3;
+}
+
+message VerifyEmailCodeResponse {
+  bool valid = 1;
+  string error_message = 2;
+}
+
+// ==================== User Ban (New) ====================
+
+enum BanType {
+  BAN_TYPE_UNSPECIFIED = 0;
+  BAN_TYPE_PERMANENT = 1;
+  BAN_TYPE_TEMPORARY = 2;
+}
+
+message BanUserRequest {
+  string request_id = 1;
+  int64 user_id = 2;
+  BanType ban_type = 3;
+  string reason = 4;
+  // Required for TEMPORARY ban
+  google.protobuf.Timestamp expires_at = 5;
+  // Operator info for audit
+  int64 operator_user_id = 6;
+}
+
+message BanUserResponse {
+  bool success = 1;
+  UserBasic user = 2;
+  string error_message = 3;
+}
+
+message UnbanUserRequest {
+  string request_id = 1;
+  int64 user_id = 2;
+  string reason = 3;
+  // Operator info for audit
+  int64 operator_user_id = 4;
+}
+
+message UnbanUserResponse {
+  bool success = 1;
+  UserBasic user = 2;
+  string error_message = 3;
+}
+
+message GetBanStatusRequest {
+  int64 user_id = 1;
+}
+
+message GetBanStatusResponse {
+  bool is_banned = 1;
+  BanType ban_type = 2;
+  string reason = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  google.protobuf.Timestamp banned_at = 5;
+}
+
+// ==================== Services ====================
+
+service UserDirectoryService {
+  rpc GetUserBasic(GetUserBasicRequest) returns (GetUserBasicResponse);
+  rpc BatchGetUserBasic(BatchGetUserBasicRequest) returns (BatchGetUserBasicResponse);
+}
+
+service UserPreferenceService {
+  rpc GetProjectPreferences(GetProjectPreferencesRequest) returns (GetProjectPreferencesResponse);
+  rpc UpsertProjectPreferences(UpsertProjectPreferencesRequest) returns (UpsertProjectPreferencesResponse);
+}
+
+service ProjectAdminService {
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+}
+
+// New: Email Verification Service
+service EmailVerificationService {
+  // Send email verification code
+  rpc SendEmailCode(SendEmailCodeRequest) returns (SendEmailCodeResponse);
+  // Verify email code
+  rpc VerifyEmailCode(VerifyEmailCodeRequest) returns (VerifyEmailCodeResponse);
+}
+
+// New: User Ban Service
+service UserBanService {
+  // Ban a user (permanent or temporary)
+  rpc BanUser(BanUserRequest) returns (BanUserResponse);
+  // Unban a user
+  rpc UnbanUser(UnbanUserRequest) returns (UnbanUserResponse);
+  // Get user's ban status
+  rpc GetBanStatus(GetBanStatusRequest) returns (GetBanStatusResponse);
+}
+
+// ==================== Auth (Internal, for BFF/main-service) ====================
+
+message RegisterUserRequest {
+  string request_id = 1;
+  string username = 2;
+  string email = 3;
+  string password = 4;
+  string display_name = 5;
+  string avatar_url = 6;
+  // For audit / rate-limiting (optional)
+  string ip_address = 7;
+  string user_agent = 8;
+}
+
+message RegisterUserResponse {
+  bool success = 1;
+  string error_message = 2;
+  UserBasic user = 3;
+  // JWT access token (shared-secret) for FireflyChat compatibility.
+  string access_token = 4;
+  // Current session id (for single-session enforcement).
+  string session_id = 5;
+}
+
+message LoginUserRequest {
+  string request_id = 1;
+  string username = 2;
+  string password = 3;
+  string ip_address = 4;
+  string user_agent = 5;
+}
+
+message LoginUserResponse {
+  bool success = 1;
+  string error_message = 2;
+  UserBasic user = 3;
+  string access_token = 4;
+  string session_id = 5;
+}
+
+message ResetPasswordRequest {
+  string request_id = 1;
+  string email = 2;
+  string new_password = 3;
+  string ip_address = 4;
+  string user_agent = 5;
+}
+
+message ResetPasswordResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ValidateSessionRequest {
+  int64 user_id = 1;
+  string session_id = 2;
+}
+
+message ValidateSessionResponse {
+  bool valid = 1;
+  UserBasic user = 2;
+}
+
+service UserAuthService {
+  rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse);
+  rpc LoginUser(LoginUserRequest) returns (LoginUserResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
+  rpc ValidateSession(ValidateSessionRequest) returns (ValidateSessionResponse);
+}

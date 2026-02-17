@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Gamepad2, User, LayoutGrid, Coins, Menu, Home, Compass, Trophy } from "lucide-react";
+import { Gamepad2, User, LayoutGrid, Coins, Home, Compass, Trophy, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -89,6 +89,12 @@ const MainLayout = () => {
                   <DropdownMenuItem>
                     <LayoutGrid className="mr-2 h-4 w-4" />
                     我的房间
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="cursor-pointer w-full flex items-center">
+                      <Shield className="mr-2 h-4 w-4" />
+                      后台管理
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-red-600" onClick={logout}>

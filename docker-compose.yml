@@ -56,6 +56,14 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       APP_AUTH_TOKEN_TTL_HOURS: 168
+      APP_PROJECT_KEY: ${APP_PROJECT_KEY:-aisocialgame}
+      APP_AI_SYSTEM_USER_ID: ${APP_AI_SYSTEM_USER_ID:-1}
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME:-admin}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-admin123}
+      CONSUL_HTTP_ADDR: ${CONSUL_HTTP_ADDR:-http://192.168.1.4:60000}
+      USER_GRPC_ADDR: ${USER_GRPC_ADDR:-consul:///aienie-userservice-grpc}
+      BILLING_GRPC_ADDR: ${BILLING_GRPC_ADDR:-consul:///aienie-payservice-grpc}
+      AI_GRPC_ADDR: ${AI_GRPC_ADDR:-consul:///aienie-aiservice-grpc}
       JAVA_OPTS: ""
       SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/
     working_dir: /app

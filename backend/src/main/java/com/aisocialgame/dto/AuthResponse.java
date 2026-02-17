@@ -1,16 +1,14 @@
 package com.aisocialgame.dto;
 
-import com.aisocialgame.model.User;
-
 public class AuthResponse {
     private String token;
-    private User user;
+    private AuthUserView user;
 
-    public AuthResponse(String token, User user) {
+    public AuthResponse(String token, AuthUserView user) {
         this.token = token;
         this.user = user;
     }
 
     public String getToken() { return token; }
-    public User getUser() { return user; }
+    public AuthUserView getUser() { return user; }
 }

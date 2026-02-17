@@ -1,13 +1,16 @@
 package com.aisocialgame.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 public class LoginRequest {
     @NotBlank
-    private String email;
+    @JsonAlias({"email", "username"})
+    private String account;
+
     @NotBlank
     private String password;
 
-    public String getEmail() { return email; }
+    public String getAccount() { return account; }
     public String getPassword() { return password; }
 }

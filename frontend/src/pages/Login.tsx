@@ -13,13 +13,13 @@ const Login = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    login(email, password)
+    login(account, password)
       .then(() => {
         toast.success("登录成功！欢迎回来");
         navigate("/");
@@ -47,8 +47,8 @@ const Login = () => {
         <CardContent className="space-y-4">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">邮箱 / 用户名</Label>
-              <Input id="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Label htmlFor="account">邮箱 / 用户名</Label>
+              <Input id="account" placeholder="name@example.com" required value={account} onChange={(e) => setAccount(e.target.value)} />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">

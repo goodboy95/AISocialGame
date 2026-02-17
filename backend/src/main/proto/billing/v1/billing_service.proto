@@ -1,0 +1,315 @@
+syntax = "proto3";
+
+package fireflychat.billing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "fireflychat.billing.v1";
+option java_outer_classname = "BillingServiceProto";
+
+// ==================== Balance ====================
+
+message GetProjectBalanceRequest {
+  string project_key = 1;
+  int64 user_id = 2;
+}
+
+message ProjectBalance {
+  int64 temp_tokens = 1;
+  google.protobuf.Timestamp temp_expires_at = 2;
+  int64 permanent_tokens = 3;
+}
+
+message GetProjectBalanceResponse {
+  ProjectBalance balance = 1;
+}
+
+message GetPublicBalanceRequest {
+  int64 user_id = 1;
+}
+
+message GetPublicBalanceResponse {
+  int64 public_permanent_tokens = 1;
+}
+
+// ==================== Conversion ====================
+
+message ConvertPublicToProjectRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  int64 tokens = 4;
+}
+
+message ConvertPublicToProjectResponse {
+  int64 public_permanent_tokens = 1;
+  ProjectBalance project_balance = 2;
+}
+
+// ==================== Grant ====================
+
+message GrantPublicTokensRequest {
+  string request_id = 1;
+  // Project key for audit scope (operator is a project admin).
+  string project_key = 2;
+  int64 user_id = 3;
+  int64 tokens = 4;
+  string reason = 5;
+}
+
+message GrantPublicTokensResponse {
+  int64 public_permanent_tokens = 1;
+}
+
+message GrantProjectPermanentTokensRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  int64 tokens = 4;
+  string reason = 5;
+}
+
+message GrantProjectPermanentTokensResponse {
+  ProjectBalance project_balance = 1;
+}
+
+// ==================== Usage ====================
+
+message DeductUsageRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  string model_key = 4;
+
+  int64 prompt_tokens = 5;
+  int64 completion_tokens = 6;
+
+  // Optional, for analytics and AI sticky routing.
+  string session_id = 7;
+  map<string, string> metadata = 8;
+}
+
+message DeductUsageResponse {
+  int64 billed_tokens = 1;
+  int64 deducted_tokens = 2;
+  int64 deducted_temp_tokens = 3;
+  int64 deducted_permanent_tokens = 4;
+  ProjectBalance project_balance = 5;
+}
+
+message DeductPerCallRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+  string model_key = 4;
+
+  // e.g. image generations count.
+  int32 calls = 5;
+
+  string session_id = 6;
+  map<string, string> metadata = 7;
+}
+
+message DeductPerCallResponse {
+  int64 billed_tokens = 1;
+  int64 deducted_tokens = 2;
+  int64 deducted_temp_tokens = 3;
+  int64 deducted_permanent_tokens = 4;
+  ProjectBalance project_balance = 5;
+}
+
+// ==================== Quota ====================
+
+message CheckAndConsumeQuotaRequest {
+  string request_id = 1;
+  string project_key = 2;
+  string model_key = 3;
+  int64 tokens = 4;
+}
+
+message CheckAndConsumeQuotaResponse {
+  bool allowed = 1;
+  int64 remaining_tokens = 2;
+}
+
+// ==================== Checkin (New) ====================
+
+message CheckinRequest {
+  string request_id = 1;
+  int64 user_id = 2;
+  string project_key = 3;
+}
+
+message CheckinResponse {
+  bool success = 1;
+  int64 tokens_granted = 2;
+  ProjectBalance project_balance = 3;
+  bool already_checked_in = 4;
+  string error_message = 5;
+}
+
+message GetCheckinStatusRequest {
+  int64 user_id = 1;
+  string project_key = 2;
+}
+
+message GetCheckinStatusResponse {
+  bool checked_in_today = 1;
+  google.protobuf.Timestamp last_checkin_date = 2;
+  int64 tokens_granted_today = 3;
+}
+
+// ==================== Redeem Code (New) ====================
+
+enum CreditType {
+  CREDIT_TYPE_UNSPECIFIED = 0;
+  CREDIT_TYPE_TEMP = 1;        // Project-specific temporary tokens
+  CREDIT_TYPE_PERMANENT = 2;  // Project-specific permanent tokens
+  CREDIT_TYPE_PUBLIC = 3;     // Global public tokens
+}
+
+message RedeemCodeRequest {
+  string request_id = 1;
+  int64 user_id = 2;
+  string project_key = 3;
+  string code = 4;
+}
+
+message RedeemCodeResponse {
+  bool success = 1;
+  int64 tokens_granted = 2;
+  CreditType credit_type = 3;
+  ProjectBalance project_balance = 4;
+  int64 public_permanent_tokens = 5;
+  string error_message = 6;
+}
+
+message GetRedemptionHistoryRequest {
+  int64 user_id = 1;
+  string project_key = 2; // Optional, filter by project
+  int32 page = 3;
+  int32 size = 4;
+}
+
+message RedemptionRecord {
+  int64 id = 1;
+  string code = 2;
+  int64 tokens_granted = 3;
+  CreditType credit_type = 4;
+  string project_key = 5;
+  google.protobuf.Timestamp redeemed_at = 6;
+}
+
+message GetRedemptionHistoryResponse {
+  repeated RedemptionRecord redemptions = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 size = 4;
+}
+
+// ==================== Services ====================
+
+service BillingBalanceService {
+  rpc GetProjectBalance(GetProjectBalanceRequest) returns (GetProjectBalanceResponse);
+  rpc GetPublicBalance(GetPublicBalanceRequest) returns (GetPublicBalanceResponse);
+}
+
+service BillingConversionService {
+  rpc ConvertPublicToProject(ConvertPublicToProjectRequest) returns (ConvertPublicToProjectResponse);
+}
+
+service BillingGrantService {
+  rpc GrantPublicTokens(GrantPublicTokensRequest) returns (GrantPublicTokensResponse);
+  rpc GrantProjectPermanentTokens(GrantProjectPermanentTokensRequest) returns (GrantProjectPermanentTokensResponse);
+}
+
+service BillingUsageService {
+  rpc DeductUsage(DeductUsageRequest) returns (DeductUsageResponse);
+  rpc DeductPerCall(DeductPerCallRequest) returns (DeductPerCallResponse);
+}
+
+service BillingProjectModelQuotaService {
+  rpc CheckAndConsumeQuota(CheckAndConsumeQuotaRequest) returns (CheckAndConsumeQuotaResponse);
+}
+
+// New: Checkin Service
+service BillingCheckinService {
+  // Perform daily checkin, returns granted tokens
+  rpc Checkin(CheckinRequest) returns (CheckinResponse);
+  // Query checkin status for today
+  rpc GetCheckinStatus(GetCheckinStatusRequest) returns (GetCheckinStatusResponse);
+}
+
+// New: Redeem Code Service
+service BillingRedeemCodeService {
+  // Redeem a code for tokens
+  rpc RedeemCode(RedeemCodeRequest) returns (RedeemCodeResponse);
+  // Get user's redemption history
+  rpc GetRedemptionHistory(GetRedemptionHistoryRequest) returns (GetRedemptionHistoryResponse);
+}
+
+// ==================== Query: Usage & Logs (for BFF/main-service) ====================
+
+message PageInfo {
+  int32 page = 1;
+  int32 size = 2;
+  int64 total = 3;
+}
+
+message ListUsageRecordsRequest {
+  int64 user_id = 1;
+  string project_key = 2;
+  int32 page = 3;
+  int32 size = 4;
+}
+
+message UsageRecord {
+  int64 id = 1;
+  string request_id = 2;
+  string project_key = 3;
+  string model_key = 4;
+  int64 prompt_tokens = 5;
+  int64 completion_tokens = 6;
+  int64 billed_tokens = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListUsageRecordsResponse {
+  repeated UsageRecord records = 1;
+  PageInfo page_info = 2;
+}
+
+message ListLedgerEntriesRequest {
+  int64 user_id = 1;
+  string project_key = 2; // Optional. Empty means all projects.
+  int32 page = 3;
+  int32 size = 4;
+}
+
+message LedgerEntry {
+  int64 id = 1;
+  string request_id = 2;
+  string project_key = 3;
+  string type = 4; // EARN/SPEND/CONVERT/ADJUST/REFUND/RECHARGE/CHECKIN/REDEEM
+  int64 token_delta_temp = 5;
+  int64 token_delta_permanent = 6;
+  int64 token_delta_public = 7;
+  int64 balance_temp = 8;
+  int64 balance_permanent = 9;
+  int64 balance_public = 10;
+  string source = 11; // Optional: CHAT/ADMIN/...
+  google.protobuf.Timestamp created_at = 12;
+  map<string, string> metadata = 13;
+}
+
+message ListLedgerEntriesResponse {
+  repeated LedgerEntry entries = 1;
+  PageInfo page_info = 2;
+}
+
+service BillingQueryService {
+  rpc ListUsageRecords(ListUsageRecordsRequest) returns (ListUsageRecordsResponse);
+  rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
+}
+

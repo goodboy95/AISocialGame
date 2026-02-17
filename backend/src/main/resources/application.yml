@@ -1,6 +1,8 @@
 spring:
   config:
     import: classpath:prompt.yml
+  application:
+    name: ${SPRING_APPLICATION_NAME:ai-social-game}
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC}
     username: ${SPRING_DATASOURCE_USERNAME:aisocial}
@@ -21,5 +23,26 @@ server:
   port: 8080
 
 app:
+  project-key: ${APP_PROJECT_KEY:aisocialgame}
   auth:
     token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}
+  ai:
+    default-model: ${APP_AI_DEFAULT_MODEL:}
+    system-user-id: ${APP_AI_SYSTEM_USER_ID:0}
+  admin:
+    username: ${APP_ADMIN_USERNAME:admin}
+    password: ${APP_ADMIN_PASSWORD:admin123}
+    display-name: ${APP_ADMIN_DISPLAY_NAME:系统管理员}
+    token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
+
+grpc:
+  client:
+    user:
+      address: ${USER_GRPC_ADDR:consul:///aienie-userservice-grpc}
+      negotiationType: PLAINTEXT
+    billing:
+      address: ${BILLING_GRPC_ADDR:consul:///aienie-payservice-grpc}
+      negotiationType: PLAINTEXT
+    ai:
+      address: ${AI_GRPC_ADDR:consul:///aienie-aiservice-grpc}
+      negotiationType: PLAINTEXT

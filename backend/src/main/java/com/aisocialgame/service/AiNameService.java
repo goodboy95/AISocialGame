@@ -1,33 +1,30 @@
 package com.aisocialgame.service;
 
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.config.PromptProperties;
+import com.aisocialgame.integration.grpc.client.AiGrpcClient;
+import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
 import com.aisocialgame.model.Persona;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
-/**
- * 负责为房间中的 AI 生成随机昵称。
- * 优先尝试调用可配置的外部 AI 接口（返回 {"name": "..."}），失败则退化为本地随机词库组合。
- */
 @Service
 public class AiNameService {
 
     private final Random random = new Random();
-    private final RestTemplate restTemplate = new RestTemplate();
     private final PromptProperties promptProperties;
+    private final AiGrpcClient aiGrpcClient;
+    private final AppProperties appProperties;
 
-    @Value("${ai.name.endpoint:}")
-    private String aiNameEndpoint;
-
-    public AiNameService(PromptProperties promptProperties) {
+    public AiNameService(PromptProperties promptProperties,
+                         AiGrpcClient aiGrpcClient,
+                         AppProperties appProperties) {
         this.promptProperties = promptProperties;
+        this.aiGrpcClient = aiGrpcClient;
+        this.appProperties = appProperties;
     }
 
     public String generateName(Persona persona) {
@@ -39,23 +36,25 @@ public class AiNameService {
     }
 
     private String tryRemoteGeneration(Persona persona) {
-        if (!StringUtils.hasText(aiNameEndpoint)) {
-            return null;
-        }
         try {
-            Map<String, Object> payload = new HashMap<>();
             String prompt = promptProperties.getAiName().getRemotePrompt();
+            String content = "角色设定：" + persona.getName() + "；风格：" + persona.getTrait() + "。请返回一个 2-6 字中文昵称，仅输出昵称。";
             if (StringUtils.hasText(prompt)) {
-                payload.put("prompt", prompt);
+                content = prompt + "\n" + content;
             }
-            payload.put("persona", persona.getName());
-            payload.put("style", persona.getTrait());
-            var response = restTemplate.postForObject(aiNameEndpoint, payload, AiNameResponse.class);
-            if (response != null && StringUtils.hasText(response.getName())) {
-                return response.getName().trim();
+            var response = aiGrpcClient.chatCompletions(
+                    appProperties.getProjectKey(),
+                    appProperties.getAi().getSystemUserId(),
+                    "",
+                    appProperties.getAi().getDefaultModel(),
+                    List.of(new AiChatMessageDto("user", content))
+            );
+            String normalized = sanitize(response.content());
+            if (StringUtils.hasText(normalized)) {
+                return normalized;
             }
         } catch (Exception ignored) {
-            // 网络不可达或接口错误时回退到本地随机生成，避免影响游戏流程
+            // AI 服务短暂不可用时回退本地策略，避免影响开房流程。
         }
         return null;
     }
@@ -71,18 +70,19 @@ public class AiNameService {
         return prefix + persona.getName() + suffix;
     }
 
-    /**
-     * 与外部 AI 接口的最小响应协议。
-     */
-    private static class AiNameResponse {
-        private String name;
-
-        public String getName() {
-            return name;
+    private String sanitize(String content) {
+        if (!StringUtils.hasText(content)) {
+            return null;
         }
-
-        public void setName(String name) {
-            this.name = name;
+        String line = content.strip().replace(" ", "");
+        int newline = line.indexOf('\n');
+        if (newline > 0) {
+            line = line.substring(0, newline).trim();
         }
+        line = line.replace("“", "").replace("”", "").replace("\"", "");
+        if (line.length() > 12) {
+            line = line.substring(0, 12);
+        }
+        return line;
     }
 }

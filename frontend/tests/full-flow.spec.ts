@@ -3,13 +3,15 @@ import { test, expect } from "@playwright/test";
 test("注册登录、开房游玩及社区发帖的完整流程", async ({ page }) => {
   const suffix = Date.now();
   const email = `tester${suffix}@example.com`;
+  const username = `tester_${suffix}`;
   const password = "Password!23";
   const nickname = `玩家${suffix.toString().slice(-4)}`;
   const postContent = `自动化发帖 ${suffix}`;
 
   // 注册并自动登录
   await page.goto("/register");
-  await page.getByLabel("用户名").fill(nickname);
+  await page.getByLabel("登录用户名").fill(username);
+  await page.getByLabel("游戏昵称").fill(nickname);
   await page.getByLabel("电子邮箱").fill(email);
   await page.getByLabel("密码", { exact: true }).fill(password);
   await page.getByLabel("确认密码", { exact: true }).fill(password);

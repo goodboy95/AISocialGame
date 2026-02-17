@@ -7,14 +7,17 @@ import com.aisocialgame.dto.VoteRequest;
 import com.aisocialgame.model.GamePlayerState;
 import com.aisocialgame.model.GameState;
 import com.aisocialgame.model.Room;
+import com.aisocialgame.model.User;
+import com.aisocialgame.integration.grpc.client.AiGrpcClient;
 import com.aisocialgame.repository.GameStateRepository;
-import com.aisocialgame.service.AuthService;
+import com.aisocialgame.repository.UserRepository;
 import com.aisocialgame.service.GamePlayService;
 import com.aisocialgame.service.RoomService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
@@ -22,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @SpringBootTest(classes = AiSocialGameApplication.class)
 @ActiveProfiles("test")
@@ -34,14 +38,17 @@ class GamePlayServiceUndercoverTest {
     private GamePlayService gamePlayService;
 
     @Autowired
-    private AuthService authService;
+    private UserRepository userRepository;
 
     @Autowired
     private GameStateRepository gameStateRepository;
 
+    @MockBean
+    private AiGrpcClient aiGrpcClient;
+
     @Test
     void aiSpeaksOneByOnePerPoll() {
-        var host = authService.register("undercover-host@example.com", "password", "房主");
+        var host = createLocalUser("undercover-host@example.com", "房主");
         Room room = roomService.createRoom("undercover", "顺序发言房", false, null, "voice", Map.of("playerCount", 4), host);
         roomService.addAi(room.getId(), "ai1");
         roomService.addAi(room.getId(), "ai2");
@@ -78,7 +85,7 @@ class GamePlayServiceUndercoverTest {
 
     @Test
     void voteResultAppearsAfterAllPlayersSubmit() {
-        var host = authService.register("undercover-host2@example.com", "password", "主持人");
+        var host = createLocalUser("undercover-host2@example.com", "主持人");
         Room room = roomService.createRoom("undercover", "投票等待房", false, null, "voice", Map.of("playerCount", 4), host);
         var guestJoin = roomService.joinRoom(room.getId(), "游客1", null, null);
         roomService.addAi(room.getId(), "ai1");
@@ -112,5 +119,18 @@ class GamePlayServiceUndercoverTest {
         guestVote.setTargetPlayerId(aiTarget);
         GameStateResponse afterGuestVote = gamePlayService.vote("undercover", room.getId(), guestVote, null, guestJoin.getSeat().getPlayerId());
         Assertions.assertNotEquals("VOTING", afterGuestVote.getPhase(), "所有人投票后应进入下一阶段或结算");
+    }
+
+    private User createLocalUser(String email, String nickname) {
+        User user = new User();
+        user.setId(UUID.randomUUID().toString());
+        user.setEmail(email);
+        user.setUsername(email.substring(0, email.indexOf("@")));
+        user.setPassword("{test}");
+        user.setNickname(nickname);
+        user.setAvatar("https://api.dicebear.com/7.x/avataaars/svg?seed=" + nickname);
+        user.setLevel(1);
+        user.setCoins(0);
+        return userRepository.save(user);
     }
 }

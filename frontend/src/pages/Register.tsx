@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 const Register = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [username, setUsername] = useState("");
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +28,7 @@ const Register = () => {
       return;
     }
 
-    register(email, password, nickname)
+    register(username, email, password, nickname || username)
       .then(() => {
         toast.success("注册成功！");
         navigate("/");
@@ -55,8 +56,14 @@ const Register = () => {
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">用户名</Label>
-              <Input id="username" placeholder="例如：逻辑大师" required value={nickname} onChange={(e) => setNickname(e.target.value)} />
+              <Label htmlFor="username">登录用户名</Label>
+              <Input id="username" placeholder="例如：logic_master" required value={username} onChange={(e) => setUsername(e.target.value)} />
+              <p className="text-[10px] text-slate-500">用于登录账号，建议使用英文字母和数字</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nickname">游戏昵称</Label>
+              <Input id="nickname" placeholder="例如：逻辑大师" required value={nickname} onChange={(e) => setNickname(e.target.value)} />
               <p className="text-[10px] text-slate-500">这将是你在游戏中显示的昵称</p>
             </div>
             

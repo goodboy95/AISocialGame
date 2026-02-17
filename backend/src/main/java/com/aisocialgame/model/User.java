@@ -21,9 +21,23 @@ public class User {
     @Column(nullable = false, unique = true, length = 191)
     private String email;
 
+    @Column(unique = true, length = 64)
+    private String username;
+
+    @Column(name = "external_user_id", unique = true)
+    private Long externalUserId;
+
     @JsonIgnore
     @Column(nullable = false)
     private String password;
+
+    @JsonIgnore
+    @Column(name = "session_id", length = 128)
+    private String sessionId;
+
+    @JsonIgnore
+    @Column(name = "access_token", length = 2048)
+    private String accessToken;
 
     @Column(nullable = false, length = 64)
     private String nickname;
@@ -66,7 +80,11 @@ public class User {
 
     public String getId() { return id; }
     public String getEmail() { return email; }
+    public String getUsername() { return username; }
+    public Long getExternalUserId() { return externalUserId; }
     public String getPassword() { return password; }
+    public String getSessionId() { return sessionId; }
+    public String getAccessToken() { return accessToken; }
     public String getNickname() { return nickname; }
     public String getAvatar() { return avatar; }
     public int getCoins() { return coins; }
@@ -76,7 +94,11 @@ public class User {
 
     public void setId(String id) { this.id = id; }
     public void setEmail(String email) { this.email = email; }
+    public void setUsername(String username) { this.username = username; }
+    public void setExternalUserId(Long externalUserId) { this.externalUserId = externalUserId; }
     public void setPassword(String password) { this.password = password; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public void setAvatar(String avatar) { this.avatar = avatar; }
     public void setCoins(int coins) { this.coins = coins; }
