@@ -22,7 +22,11 @@ public class WebConfig {
                                 "http://aisocialgame.seekerhut.com",
                                 "http://aisocialgame.seekerhut.com:10030",
                                 "http://aisocialgame.seekerhut.com:20030",
-                                "https://aisocialgame.seekerhut.com")
+                                "https://aisocialgame.seekerhut.com",
+                                "http://aisocialgame.aienie.com",
+                                "http://aisocialgame.aienie.com:10030",
+                                "http://aisocialgame.aienie.com:20030",
+                                "https://aisocialgame.aienie.com")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);

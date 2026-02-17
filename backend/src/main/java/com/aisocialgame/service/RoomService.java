@@ -10,6 +10,8 @@ import com.aisocialgame.model.RoomStatus;
 import com.aisocialgame.model.User;
 import com.aisocialgame.repository.PersonaRepository;
 import com.aisocialgame.repository.RoomRepository;
+import com.aisocialgame.dto.ws.SeatEvent;
+import com.aisocialgame.websocket.GamePushService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +28,18 @@ public class RoomService {
     private final GameService gameService;
     private final PersonaRepository personaRepository;
     private final AiNameService aiNameService;
+    private final GamePushService gamePushService;
 
-    public RoomService(RoomRepository roomRepository, GameService gameService, PersonaRepository personaRepository, AiNameService aiNameService) {
+    public RoomService(RoomRepository roomRepository,
+                       GameService gameService,
+                       PersonaRepository personaRepository,
+                       AiNameService aiNameService,
+                       GamePushService gamePushService) {
         this.roomRepository = roomRepository;
         this.gameService = gameService;
         this.personaRepository = personaRepository;
         this.aiNameService = aiNameService;
+        this.gamePushService = gamePushService;
     }
 
     public Room createRoom(String gameId, String name, boolean isPrivate, String password, String commMode, Map<String, Object> config, User creator) {
@@ -87,6 +95,7 @@ public class RoomService {
         RoomSeat seat = new RoomSeat(seatNumber, playerId, displayName, false, null, avatar, true, room.getSeats().isEmpty());
         room.getSeats().add(seat);
         roomRepository.save(room);
+        gamePushService.pushSeatChange(roomId, new SeatEvent("JOIN", seat));
         return new JoinRoomResult(room, seat);
     }
 
@@ -104,6 +113,7 @@ public class RoomService {
         RoomSeat seat = new RoomSeat(seatNumber, "ai-" + personaId + "-" + seatNumber, aiDisplayName, true, personaId, persona.getAvatar(), true, false);
         room.getSeats().add(seat);
         roomRepository.save(room);
+        gamePushService.pushSeatChange(roomId, new SeatEvent("AI_ADDED", seat));
         return room;
     }
 

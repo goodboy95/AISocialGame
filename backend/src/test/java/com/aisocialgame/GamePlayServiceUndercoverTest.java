@@ -99,7 +99,7 @@ class GamePlayServiceUndercoverTest {
         state.setCurrentSeat(null);
         state.getData().put("speakers", new ArrayList<>(aliveIds));
         state.getData().put("votes", new HashMap<String, String>());
-        state.setPhaseEndsAt(LocalDateTime.now().minusSeconds(1));
+        state.setPhaseEndsAt(LocalDateTime.now().plusSeconds(30));
         gameStateRepository.save(state);
 
         GameStateResponse voting = gamePlayService.state("undercover", room.getId(), host, host.getId());

@@ -10,10 +10,11 @@ public class GamePlayerView {
     private boolean alive;
     private String role;
     private String word;
+    private String connectionStatus;
 
     public GamePlayerView() {}
 
-    public GamePlayerView(String playerId, String displayName, int seatNumber, boolean ai, String personaId, String avatar, boolean alive, String role, String word) {
+    public GamePlayerView(String playerId, String displayName, int seatNumber, boolean ai, String personaId, String avatar, boolean alive, String role, String word, String connectionStatus) {
         this.playerId = playerId;
         this.displayName = displayName;
         this.seatNumber = seatNumber;
@@ -23,6 +24,7 @@ public class GamePlayerView {
         this.alive = alive;
         this.role = role;
         this.word = word;
+        this.connectionStatus = connectionStatus;
     }
 
     public String getPlayerId() { return playerId; }
@@ -34,6 +36,7 @@ public class GamePlayerView {
     public boolean isAlive() { return alive; }
     public String getRole() { return role; }
     public String getWord() { return word; }
+    public String getConnectionStatus() { return connectionStatus; }
 
     public void setPlayerId(String playerId) { this.playerId = playerId; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
@@ -44,4 +47,5 @@ public class GamePlayerView {
     public void setAlive(boolean alive) { this.alive = alive; }
     public void setRole(String role) { this.role = role; }
     public void setWord(String word) { this.word = word; }
+    public void setConnectionStatus(String connectionStatus) { this.connectionStatus = connectionStatus; }
 }

@@ -1,23 +1,17 @@
-# 未解决 / 备忘（2026-02-16）
+# 未解决 / 阻塞记录（2026-02-17）
 
-## 1. 前端构建依赖缺失
-- 现象：执行 `pnpm -C frontend build` 时报错 `vite is not recognized`。
-- 影响：无法在当前环境重新构建前端产物，导致页面级回归测试受阻。
-- 建议：先执行前端依赖安装（`pnpm install --frozen-lockfile`），再执行 `pnpm build` 与 Playwright 页面测试。
+## 1. 后端联调阻塞（数据库连接不可用）
+- 现象：执行 `mvn -f backend/pom.xml spring-boot:run -DskipTests` 时启动失败。
+- 错误：`Connection refused`（MySQL 连接失败），随后 Hibernate 无法确定方言，应用退出。
+- 影响：本地端口 `20030` 无法启动，导致前端 `/api` 与 `/ws` 联调失败。
+- 证据：`artifacts/test/20260217-231428/backend.out.log`
 
-## 2. Playwright 页面自测阻塞
-- 现象：
-  - `http://socialgame.seekerhut.com` -> `ERR_NAME_NOT_RESOLVED`
-  - `http://localhost` -> `ERR_CONNECTION_REFUSED`
-- 影响：当前会话无法访问可用的前端站点，无法完成 UI 路径验收。
-- 建议：确保目标域名可解析并有服务实例，或先在本机启动前端服务后再执行 Playwright。
+## 2. 前端仓库目录构建阻塞
+- 现象：执行 `npm --prefix frontend run build` 报错 `vite is not recognized`。
+- 影响：仓库目录无法直接构建前端产物。
+- 临时措施：使用 `frontend_tmp_run_20260217230120` 进行构建与页面自测。
 
-## 3. 本地“无依赖”后端启动限制
-- 现象：尝试用打包 JAR + H2 启动进行 API 自测时，运行时 classpath 不含 H2 驱动（H2 为 test scope）。
-- 影响：无法直接通过 JAR 在无 MySQL/Redis 环境完成端到端接口联调。
-- 建议：
-  1. 使用 `spring-boot:run` 并启用 test classpath，或
-  2. 提供可用 MySQL/Redis 环境后执行完整联调。
-
-## 4. Java 版本兼容提醒
-- 当前后端使用 JDK 25 运行但 `--release 21` 编译。若需完全 class 版本 69，需要升级 Spring/ASM 相关依赖链。
+## 3. Playwright 联调阶段的网络错误
+- 现象：房间页持续出现 `/api/personas`、`/api/games/...` 500。
+- 影响：WS 与后端动作路径无法闭环验证，当前只能验证前端渲染和交互降级行为。
+- 证据：`artifacts/test/20260217-231428/playwright-network.log`

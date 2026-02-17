@@ -1,0 +1,10 @@
+{
+  "startedAt": "2026-02-17T23:14:28",
+  "frontendPid": 31872,
+  "artifact": "D:\\project\\AIProjects\\aienie\\AISocialGame\\artifacts\\test\\20260217-231428",
+  "backendPid": 34904,
+  "backendListen20030": false,
+  "backendCheckedAt": "2026-02-17T23:15:08",
+  "frontendStoppedAt": "2026-02-17T23:32:38",
+  "note": "backend start failed due datasource connection; frontend self-test completed and process stopped"
+}

@@ -1,45 +1,133 @@
 # GamePlayController 接口说明
 
-基址：`/api/games/{gameId}/rooms/{roomId}`
+## 简介
+- 职责：管理狼人杀/谁是卧底的对局状态查询与动作提交。
+- 鉴权要求：支持 `X-Auth-Token`（登录用户）或 `X-Player-Id`（游客/重连玩家）。
+- 基础路径：`/api/games/{gameId}/rooms/{roomId}`
 
-## GET /state
-- **用途**：获取实时对局状态（卧底、狼人杀共用）。
-- **请求头**：`X-Auth-Token` 或 `X-Player-Id`（游客/断线重连时使用 selfPlayerId）。
-- **响应 200**：`GameStateResponse`
-  - 字段：`phase`（WAITING/DESCRIPTION/VOTING/NIGHT/DAY_DISCUSS/DAY_VOTE/SETTLEMENT）、`round`、`currentSeat`、`currentSpeakerName`、`phaseEndsAt`、`players[]`（包含座位、生存状态，自己或结算时才包含 `role/word`）、`logs[]`、`myPlayerId/mySeatNumber/myWord/myRole`、`votes`（已投票映射）、`pendingAction`（狼人夜晚待办）、`extra`（卧底词语/预言家查验结果等）。
+## 接口列表
 
-## POST /start
-- **用途**：房主开局，生成身份/词语并切换到首阶段。
-- **请求头**：同上。
-- **响应 200**：`GameStateResponse`
-- **错误**：403 非房主，400 人数不足。
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/state` | 查询当前对局状态 |
+| POST | `/start` | 房主开局 |
+| POST | `/speak` | 提交发言并推进流程 |
+| POST | `/vote` | 提交投票 |
+| POST | `/night-action` | 狼人杀夜晚行动 |
 
-## POST /speak
-- **用途**：当前发言玩家提交发言并切换到下一个座位/阶段。
-- **请求头**：同上。
-- **请求体**
-```json
-{ "content": "这轮我的描述..." }
-```
-- **响应 200**：最新 `GameStateResponse`
-- **错误**：400 非发言者/阶段错误。
+## 接口详情
 
-## POST /vote
-- **用途**：投票阶段提交投票（卧底/狼人杀共用）。
-- **请求头**：同上。
-- **请求体**
-```json
-{ "targetPlayerId": "xxx", "abstain": false }
-```
-- **响应 200**：最新 `GameStateResponse`
-- **错误**：400 阶段错误/目标无效/重复投票。
+### GET `/state` - 查询当前对局状态
 
-## POST /night-action （仅狼人杀）
-- **用途**：夜晚行动（狼人刀人、预言家查验、女巫解毒/下毒）。
-- **请求头**：同上。
-- **请求体**
-```json
-{ "action": "WOLF_KILL|SEER_CHECK|WITCH_SAVE|WITCH_POISON", "targetPlayerId": "xxx", "useHeal": true }
-```
-- **响应 200**：最新 `GameStateResponse`
-- **错误**：400 角色不符/目标无效。
+**用途**：返回阶段、回合、当前行动位、日志、玩家列表、个人私有信息、夜晚待办等。
+
+**请求参数**
+
+Path params：
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|---|---|---|---|---|
+| gameId | String | 是 | 游戏标识（`undercover`/`werewolf`） | `undercover` |
+| roomId | String | 是 | 房间 ID | `room-123` |
+
+Headers：
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|---|---|---|---|---|
+| X-Auth-Token | String | 否 | 登录态 token | `<token>` |
+| X-Player-Id | String | 否 | 游客或重连玩家 ID | `guest-abc` |
+
+**返回值（核心字段）**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| phase | String | 当前阶段（WAITING/DESCRIPTION/VOTING/NIGHT/DAY_DISCUSS/DAY_VOTE/SETTLEMENT） |
+| phaseEndsAt | String | 阶段结束时间 |
+| players[].connectionStatus | String | 连接状态（ONLINE/DISCONNECTED/AI_TAKEOVER） |
+| myRole/myWord | String | 当前玩家私有身份信息（仅本人或结算时可见） |
+| pendingAction | Object | 狼人杀夜晚待办 |
+
+**说明**
+- 查询时会同步连接状态并处理超时自动推进（含断线托管逻辑）。
+- 当状态在查询期间发生推进，服务端会同时推送 WS `state` 事件。
+
+### POST `/start` - 房主开局
+
+**用途**：初始化对局并进入首阶段。
+
+**请求参数**
+
+Headers：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| X-Auth-Token | String | 否 | 登录用户 token |
+| X-Player-Id | String | 否 | 游客玩家 ID |
+
+**返回值**
+- 200：`GameStateResponse`
+
+**错误码/常见错误**
+
+| 错误码 | 说明 |
+|---|---|
+| 401 | 未提供玩家身份 |
+| 403 | 非房主 |
+| 400 | 人数不足或状态非法 |
+
+**WS 联动**
+- 广播：`/topic/room/{roomId}/state`（`PHASE_CHANGE`）
+- 私有：`/user/queue/private`（`ROLE_ASSIGNED`，包含 role/word/seatNumber）
+
+### POST `/speak` - 提交发言
+
+**请求体**
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|---|---|---|---|---|
+| content | String | 是 | 发言内容 | `我描述的是一种食物` |
+
+**返回值**
+- 200：最新 `GameStateResponse`
+
+**说明**
+- 服务端会记录活跃状态并将玩家连接状态恢复为 ONLINE。
+- 成功后推送 `state` 事件类型 `SPEAK`。
+
+### POST `/vote` - 提交投票
+
+**请求体**
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|---|---|---|---|---|
+| targetPlayerId | String | 否 | 目标玩家 ID（弃票时可空） | `player-2` |
+| abstain | Boolean | 否 | 是否弃票 | `false` |
+
+**返回值**
+- 200：最新 `GameStateResponse`
+
+**说明**
+- 在超时场景下，断线玩家会被自动记为弃票并写入日志。
+- 成功后推送 `state` 事件类型 `VOTE`。
+
+### POST `/night-action` - 狼人杀夜晚行动
+
+**请求体**
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|---|---|---|---|---|
+| action | String | 是 | `WOLF_KILL/SEER_CHECK/WITCH_SAVE/WITCH_POISON` | `SEER_CHECK` |
+| targetPlayerId | String | 否 | 行动目标 | `player-3` |
+| useHeal | Boolean | 否 | 女巫是否使用解药 | `true` |
+
+**返回值**
+- 200：最新 `GameStateResponse`
+
+**错误码/常见错误**
+
+| 错误码 | 说明 |
+|---|---|
+| 400 | 阶段错误、角色不匹配、目标无效 |
+
+**WS 联动**
+- 成功后推送 `state` 事件类型 `PHASE_CHANGE`。

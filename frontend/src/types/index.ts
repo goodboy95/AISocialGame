@@ -229,6 +229,7 @@ export interface GamePlayerStateView {
   alive: boolean;
   role?: string;
   word?: string;
+  connectionStatus?: "ONLINE" | "DISCONNECTED" | "AI_TAKEOVER";
 }
 
 export interface PendingAction {
@@ -255,6 +256,35 @@ export interface GameState {
   extra?: Record<string, any>;
   votes?: Record<string, string>;
   pendingAction?: PendingAction | null;
+}
+
+export interface GameStateEvent {
+  type: string;
+  phase: string;
+  round: number;
+  currentSeat?: number;
+  payload?: Record<string, any>;
+}
+
+export interface PrivateEvent {
+  type: string;
+  payload?: Record<string, any>;
+}
+
+export interface SeatEvent {
+  type: string;
+  seat: RoomSeat;
+}
+
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  type: "TEXT" | "EMOJI" | "QUICK_PHRASE" | "SYSTEM";
+  content: string;
+  timestamp: number;
 }
 
 export interface CommunityPost {

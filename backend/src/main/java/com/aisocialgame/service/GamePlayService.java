@@ -7,6 +7,8 @@ import com.aisocialgame.dto.PendingAction;
 import com.aisocialgame.dto.SpeakRequest;
 import com.aisocialgame.dto.VoteRequest;
 import com.aisocialgame.dto.NightActionRequest;
+import com.aisocialgame.dto.ws.GameStateEvent;
+import com.aisocialgame.dto.ws.PrivateEvent;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.model.GameLogEntry;
 import com.aisocialgame.model.GamePlayerState;
@@ -18,6 +20,8 @@ import com.aisocialgame.model.UndercoverWordPair;
 import com.aisocialgame.model.User;
 import com.aisocialgame.repository.GameStateRepository;
 import com.aisocialgame.repository.UndercoverWordRepository;
+import com.aisocialgame.websocket.GamePushService;
+import com.aisocialgame.websocket.PlayerConnectionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +43,9 @@ public class GamePlayService {
     private static final String PHASE_DAY_DISCUSS = "DAY_DISCUSS";
     private static final String PHASE_DAY_VOTE = "DAY_VOTE";
     private static final String PHASE_SETTLEMENT = "SETTLEMENT";
+    private static final String STATUS_ONLINE = "ONLINE";
+    private static final String STATUS_DISCONNECTED = "DISCONNECTED";
+    private static final String STATUS_AI_TAKEOVER = "AI_TAKEOVER";
 
     private final RoomService roomService;
     private final GameStateRepository gameStateRepository;
@@ -46,19 +53,25 @@ public class GamePlayService {
     private final StatsService statsService;
     private final PromptProperties promptProperties;
     private final AiGameSpeechService aiGameSpeechService;
+    private final GamePushService gamePushService;
+    private final PlayerConnectionService playerConnectionService;
 
     public GamePlayService(RoomService roomService,
                            GameStateRepository gameStateRepository,
                            UndercoverWordRepository undercoverWordRepository,
                            StatsService statsService,
                            PromptProperties promptProperties,
-                           AiGameSpeechService aiGameSpeechService) {
+                           AiGameSpeechService aiGameSpeechService,
+                           GamePushService gamePushService,
+                           PlayerConnectionService playerConnectionService) {
         this.roomService = roomService;
         this.gameStateRepository = gameStateRepository;
         this.undercoverWordRepository = undercoverWordRepository;
         this.statsService = statsService;
         this.promptProperties = promptProperties;
         this.aiGameSpeechService = aiGameSpeechService;
+        this.gamePushService = gamePushService;
+        this.playerConnectionService = playerConnectionService;
     }
 
     @Transactional
@@ -72,8 +85,18 @@ public class GamePlayService {
 
         GameState state = optionalState.get();
         boolean changed = false;
+        if (StringUtils.hasText(viewerId)) {
+            playerConnectionService.markActive(viewerId, roomId);
+        }
+        changed = syncConnectionStatus(state, viewerId) || changed;
+        if ("undercover".equals(gameId) && PHASE_VOTING.equals(state.getPhase()) && state.getPhaseEndsAt() != null && LocalDateTime.now().isAfter(state.getPhaseEndsAt())) {
+            changed = resolveUndercoverVoting(state, room, true) || changed;
+        }
         if (gameId.equals("werewolf") && PHASE_NIGHT.equals(state.getPhase()) && state.getPhaseEndsAt() != null && LocalDateTime.now().isAfter(state.getPhaseEndsAt())) {
             changed = resolveNight(state, room, true);
+        }
+        if (gameId.equals("werewolf") && PHASE_DAY_DISCUSS.equals(state.getPhase())) {
+            changed = autoAdvanceWerewolfDay(state, room) || changed;
         }
         if (gameId.equals("werewolf") && PHASE_DAY_VOTE.equals(state.getPhase()) && state.getPhaseEndsAt() != null && LocalDateTime.now().isAfter(state.getPhaseEndsAt())) {
             changed = resolveWerewolfVoting(state, room, true) || changed;
@@ -83,6 +106,7 @@ public class GamePlayService {
         }
         if (changed) {
             state = gameStateRepository.save(state);
+            pushStateEvent(roomId, "STATE_SYNC", state);
         }
         return buildResponse(gameId, room, state, viewerId);
     }
@@ -99,11 +123,17 @@ public class GamePlayService {
 
         if (gameId.equals("undercover")) {
             GameState state = startUndercover(room);
-            return buildResponse(gameId, room, state, actorId);
+            GameStateResponse response = buildResponse(gameId, room, state, actorId);
+            pushStateEvent(roomId, "PHASE_CHANGE", state);
+            pushPrivateAssignments(state);
+            return response;
         }
         if (gameId.equals("werewolf")) {
             GameState state = startWerewolf(room);
-            return buildResponse(gameId, room, state, actorId);
+            GameStateResponse response = buildResponse(gameId, room, state, actorId);
+            pushStateEvent(roomId, "PHASE_CHANGE", state);
+            pushPrivateAssignments(state);
+            return response;
         }
         throw new ApiException(HttpStatus.BAD_REQUEST, "暂不支持的游戏");
     }
@@ -119,7 +149,10 @@ public class GamePlayService {
         } else {
             throw new ApiException(HttpStatus.BAD_REQUEST, "暂不支持的游戏");
         }
+        playerConnectionService.markActive(actorId, roomId);
+        markPlayerOnline(state, actorId);
         state = gameStateRepository.save(state);
+        pushStateEvent(roomId, "SPEAK", state);
         return buildResponse(gameId, room, state, actorId);
     }
 
@@ -134,7 +167,10 @@ public class GamePlayService {
         } else {
             throw new ApiException(HttpStatus.BAD_REQUEST, "暂不支持的游戏");
         }
+        playerConnectionService.markActive(actorId, roomId);
+        markPlayerOnline(state, actorId);
         state = gameStateRepository.save(state);
+        pushStateEvent(roomId, "VOTE", state);
         return buildResponse(gameId, room, state, actorId);
     }
 
@@ -160,7 +196,10 @@ public class GamePlayService {
         }
 
         setNightAction(state, room, actorId, request);
+        playerConnectionService.markActive(actorId, roomId);
+        markPlayerOnline(state, actorId);
         state = gameStateRepository.save(state);
+        pushStateEvent(roomId, "PHASE_CHANGE", state);
         return buildResponse(gameId, room, state, actorId);
     }
 
@@ -191,6 +230,9 @@ public class GamePlayService {
                 player.setWord(pair.getCivilian());
             }
             player.setAlive(true);
+            player.setConnectionStatus(STATUS_ONLINE);
+            player.setLastActiveAt(LocalDateTime.now());
+            player.setDisconnectedAt(null);
         }
 
         GameState state = new GameState(room.getId(), room.getGameId(), PHASE_DESCRIPTION);
@@ -199,6 +241,9 @@ public class GamePlayService {
             copy.setRole(p.getRole());
             copy.setWord(p.getWord());
             copy.setAlive(true);
+            copy.setConnectionStatus(p.getConnectionStatus());
+            copy.setLastActiveAt(p.getLastActiveAt());
+            copy.setDisconnectedAt(p.getDisconnectedAt());
             return copy;
         }).toList());
         state.setCurrentSeat(aliveSeats(state).stream().findFirst().orElse(null));
@@ -228,6 +273,9 @@ public class GamePlayService {
         for (int i = 0; i < players.size(); i++) {
             players.get(i).setRole(roles.get(i));
             players.get(i).setAlive(true);
+            players.get(i).setConnectionStatus(STATUS_ONLINE);
+            players.get(i).setLastActiveAt(LocalDateTime.now());
+            players.get(i).setDisconnectedAt(null);
         }
 
         GameState state = new GameState(room.getId(), room.getGameId(), PHASE_NIGHT);
@@ -512,8 +560,7 @@ public class GamePlayService {
     private boolean fastForwardToNight(GameState state, Room room) {
         boolean changed = false;
         if (PHASE_DAY_DISCUSS.equals(state.getPhase())) {
-            autoAdvanceWerewolfDay(state, room);
-            changed = true;
+            changed = autoAdvanceWerewolfDay(state, room) || changed;
         }
         if (PHASE_DAY_VOTE.equals(state.getPhase())) {
             Map<String, String> votes = voteMap(state);
@@ -536,18 +583,33 @@ public class GamePlayService {
 
         if (PHASE_DESCRIPTION.equals(state.getPhase())) {
             GamePlayerState speaker = currentSpeaker(state);
-            if (speaker != null && speaker.isAi() && !speakerList(state).contains(speaker.getPlayerId())) {
-                addLog(state, "speak", speaker.getDisplayName() + "（AI）：" + buildAiDescription(speaker.getWord()));
-                addSpeaker(state, speaker.getPlayerId());
-                moveUndercoverToNextSpeaker(state, room);
-                changed = true;
+            if (speaker != null && !speakerList(state).contains(speaker.getPlayerId())) {
+                if (speaker.isAi()) {
+                    addLog(state, "speak", speaker.getDisplayName() + "（AI）：" + buildAiDescription(speaker.getWord()));
+                    addSpeaker(state, speaker.getPlayerId());
+                    moveUndercoverToNextSpeaker(state, room);
+                    changed = true;
+                } else if (isPhaseTimeout(state.getPhaseEndsAt())) {
+                    if (isPlayerDisconnected(speaker)) {
+                        markAiTakeover(state, speaker);
+                        addLog(state, "speak", speaker.getDisplayName() + "（托管）：" + buildAiDescription(speaker.getWord()));
+                    } else {
+                        addLog(state, "system", speaker.getDisplayName() + " 发言超时，自动跳过");
+                    }
+                    addSpeaker(state, speaker.getPlayerId());
+                    moveUndercoverToNextSpeaker(state, room);
+                    changed = true;
+                }
             }
         }
 
         if (PHASE_VOTING.equals(state.getPhase())) {
+            changed = fillDisconnectedVotes(state, false) || changed;
             boolean aiVoted = fillAiVotes(state);
             if (allAliveVoted(state)) {
                 changed = resolveUndercoverVoting(state, room, false) || changed || aiVoted;
+            } else if (isPhaseTimeout(state.getPhaseEndsAt())) {
+                changed = resolveUndercoverVoting(state, room, true) || changed || aiVoted;
             } else {
                 changed = aiVoted || changed;
             }
@@ -556,24 +618,46 @@ public class GamePlayService {
         return changed;
     }
 
-    private void autoAdvanceWerewolfDay(GameState state, Room room) {
+    private boolean autoAdvanceWerewolfDay(GameState state, Room room) {
         boolean changed = true;
+        boolean anyChange = false;
         while (changed) {
             changed = false;
             if (PHASE_DAY_DISCUSS.equals(state.getPhase())) {
                 GamePlayerState speaker = currentSpeaker(state);
-                if (speaker != null && speaker.isAi()) {
-                    addLog(state, "speak", speaker.getDisplayName() + "（AI）：" + buildAiSuspicion(speaker.getSeatNumber()));
-                    addSpeaker(state, speaker.getPlayerId());
-                    moveWerewolfToNextSpeaker(state, room);
-                    changed = true;
+                if (speaker != null && !speakerList(state).contains(speaker.getPlayerId())) {
+                    if (speaker.isAi()) {
+                        addLog(state, "speak", speaker.getDisplayName() + "（AI）：" + buildAiSuspicion(speaker.getSeatNumber()));
+                        addSpeaker(state, speaker.getPlayerId());
+                        moveWerewolfToNextSpeaker(state, room);
+                        changed = true;
+                    } else if (isPhaseTimeout(state.getPhaseEndsAt())) {
+                        if (isPlayerDisconnected(speaker)) {
+                            markAiTakeover(state, speaker);
+                            addLog(state, "speak", speaker.getDisplayName() + "（托管）：" + buildAiSuspicion(speaker.getSeatNumber()));
+                        } else {
+                            addLog(state, "system", speaker.getDisplayName() + " 发言超时，自动跳过");
+                        }
+                        addSpeaker(state, speaker.getPlayerId());
+                        moveWerewolfToNextSpeaker(state, room);
+                        changed = true;
+                    }
                 }
             }
             if (PHASE_DAY_VOTE.equals(state.getPhase())) {
+                changed = fillDisconnectedVotes(state, true) || changed;
                 boolean aiVoted = fillAiVotes(state);
-                changed = resolveWerewolfVoting(state, room, false) || changed || aiVoted;
+                if (allAliveVoted(state)) {
+                    changed = resolveWerewolfVoting(state, room, false) || changed || aiVoted;
+                } else if (isPhaseTimeout(state.getPhaseEndsAt())) {
+                    changed = resolveWerewolfVoting(state, room, true) || changed || aiVoted;
+                } else {
+                    changed = aiVoted || changed;
+                }
             }
+            anyChange = anyChange || changed;
         }
+        return anyChange;
     }
 
     private void moveUndercoverToNextSpeaker(GameState state, Room room) {
@@ -646,6 +730,41 @@ public class GamePlayService {
             return new ArrayList<>(list.stream().map(Object::toString).toList());
         }
         return new ArrayList<>();
+    }
+
+    private boolean fillDisconnectedVotes(GameState state, boolean werewolfMode) {
+        Map<String, String> votes = voteMap(state);
+        boolean changed = false;
+        for (GamePlayerState player : state.getPlayers()) {
+            if (!player.isAlive() || player.isAi() || votes.containsKey(player.getPlayerId())) {
+                continue;
+            }
+            if (!isPlayerDisconnected(player)) {
+                continue;
+            }
+            votes.put(player.getPlayerId(), "abstain");
+            String modePrefix = werewolfMode ? "放逐投票" : "卧底投票";
+            addLog(state, "vote", player.getDisplayName() + " 离线，" + modePrefix + "自动弃票");
+            changed = true;
+        }
+        if (changed) {
+            state.getData().put("votes", votes);
+        }
+        return changed;
+    }
+
+    private void markAiTakeover(GameState state, GamePlayerState player) {
+        player.setConnectionStatus(STATUS_AI_TAKEOVER);
+        player.setDisconnectedAt(LocalDateTime.now());
+        addLog(state, "system", player.getDisplayName() + " 暂时离线，AI 接管操作");
+    }
+
+    private boolean isPlayerDisconnected(GamePlayerState player) {
+        return STATUS_DISCONNECTED.equals(player.getConnectionStatus()) || STATUS_AI_TAKEOVER.equals(player.getConnectionStatus());
+    }
+
+    private boolean isPhaseTimeout(LocalDateTime phaseEndsAt) {
+        return phaseEndsAt != null && LocalDateTime.now().isAfter(phaseEndsAt);
     }
 
     private boolean fillAiVotes(GameState state) {
@@ -786,6 +905,7 @@ public class GamePlayService {
             state.getData().put("statsRecorded", true);
         }
         roomService.updateStatus(room.getId(), RoomStatus.WAITING);
+        pushStateEvent(room.getId(), "SETTLEMENT", state);
     }
 
     private Set<String> determineUndercoverWinners(GameState state) {
@@ -829,6 +949,83 @@ public class GamePlayService {
             return true;
         }
         return werewolfWinCondition(state);
+    }
+
+    private boolean syncConnectionStatus(GameState state, String viewerId) {
+        boolean changed = false;
+        for (GamePlayerState player : state.getPlayers()) {
+            if (player.isAi()) {
+                if (!STATUS_ONLINE.equals(player.getConnectionStatus())) {
+                    player.setConnectionStatus(STATUS_ONLINE);
+                    changed = true;
+                }
+                continue;
+            }
+            boolean online = playerConnectionService.isOnline(player.getPlayerId());
+            if (online) {
+                if (STATUS_AI_TAKEOVER.equals(player.getConnectionStatus()) && player.getPlayerId().equals(viewerId)) {
+                    player.setConnectionStatus(STATUS_ONLINE);
+                    player.setLastActiveAt(LocalDateTime.now());
+                    player.setDisconnectedAt(null);
+                    addLog(state, "system", player.getDisplayName() + " 已回归");
+                    changed = true;
+                } else if (!STATUS_ONLINE.equals(player.getConnectionStatus())) {
+                    player.setConnectionStatus(STATUS_ONLINE);
+                    player.setLastActiveAt(LocalDateTime.now());
+                    player.setDisconnectedAt(null);
+                    changed = true;
+                }
+                continue;
+            }
+            if (!StringUtils.hasText(player.getConnectionStatus())) {
+                player.setConnectionStatus(STATUS_ONLINE);
+                player.setLastActiveAt(LocalDateTime.now());
+                changed = true;
+                continue;
+            }
+            if (player.getLastActiveAt() != null && Duration.between(player.getLastActiveAt(), LocalDateTime.now()).toSeconds() < 20) {
+                continue;
+            }
+            if (!STATUS_AI_TAKEOVER.equals(player.getConnectionStatus()) && !STATUS_DISCONNECTED.equals(player.getConnectionStatus())) {
+                player.setConnectionStatus(STATUS_DISCONNECTED);
+                player.setDisconnectedAt(LocalDateTime.now());
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private void pushStateEvent(String roomId, String type, GameState state) {
+        if (state == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("updatedAt", state.getUpdatedAt() != null ? state.getUpdatedAt().toString() : null);
+        payload.put("logs", state.getLogs() != null ? state.getLogs().size() : 0);
+        gamePushService.pushStateChange(roomId, new GameStateEvent(type, state.getPhase(), state.getRoundNumber(), state.getCurrentSeat(), payload));
+    }
+
+    private void pushPrivateAssignments(GameState state) {
+        for (GamePlayerState player : state.getPlayers()) {
+            if (!StringUtils.hasText(player.getPlayerId())) {
+                continue;
+            }
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("role", player.getRole());
+            payload.put("word", player.getWord());
+            payload.put("seatNumber", player.getSeatNumber());
+            gamePushService.pushPrivate(player.getPlayerId(), new PrivateEvent("ROLE_ASSIGNED", payload));
+        }
+    }
+
+    private void markPlayerOnline(GameState state, String playerId) {
+        GamePlayerState player = playerById(state, playerId);
+        if (player == null) {
+            return;
+        }
+        player.setConnectionStatus(STATUS_ONLINE);
+        player.setLastActiveAt(LocalDateTime.now());
+        player.setDisconnectedAt(null);
     }
 
     private void ensurePhase(GameState state, String phase) {
@@ -986,7 +1183,7 @@ public class GamePlayService {
 
     private GameStateResponse buildWaitingResponse(Room room, String viewerId) {
         List<GamePlayerView> players = room.getSeats().stream()
-                .map(seat -> new GamePlayerView(seat.getPlayerId(), seat.getDisplayName(), seat.getSeatNumber(), seat.isAi(), seat.getPersonaId(), seat.getAvatar(), true, null, null))
+                .map(seat -> new GamePlayerView(seat.getPlayerId(), seat.getDisplayName(), seat.getSeatNumber(), seat.isAi(), seat.getPersonaId(), seat.getAvatar(), true, null, null, STATUS_ONLINE))
                 .toList();
         return new GameStateResponse(room.getId(), room.getGameId(), PHASE_WAITING, 0, null, null, null, viewerId, null, null, null, null, players, List.of(), Map.of("roomStatus", room.getStatus().name()), Map.of(), null);
     }
@@ -997,7 +1194,7 @@ public class GamePlayService {
                     boolean reveal = PHASE_SETTLEMENT.equals(state.getPhase());
                     String role = reveal ? p.getRole() : (viewerId != null && viewerId.equals(p.getPlayerId()) ? p.getRole() : null);
                     String word = reveal ? p.getWord() : (viewerId != null && viewerId.equals(p.getPlayerId()) ? p.getWord() : null);
-                    return new GamePlayerView(p.getPlayerId(), p.getDisplayName(), p.getSeatNumber(), p.isAi(), p.getPersonaId(), p.getAvatar(), p.isAlive(), role, word);
+                    return new GamePlayerView(p.getPlayerId(), p.getDisplayName(), p.getSeatNumber(), p.isAi(), p.getPersonaId(), p.getAvatar(), p.isAlive(), role, word, p.getConnectionStatus());
                 }).toList();
 
         GamePlayerState me = viewerId == null ? null : playerById(state, viewerId);

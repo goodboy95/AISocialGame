@@ -34,11 +34,16 @@ app:
   ai:
     default-model: ${APP_AI_DEFAULT_MODEL:}
     system-user-id: ${APP_AI_SYSTEM_USER_ID:0}
+  websocket:
+    enabled: ${APP_WEBSOCKET_ENABLED:true}
   admin:
     username: ${APP_ADMIN_USERNAME:admin}
     password: ${APP_ADMIN_PASSWORD:admin123}
     display-name: ${APP_ADMIN_DISPLAY_NAME:系统管理员}
     token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
+
+connection:
+  disconnect-threshold-seconds: ${APP_CONNECTION_DISCONNECT_THRESHOLD_SECONDS:15}
 
 grpc:
   client:
