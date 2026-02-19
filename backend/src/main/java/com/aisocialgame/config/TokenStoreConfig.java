@@ -22,7 +22,19 @@ public class TokenStoreConfig {
 
     @Bean
     @Profile("!test")
-    public TokenStore redisTokenStore(StringRedisTemplate redisTemplate, @Value("${app.auth.token-ttl-hours:168}") long hours) {
-        return new RedisTokenStore(redisTemplate, Duration.ofHours(hours));
+    public TokenStore redisTokenStore(StringRedisTemplate redisTemplate,
+                                      @Value("${app.auth.token-ttl-hours:168}") long hours,
+                                      @Value("${app.redis.token-key-prefix:}") String keyPrefix,
+                                      @Value("${app.project-key:aisocialgame}") String projectKey) {
+        String resolvedKeyPrefix = resolveKeyPrefix(keyPrefix, projectKey);
+        return new RedisTokenStore(redisTemplate, Duration.ofHours(hours), resolvedKeyPrefix);
+    }
+
+    private String resolveKeyPrefix(String configuredPrefix, String projectKey) {
+        String value = configuredPrefix;
+        if (value == null || value.isBlank()) {
+            value = projectKey + ":auth:token:";
+        }
+        return value.endsWith(":") ? value : value + ":";
     }
 }

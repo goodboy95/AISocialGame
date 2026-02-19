@@ -68,6 +68,8 @@ export interface Room {
   isPrivate: boolean;
   commMode?: string;
   config?: Record<string, any>;
+  spectateAllowed?: boolean;
+  spectatorCount?: number;
   seats: RoomSeat[];
   selfPlayerId?: string;
 }
@@ -308,4 +310,56 @@ export interface PlayerStats {
   gamesPlayed: number;
   wins: number;
   score: number;
+}
+
+export interface FriendItem {
+  id: string;
+  displayName: string;
+  avatar?: string;
+  online: boolean;
+  currentGameId?: string;
+  currentRoomId?: string;
+}
+
+export interface FriendRequestItem {
+  id: string;
+  fromId: string;
+  fromName: string;
+  fromAvatar?: string;
+  createdAt: string;
+}
+
+export interface AchievementDefinition {
+  code: string;
+  name: string;
+  description: string;
+  rarity: "COMMON" | "RARE" | "EPIC";
+  rewardCoins: number;
+  gameId?: string;
+  target: number;
+}
+
+export interface PlayerAchievement {
+  code: string;
+  unlocked: boolean;
+  progress: number;
+  unlockedAt?: string;
+}
+
+export interface ReplayEvent {
+  id: string;
+  timestamp: string;
+  type: string;
+  message: string;
+}
+
+export interface ReplayArchive {
+  id: string;
+  gameId: string;
+  roomId: string;
+  roomName: string;
+  result: string;
+  perspective: "GOD" | "PLAYER";
+  createdAt: string;
+  events: ReplayEvent[];
 }

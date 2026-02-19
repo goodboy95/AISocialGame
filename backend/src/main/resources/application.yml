@@ -4,9 +4,9 @@ spring:
   application:
     name: ${SPRING_APPLICATION_NAME:ai-social-game}
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC}
-    username: ${SPRING_DATASOURCE_USERNAME:aisocial}
-    password: ${SPRING_DATASOURCE_PASSWORD:aisocial_pass}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3308}/${MYSQL_DB:aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:aisocialgame}
+    password: ${SPRING_DATASOURCE_PASSWORD:aisocialgame_pwd}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -16,8 +16,8 @@ spring:
         format_sql: false
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6381}
 
 server:
   port: ${SERVER_PORT:20030}
@@ -25,12 +25,14 @@ server:
 app:
   project-key: ${APP_PROJECT_KEY:aisocialgame}
   consul:
-    address: ${CONSUL_HTTP_ADDR:http://127.0.0.1:8500}
+    address: ${CONSUL_HTTP_ADDR:http://127.0.0.1:8502}
   sso:
     user-service-name: ${SSO_USER_SERVICE_NAME:aienie-userservice-http}
     callback-url: ${SSO_CALLBACK_URL:http://localhost:10030/sso/callback}
   auth:
     token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}
+  redis:
+    token-key-prefix: ${APP_REDIS_TOKEN_KEY_PREFIX:aisocialgame:auth:token:}
   ai:
     default-model: ${APP_AI_DEFAULT_MODEL:}
     system-user-id: ${APP_AI_SYSTEM_USER_ID:0}
@@ -41,6 +43,11 @@ app:
     password: ${APP_ADMIN_PASSWORD:admin123}
     display-name: ${APP_ADMIN_DISPLAY_NAME:系统管理员}
     token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
+
+qdrant:
+  host: ${QDRANT_HOST:http://127.0.0.1}
+  http-port: ${QDRANT_PORT:6335}
+  enabled: ${QDRANT_ENABLED:true}
 
 connection:
   disconnect-threshold-seconds: ${APP_CONNECTION_DISCONNECT_THRESHOLD_SECONDS:15}

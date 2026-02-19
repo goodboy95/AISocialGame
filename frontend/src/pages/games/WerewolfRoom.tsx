@@ -18,12 +18,15 @@ import { CountdownTimer } from "@/components/game/CountdownTimer";
 import { PhaseTransition } from "@/components/game/PhaseTransition";
 import { Bot, CheckSquare, Moon, Play, Sun, WifiOff } from "lucide-react";
 import { toast } from "sonner";
+import { SettlementPanel } from "@/components/game/SettlementPanel";
+import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
+import { achievementApi, replayApi } from "@/services/v2Social";
 
 const playerKey = (roomId?: string) => (roomId ? `room_player_${roomId}` : "room_player");
 
 const WerewolfRoom = () => {
   const { roomId, gameId } = useParams();
-  const { displayName, token } = useAuth();
+  const { user, displayName, token, loading } = useAuth();
   const queryClient = useQueryClient();
   const [playerId, setPlayerId] = useState<string | null>(() => (roomId ? localStorage.getItem(playerKey(roomId)) : null));
   const [speakContent, setSpeakContent] = useState("");
@@ -33,6 +36,8 @@ const WerewolfRoom = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showTransition, setShowTransition] = useState(false);
   const prevPhaseRef = useRef<string | undefined>();
+  const settlementSnapshotRef = useRef<string | null>(null);
+  const userKey = user?.id || `guest:${displayName}`;
 
   useEffect(() => {
     if (!roomId) {
@@ -102,10 +107,17 @@ const WerewolfRoom = () => {
   });
 
   useEffect(() => {
-    if (room && !joinMutation.isSuccess && !joinMutation.isPending) {
-      joinMutation.mutate();
+    if (!room || loading || joinMutation.isSuccess || joinMutation.isPending) {
+      return;
     }
-  }, [room]);
+    if (playerId && !stateQuery.data) {
+      return;
+    }
+    if (playerId && stateQuery.data?.myPlayerId) {
+      return;
+    }
+    joinMutation.mutate();
+  }, [room, loading, token, playerId, stateQuery.data]);
 
   const startMutation = useMutation({
     mutationFn: () => gameplayApi.start(gameId || "werewolf", roomId || "", playerId || undefined),
@@ -153,10 +165,36 @@ const WerewolfRoom = () => {
   const pending = state?.pendingAction;
   const canSpeak = phase === "DAY_DISCUSS" && state?.mySeatNumber === state?.currentSeat;
 
+  useEffect(() => {
+    if (!roomId || !state || phase !== "SETTLEMENT") {
+      return;
+    }
+    const settlementId = `${roomId}-${state.round}-${state.logs?.length || 0}`;
+    if (settlementSnapshotRef.current === settlementId) {
+      return;
+    }
+    settlementSnapshotRef.current = settlementId;
+
+    const me = state.players.find((p) => p.playerId === state.myPlayerId);
+    const didWin = !!state.winner && !!me?.alive;
+    const unlocked = achievementApi.applySettlement(userKey, didWin);
+    unlocked.forEach((item) => {
+      const def = achievementApi.listDefinitions().find((d) => d.code === item.code);
+      toast.success(`成就解锁：${def?.name || item.code}`);
+    });
+
+    const archive = replayApi.fromState(gameId || "werewolf", room, state);
+    replayApi.save(userKey, archive);
+  }, [phase, state?.roomId, state?.round, state?.logs?.length, userKey, roomId, gameId, room?.name]);
+
   return (
     <>
       <ConnectionStatusBar connected={socket.connected} showReconnectAction={socket.showReconnectAction} onReconnect={socket.reconnect} />
       <PhaseTransition gameId={gameId} phase={phase} visible={showTransition} />
+      <TutorialOverlay
+        id={`room-${gameId || "werewolf"}`}
+        steps={["你当前处于狼人杀房间，顶部显示阶段与倒计时。", "白天讨论后进入投票，点击头像可快速选择并确认目标。", "结算后可直接添加好友并在回放中心复盘。"]}
+      />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -180,7 +218,20 @@ const WerewolfRoom = () => {
             <Card className="p-4">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {players.map((p) => (
-                  <div key={p.playerId} className={`flex items-center gap-3 rounded-lg border p-2 ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"}`}>
+                  <div
+                    key={p.playerId}
+                    className={`flex items-center gap-3 rounded-lg border p-2 transition ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"} ${
+                      selectedVote === p.playerId ? "ring-2 ring-amber-400" : ""
+                    } ${phase === "DAY_VOTE" && p.playerId !== state?.myPlayerId ? "cursor-pointer hover:bg-amber-50" : ""}`}
+                    onClick={() => {
+                      if (phase !== "DAY_VOTE" || p.playerId === state?.myPlayerId || !p.alive) return;
+                      if (selectedVote === p.playerId && !voteMutation.isPending) {
+                        voteMutation.mutate();
+                        return;
+                      }
+                      setSelectedVote(p.playerId);
+                    }}
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={p.avatar} />
                       <AvatarFallback>{p.displayName[0]}</AvatarFallback>
@@ -281,26 +332,13 @@ const WerewolfRoom = () => {
                   )}
                   {phase === "DAY_VOTE" && (
                     <div className="space-y-2">
-                      <Select value={selectedVote || undefined} onValueChange={setSelectedVote}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="选择投票对象" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {alivePlayers
-                            .filter((p) => p.playerId !== state?.myPlayerId)
-                            .map((p) => (
-                              <SelectItem key={p.playerId} value={p.playerId}>
-                                {p.displayName}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="text-xs text-muted-foreground">点击玩家头像投票，重复点击同一目标可直接确认。</div>
                       <Button className="w-full" disabled={!selectedVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
                         <CheckSquare className="mr-2 h-4 w-4" /> 投票
                       </Button>
                     </div>
                   )}
-                  {phase === "SETTLEMENT" && <div className="text-sm text-muted-foreground">对局结束，获胜方：{state?.winner || "未判定"}。</div>}
+                  {phase === "SETTLEMENT" && state && <SettlementPanel gameId={gameId} state={state} userKey={userKey} />}
                 </Card>
 
                 <Card className="space-y-3 p-3">

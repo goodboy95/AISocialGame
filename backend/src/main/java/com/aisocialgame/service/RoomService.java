@@ -44,7 +44,7 @@ public class RoomService {
 
     public Room createRoom(String gameId, String name, boolean isPrivate, String password, String commMode, Map<String, Object> config, User creator) {
         Game game = gameService.findById(gameId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "游戏不存在"));
-        int maxPlayers = resolveMaxPlayers(config, game.getMaxPlayers());
+        int maxPlayers = normalizeMaxPlayers(gameId, resolveMaxPlayers(config, game.getMaxPlayers()), game.getMaxPlayers());
 
         Room room = new Room(UUID.randomUUID().toString(), gameId, name, RoomStatus.WAITING, maxPlayers, isPrivate, password, commMode, config != null ? config : new HashMap<>());
 
@@ -135,5 +135,24 @@ public class RoomService {
             } catch (NumberFormatException ignored) {}
         }
         return fallback;
+    }
+
+    private int normalizeMaxPlayers(String gameId, int requested, int gameMaxPlayers) {
+        int minRequired = minimumPlayersForGame(gameId);
+        int normalized = Math.max(requested, minRequired);
+        if (gameMaxPlayers > 0) {
+            normalized = Math.min(normalized, gameMaxPlayers);
+        }
+        return normalized;
+    }
+
+    private int minimumPlayersForGame(String gameId) {
+        if ("undercover".equals(gameId)) {
+            return 4;
+        }
+        if ("werewolf".equals(gameId)) {
+            return 6;
+        }
+        return 2;
     }
 }

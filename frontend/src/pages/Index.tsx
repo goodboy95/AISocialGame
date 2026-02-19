@@ -6,6 +6,9 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { gameApi } from "@/services/api";
 import { Game } from "@/types";
+import { quickMatchApi } from "@/services/v2Social";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 // Helper to render dynamic icons based on string name
 const IconMap: Record<string, any> = {
@@ -16,10 +19,26 @@ const IconMap: Record<string, any> = {
 
 const Index = () => {
   const navigate = useNavigate();
+  const { displayName } = useAuth();
   const { data: games = [], isLoading } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: gameApi.list,
   });
+
+  const quickStart = async (gameId: string) => {
+    try {
+      const cacheKey = `quick_match_player_${gameId}`;
+      const savedPlayerId = localStorage.getItem(cacheKey);
+      const result = await quickMatchApi.start(gameId, displayName, savedPlayerId);
+      if (result.playerId) {
+        localStorage.setItem(cacheKey, result.playerId);
+        localStorage.setItem(`room_player_${result.roomId}`, result.playerId);
+      }
+      navigate(`/room/${gameId}/${result.roomId}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "快速匹配失败，请稍后重试");
+    }
+  };
 
   return (
     <div className="space-y-12 pb-12">
@@ -33,8 +52,8 @@ const Index = () => {
             新一代社交推理平台。好友缺人？智能陪玩一秒补位，告别等待，即刻开局。
           </p>
           <div className="pt-4 flex justify-center">
-            <Button size="lg" variant="outline" className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm px-8">
-              了解更多玩法
+            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 shadow-sm px-8" onClick={() => quickStart("werewolf")}>
+              快速开始
             </Button>
           </div>
         </div>
@@ -91,13 +110,18 @@ const Index = () => {
                   </CardContent>
                   <CardFooter className="p-6 pt-0">
                     {isActive ? (
-                      <Button 
-                        className="w-full gap-2 bg-slate-50 text-slate-700 border border-slate-200 hover:bg-white hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all" 
-                        variant="outline"
-                        onClick={() => navigate(`/game/${game.id}`)}
-                      >
-                        进入大厅 <ArrowRight className="h-4 w-4" />
-                      </Button>
+                      <div className="flex w-full gap-2">
+                        <Button className="flex-1" onClick={() => quickStart(game.id)}>
+                          一键开局
+                        </Button>
+                        <Button
+                          className="flex-1 gap-2 bg-slate-50 text-slate-700 border border-slate-200 hover:bg-white hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all"
+                          variant="outline"
+                          onClick={() => navigate(`/game/${game.id}`)}
+                        >
+                          进入大厅 <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                     ) : (
                       <Button disabled className="w-full bg-slate-50 text-slate-400 border-slate-100">
                         敬请期待

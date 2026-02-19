@@ -5,13 +5,15 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
 
 public class RedisTokenStore implements TokenStore {
-    private static final String KEY_PREFIX = "auth:token:";
+    private static final String DEFAULT_KEY_PREFIX = "auth:token:";
     private final StringRedisTemplate redisTemplate;
     private final Duration ttl;
+    private final String keyPrefix;
 
-    public RedisTokenStore(StringRedisTemplate redisTemplate, Duration ttl) {
+    public RedisTokenStore(StringRedisTemplate redisTemplate, Duration ttl, String keyPrefix) {
         this.redisTemplate = redisTemplate;
         this.ttl = ttl;
+        this.keyPrefix = keyPrefix == null || keyPrefix.isBlank() ? DEFAULT_KEY_PREFIX : keyPrefix;
     }
 
     @Override
@@ -36,6 +38,6 @@ public class RedisTokenStore implements TokenStore {
     }
 
     private String buildKey(String token) {
-        return KEY_PREFIX + token;
+        return keyPrefix + token;
     }
 }

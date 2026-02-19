@@ -4,3 +4,5 @@ dist/
 .vscode/
 .idea/
 backend/target/
+/artifacts
+/screenshot

@@ -184,12 +184,19 @@ export const roomApi = {
     return res.data;
   },
   async join(gameId: string, roomId: string, displayName: string, playerId?: string): Promise<Room> {
-    const res = await api.post(
-      `/games/${gameId}/rooms/${roomId}/join`,
-      { displayName },
-      { headers: playerId ? { "X-Player-Id": playerId } : undefined }
-    );
-    return res.data;
+    const headers = playerId ? { "X-Player-Id": playerId } : undefined;
+    try {
+      const res = await api.post(`/games/${gameId}/rooms/${roomId}/join`, { displayName }, { headers });
+      return res.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        const retryHeaders = { ...(headers || {}), "X-Auth-Token": "" };
+        const retryRes = await api.post(`/games/${gameId}/rooms/${roomId}/join`, { displayName }, { headers: retryHeaders });
+        return retryRes.data;
+      }
+      throw error;
+    }
   },
   async addAi(gameId: string, roomId: string, personaId: string): Promise<Room> {
     const res = await api.post(`/games/${gameId}/rooms/${roomId}/ai`, { personaId });

@@ -18,13 +18,16 @@ import { CountdownTimer } from "@/components/game/CountdownTimer";
 import { PhaseTransition } from "@/components/game/PhaseTransition";
 import { Bot, CheckSquare, Play, Send, WifiOff } from "lucide-react";
 import { toast } from "sonner";
+import { SettlementPanel } from "@/components/game/SettlementPanel";
+import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
+import { achievementApi, replayApi } from "@/services/v2Social";
 
 const playerKey = (roomId?: string) => (roomId ? `room_player_${roomId}` : "room_player");
 
 const UndercoverRoom = () => {
   const { roomId, gameId } = useParams();
   const queryClient = useQueryClient();
-  const { displayName, token } = useAuth();
+  const { user, displayName, token, loading } = useAuth();
   const [playerId, setPlayerId] = useState<string | null>(() => (roomId ? localStorage.getItem(playerKey(roomId)) : null));
   const [speakContent, setSpeakContent] = useState("");
   const [selectedVote, setSelectedVote] = useState<string | null>(null);
@@ -32,6 +35,8 @@ const UndercoverRoom = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showTransition, setShowTransition] = useState(false);
   const prevPhaseRef = useRef<string | undefined>();
+  const settlementSnapshotRef = useRef<string | null>(null);
+  const userKey = user?.id || `guest:${displayName}`;
 
   useEffect(() => {
     if (!roomId) {
@@ -115,10 +120,17 @@ const UndercoverRoom = () => {
   });
 
   useEffect(() => {
-    if (room && !joinMutation.isSuccess && !joinMutation.isPending) {
-      joinMutation.mutate();
+    if (!room || loading || joinMutation.isSuccess || joinMutation.isPending) {
+      return;
     }
-  }, [room]);
+    if (playerId && !stateQuery.data) {
+      return;
+    }
+    if (playerId && stateQuery.data?.myPlayerId) {
+      return;
+    }
+    joinMutation.mutate();
+  }, [room, loading, token, playerId, stateQuery.data]);
 
   const startMutation = useMutation({
     mutationFn: () => gameplayApi.start(gameId || "undercover", roomId || "", playerId || undefined),
@@ -159,10 +171,36 @@ const UndercoverRoom = () => {
   const canSpeak = phase === "DESCRIPTION" && stateQuery.data?.mySeatNumber === stateQuery.data?.currentSeat;
   const canVote = phase === "VOTING" && !!selectedVote;
 
+  useEffect(() => {
+    if (!roomId || !stateQuery.data || phase !== "SETTLEMENT") {
+      return;
+    }
+    const settlementId = `${roomId}-${stateQuery.data.round}-${stateQuery.data.logs?.length || 0}`;
+    if (settlementSnapshotRef.current === settlementId) {
+      return;
+    }
+    settlementSnapshotRef.current = settlementId;
+
+    const me = stateQuery.data.players.find((p) => p.playerId === stateQuery.data?.myPlayerId);
+    const didWin = !!stateQuery.data.winner && !!me?.alive;
+    const unlocked = achievementApi.applySettlement(userKey, didWin);
+    unlocked.forEach((item) => {
+      const def = achievementApi.listDefinitions().find((d) => d.code === item.code);
+      toast.success(`成就解锁：${def?.name || item.code}`);
+    });
+
+    const archive = replayApi.fromState(gameId || "undercover", room, stateQuery.data);
+    replayApi.save(userKey, archive);
+  }, [phase, stateQuery.data?.roomId, stateQuery.data?.round, stateQuery.data?.logs?.length, userKey, roomId, gameId, room?.name]);
+
   return (
     <>
       <ConnectionStatusBar connected={socket.connected} showReconnectAction={socket.showReconnectAction} onReconnect={socket.reconnect} />
       <PhaseTransition gameId={gameId} phase={phase} visible={showTransition} />
+      <TutorialOverlay
+        id={`room-${gameId || "undercover"}`}
+        steps={["这是房间主视图，左侧展示玩家与阶段。", "轮到你时可提交发言，投票阶段点击头像完成投票。", "结算后可添加好友并在回放中心复盘。"]}
+      />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -185,7 +223,20 @@ const UndercoverRoom = () => {
             <Card className="p-4">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {players.map((p) => (
-                  <div key={p.playerId} className={`flex items-center gap-3 rounded-lg border p-2 ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"}`}>
+                  <div
+                    key={p.playerId}
+                    className={`flex items-center gap-3 rounded-lg border p-2 transition ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"} ${
+                      selectedVote === p.playerId ? "ring-2 ring-amber-400" : ""
+                    } ${phase === "VOTING" && p.playerId !== stateQuery.data?.myPlayerId ? "cursor-pointer hover:bg-amber-50" : ""}`}
+                    onClick={() => {
+                      if (phase !== "VOTING" || p.playerId === stateQuery.data?.myPlayerId || !p.alive) return;
+                      if (selectedVote === p.playerId && !voteMutation.isPending) {
+                        voteMutation.mutate();
+                        return;
+                      }
+                      setSelectedVote(p.playerId);
+                    }}
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={p.avatar} />
                       <AvatarFallback>{p.displayName[0]}</AvatarFallback>
@@ -232,26 +283,13 @@ const UndercoverRoom = () => {
                   )}
                   {phase === "VOTING" && (
                     <div className="space-y-2">
-                      <Select value={selectedVote || undefined} onValueChange={setSelectedVote}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="选择要投出的玩家" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {alivePlayers
-                            .filter((p) => p.playerId !== stateQuery.data?.myPlayerId)
-                            .map((p) => (
-                              <SelectItem key={p.playerId} value={p.playerId}>
-                                {p.displayName}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="text-xs text-muted-foreground">点击玩家头像投票，重复点击同一目标可直接确认。</div>
                       <Button className="w-full" disabled={!canVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
                         <CheckSquare className="mr-2 h-4 w-4" /> 投票
                       </Button>
                     </div>
                   )}
-                  {phase === "SETTLEMENT" && <div className="text-sm text-muted-foreground">对局结束，获胜方：{stateQuery.data?.winner || "未判定"}。</div>}
+                  {phase === "SETTLEMENT" && stateQuery.data && <SettlementPanel gameId={gameId} state={stateQuery.data} userKey={userKey} />}
                   {!canSpeak && phase === "DESCRIPTION" && <div className="text-sm text-muted-foreground">等待 {currentSpeaker?.displayName || "玩家"} 发言...</div>}
                 </Card>
 

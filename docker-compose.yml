@@ -1,69 +1,29 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: aisocial-mysql
-    command:
-      - "--character-set-server=utf8mb4"
-      - "--collation-server=utf8mb4_unicode_ci"
-    environment:
-      MYSQL_DATABASE: aisocial
-      MYSQL_USER: aisocial
-      MYSQL_PASSWORD: aisocial_pass
-      MYSQL_ROOT_PASSWORD: root_pass_aisocial
-    ports:
-      - "3307:3306"
-    volumes:
-      - ${AISOCIAL_MYSQL_DATA_DIR:-/var/lib/aisocialgame/mysql}:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot_pass_aisocial"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - aisocial
-
-  redis:
-    image: redis:7.4-alpine
-    container_name: aisocial-redis
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6380:6379"
-    volumes:
-      - ${AISOCIAL_REDIS_DATA_DIR:-/var/lib/aisocialgame/redis}:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - aisocial
-
   backend:
     image: eclipse-temurin:21-jre
     container_name: aisocial-backend
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     ports:
       - "20030:20030"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/aisocial?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC
-      SPRING_DATASOURCE_USERNAME: aisocial
-      SPRING_DATASOURCE_PASSWORD: aisocial_pass
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://${MYSQL_HOST:-127.0.0.1}:${MYSQL_PORT:-3308}/${MYSQL_DB:-aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-aisocialgame}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-aisocialgame_pwd}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-127.0.0.1}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6381}
+      APP_REDIS_TOKEN_KEY_PREFIX: ${APP_REDIS_TOKEN_KEY_PREFIX:-aisocialgame:auth:token:}
       APP_AUTH_TOKEN_TTL_HOURS: 168
       APP_PROJECT_KEY: ${APP_PROJECT_KEY:-aisocialgame}
       APP_AI_SYSTEM_USER_ID: ${APP_AI_SYSTEM_USER_ID:-1}
       APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME:-admin}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-admin123}
-      CONSUL_HTTP_ADDR: ${CONSUL_HTTP_ADDR:-http://192.168.1.4:60000}
+      CONSUL_HTTP_ADDR: ${CONSUL_HTTP_ADDR:-http://127.0.0.1:8502}
       USER_GRPC_ADDR: ${USER_GRPC_ADDR:-consul:///aienie-userservice-grpc}
       BILLING_GRPC_ADDR: ${BILLING_GRPC_ADDR:-consul:///aienie-payservice-grpc}
       AI_GRPC_ADDR: ${AI_GRPC_ADDR:-consul:///aienie-aiservice-grpc}
+      QDRANT_HOST: ${QDRANT_HOST:-http://127.0.0.1}
+      QDRANT_PORT: ${QDRANT_PORT:-6335}
+      QDRANT_ENABLED: ${QDRANT_ENABLED:-true}
       SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:10030/sso/callback}
       SERVER_PORT: ${SERVER_PORT:-20030}
       JAVA_OPTS: ""

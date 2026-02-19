@@ -1,5 +1,23 @@
+import { useMemo, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Gamepad2, User, LayoutGrid, Coins, Home, Compass, Trophy, Shield, MessageCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Award,
+  Bell,
+  BookOpen,
+  Coins,
+  Compass,
+  Gamepad2,
+  Home,
+  LayoutGrid,
+  MessageCircle,
+  PlayCircle,
+  Shield,
+  Trophy,
+  User,
+  Users,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,18 +29,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import { gameApi } from "@/services/api";
+import { friendApi } from "@/services/v2Social";
+import { FriendPanel } from "@/components/social/FriendPanel";
+import { QuickMatchDialog } from "@/components/social/QuickMatchDialog";
 
 const MainLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, displayName, redirectToSsoLogin } = useAuth();
+  const [friendOpen, setFriendOpen] = useState(false);
+  const [quickMatchOpen, setQuickMatchOpen] = useState(false);
+  const userKey = useMemo(() => user?.id || `guest:${displayName}`, [user?.id, displayName]);
+
+  const { data: games = [] } = useQuery({
+    queryKey: ["games"],
+    queryFn: gameApi.list,
+  });
+
+  const requestCount = friendApi.getPanelData(userKey).requests.length;
+  const onlineTotal = games.reduce((acc, item) => acc + (item.onlineCount || 0), 0);
+  const isGameRoute = /^\/(room|spectate)\//.test(location.pathname);
 
   const isActive = (path: string) => {
-    return location.pathname === path ? "text-primary" : "text-muted-foreground";
+    return location.pathname.startsWith(path) ? "text-primary" : "text-muted-foreground";
   };
 
   const isMobileActive = (path: string) => {
-    return location.pathname === path ? "text-blue-600" : "text-slate-400";
+    return location.pathname.startsWith(path) ? "text-blue-600" : "text-slate-400";
   };
 
   return (
@@ -53,11 +87,34 @@ const MainLayout = () => {
               <Link to="/rankings" className={`transition-colors hover:text-primary ${isActive("/rankings")}`}>
                 排行榜
               </Link>
+              <Link to="/achievements" className={`transition-colors hover:text-primary ${isActive("/achievements")}`}>
+                成就
+              </Link>
+              <Link to="/replays" className={`transition-colors hover:text-primary ${isActive("/replays")}`}>
+                回放
+              </Link>
+              <Link to="/guide" className={`transition-colors hover:text-primary ${isActive("/guide")}`}>
+                百科
+              </Link>
             </nav>
           </div>
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2 md:gap-4">
+            <Button size="sm" className="hidden md:inline-flex" onClick={() => setQuickMatchOpen(true)}>
+              <Zap className="mr-1 h-4 w-4" />
+              快速开始
+            </Button>
+
+            <Button variant="outline" size="icon" className="relative" onClick={() => setFriendOpen(true)}>
+              <Users className="h-4 w-4" />
+              {requestCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 text-[10px] text-white">{requestCount}</span>}
+            </Button>
+
+            <Button variant="outline" size="icon">
+              <Bell className="h-4 w-4" />
+            </Button>
+
             <button
               type="button"
               onClick={() => navigate("/profile?tab=wallet")}
@@ -116,38 +173,48 @@ const MainLayout = () => {
             )}
           </div>
         </div>
+        <div className="border-t bg-slate-50/80">
+          <div className="container flex items-center gap-4 px-4 py-1 text-xs text-muted-foreground">
+            <span>在线玩家 {onlineTotal}</span>
+            <span>好友请求 {requestCount}</span>
+            <span>邀请通知 0</span>
+          </div>
+        </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container py-4 md:py-6 px-4">
+      <main className="page-enter flex-1 container py-4 md:py-6 px-4">
         <Outlet />
       </main>
 
       {/* Mobile Bottom Navigation (Scheme 1A) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe">
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe ${isGameRoute ? "hidden" : ""}`}>
         <div className="grid grid-cols-5 h-16">
           <Link to="/" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/")}`}>
             <Home className="h-6 w-6" />
             <span className="text-[10px] font-medium">大厅</span>
           </Link>
-          <Link to="/community" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/community")}`}>
-            <Compass className="h-6 w-6" />
-            <span className="text-[10px] font-medium">社区</span>
-          </Link>
           <Link to="/rankings" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/rankings")}`}>
             <Trophy className="h-6 w-6" />
             <span className="text-[10px] font-medium">排行</span>
           </Link>
-          <Link to="/ai-chat" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/ai-chat")}`}>
-            <MessageCircle className="h-6 w-6" />
-            <span className="text-[10px] font-medium">AI</span>
+          <button className="flex flex-col items-center justify-center gap-1 text-slate-400" onClick={() => setQuickMatchOpen(true)}>
+            <Zap className="h-6 w-6" />
+            <span className="text-[10px] font-medium">速配</span>
+          </button>
+          <Link to="/replays" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/replays")}`}>
+            <PlayCircle className="h-6 w-6" />
+            <span className="text-[10px] font-medium">回放</span>
           </Link>
-          <Link to="/profile" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/profile")}`}>
-            <User className="h-6 w-6" />
-            <span className="text-[10px] font-medium">我的</span>
+          <Link to="/guide" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/guide")}`}>
+            <BookOpen className="h-6 w-6" />
+            <span className="text-[10px] font-medium">百科</span>
           </Link>
         </div>
       </div>
+
+      <FriendPanel open={friendOpen} onOpenChange={setFriendOpen} userKey={userKey} />
+      <QuickMatchDialog open={quickMatchOpen} onOpenChange={setQuickMatchOpen} displayName={displayName} />
     </div>
   );
 };

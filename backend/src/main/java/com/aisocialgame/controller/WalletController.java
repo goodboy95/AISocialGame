@@ -39,23 +39,23 @@ public class WalletController {
     }
 
     @PostMapping("/checkin")
-    public ResponseEntity<CheckinResponse> checkin(@RequestHeader("X-Auth-Token") String token) {
+    public ResponseEntity<CheckinResponse> checkin(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
         return ResponseEntity.ok(new CheckinResponse(walletService.checkin(requireUser(token))));
     }
 
     @GetMapping("/checkin-status")
-    public ResponseEntity<CheckinStatusResponse> checkinStatus(@RequestHeader("X-Auth-Token") String token) {
+    public ResponseEntity<CheckinStatusResponse> checkinStatus(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
         return ResponseEntity.ok(new CheckinStatusResponse(walletService.getCheckinStatus(requireUser(token))));
     }
 
     @GetMapping("/balance")
-    public ResponseEntity<BalanceView> balance(@RequestHeader("X-Auth-Token") String token) {
+    public ResponseEntity<BalanceView> balance(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
         BalanceSnapshot snapshot = walletService.getBalance(requireUser(token));
         return ResponseEntity.ok(new BalanceView(snapshot));
     }
 
     @GetMapping("/usage-records")
-    public ResponseEntity<PagedResponse<UsageRecordView>> usageRecords(@RequestHeader("X-Auth-Token") String token,
+    public ResponseEntity<PagedResponse<UsageRecordView>> usageRecords(@RequestHeader(value = "X-Auth-Token", required = false) String token,
                                                                        @RequestParam(defaultValue = "1") int page,
                                                                        @RequestParam(defaultValue = "20") int size) {
         var result = walletService.getUsageRecords(requireUser(token), page, size);
@@ -64,7 +64,7 @@ public class WalletController {
     }
 
     @GetMapping("/ledger")
-    public ResponseEntity<PagedResponse<LedgerEntryView>> ledger(@RequestHeader("X-Auth-Token") String token,
+    public ResponseEntity<PagedResponse<LedgerEntryView>> ledger(@RequestHeader(value = "X-Auth-Token", required = false) String token,
                                                                  @RequestParam(defaultValue = "1") int page,
                                                                  @RequestParam(defaultValue = "20") int size) {
         var result = walletService.getLedgerEntries(requireUser(token), page, size);
@@ -73,13 +73,13 @@ public class WalletController {
     }
 
     @PostMapping("/redeem")
-    public ResponseEntity<RedeemResponse> redeem(@RequestHeader("X-Auth-Token") String token,
+    public ResponseEntity<RedeemResponse> redeem(@RequestHeader(value = "X-Auth-Token", required = false) String token,
                                                  @Valid @RequestBody RedeemRequest request) {
         return ResponseEntity.ok(new RedeemResponse(walletService.redeemCode(requireUser(token), request.getCode())));
     }
 
     @GetMapping("/redemption-history")
-    public ResponseEntity<PagedResponse<RedemptionView>> redemptionHistory(@RequestHeader("X-Auth-Token") String token,
+    public ResponseEntity<PagedResponse<RedemptionView>> redemptionHistory(@RequestHeader(value = "X-Auth-Token", required = false) String token,
                                                                            @RequestParam(defaultValue = "1") int page,
                                                                            @RequestParam(defaultValue = "20") int size) {
         var result = walletService.getRedemptionHistory(requireUser(token), page, size);

@@ -17,6 +17,11 @@ import AiChat from "./pages/AiChat";
 import Rankings from "./pages/Rankings";
 import NotFound from "./pages/NotFound";
 import SsoCallback from "./pages/SsoCallback";
+import Achievements from "./pages/Achievements";
+import Replays from "./pages/Replays";
+import ReplayPlayer from "./pages/ReplayPlayer";
+import Guide from "./pages/Guide";
+import SpectatorRoom from "./pages/SpectatorRoom";
 import AdminLogin from "./pages/admin/AdminLogin";
 import Dashboard from "./pages/admin/Dashboard";
 import UserAdmin from "./pages/admin/UserAdmin";
@@ -49,6 +54,11 @@ const App = () => (
                 <Route path="/community" element={<Community />} />
                 <Route path="/ai-chat" element={<AiChat />} />
                 <Route path="/rankings" element={<Rankings />} />
+                <Route path="/achievements" element={<Achievements />} />
+                <Route path="/replays" element={<Replays />} />
+                <Route path="/replay/:archiveId" element={<ReplayPlayer />} />
+                <Route path="/guide" element={<Guide />} />
+                <Route path="/spectate/:gameId/:roomId" element={<SpectatorRoom />} />
               </Route>
 
               {/* Admin Routes */}

@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { gameApi, roomApi } from "@/services/api";
 import { Game, Room } from "@/types";
+import { quickMatchApi } from "@/services/v2Social";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const RoomList = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
+  const { displayName } = useAuth();
   const { data: game } = useQuery<Game | undefined>({
     queryKey: ["game", gameId],
     queryFn: () => gameId ? gameApi.detail(gameId) : Promise.resolve(undefined as any),
@@ -52,6 +56,22 @@ const RoomList = () => {
 
   if (!game) return <div>游戏不存在</div>;
 
+  const quickStart = async () => {
+    if (!gameId) return;
+    try {
+      const cacheKey = `quick_match_player_${gameId}`;
+      const savedPlayerId = localStorage.getItem(cacheKey);
+      const result = await quickMatchApi.start(gameId, displayName, savedPlayerId);
+      if (result.playerId) {
+        localStorage.setItem(cacheKey, result.playerId);
+        localStorage.setItem(`room_player_${result.roomId}`, result.playerId);
+      }
+      navigate(`/room/${gameId}/${result.roomId}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "快速匹配失败");
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Header Section */}
@@ -70,6 +90,9 @@ const RoomList = () => {
           </div>
           <Button onClick={() => navigate(`/create/${gameId}`)} className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200/50">
             <Plus className="mr-2 h-4 w-4" /> 创建房间
+          </Button>
+          <Button variant="outline" onClick={quickStart}>
+            一键开局
           </Button>
         </div>
       </div>
@@ -115,10 +138,13 @@ const RoomList = () => {
                 <Button 
                   className="w-full border border-slate-200" 
                   variant={room.status.toString().toLowerCase() === "playing" ? "secondary" : "default"}
-                  disabled={room.status.toString().toLowerCase() === "playing"}
-                  onClick={() => navigate(`/room/${gameId}/${room.id}`)}
+                  onClick={() =>
+                    room.status.toString().toLowerCase() === "playing"
+                      ? navigate(`/spectate/${gameId}/${room.id}`)
+                      : navigate(`/room/${gameId}/${room.id}`)
+                  }
                 >
-                  {room.status.toString().toLowerCase() === "playing" ? "观战 (暂未开放)" : "立即加入"}
+                  {room.status.toString().toLowerCase() === "playing" ? "立即观战" : "立即加入"}
                 </Button>
               </CardFooter>
             </Card>

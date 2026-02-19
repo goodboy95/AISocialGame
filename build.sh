@@ -9,30 +9,20 @@ step() {
   echo "== $1 =="
 }
 
-# --- Tooling helpers -------------------------------------------------------
-MAVEN_DOCKER_IMAGE="maven:3.9-eclipse-temurin-21"
-DATA_BASE="${AISOCIAL_DATA_BASE:-/var/lib/aisocialgame}"
-MYSQL_DATA_DIR="${AISOCIAL_MYSQL_DATA_DIR:-$DATA_BASE/mysql}"
-REDIS_DATA_DIR="${AISOCIAL_REDIS_DATA_DIR:-$DATA_BASE/redis}"
-
-ensure_dir() {
-  mkdir -p "$1" 2>/dev/null || sudo mkdir -p "$1"
-}
-
-ensure_dir "$repo_root/.cache/.m2"
-ensure_dir "$MYSQL_DATA_DIR"
-ensure_dir "$REDIS_DATA_DIR"
-if command -v sudo >/dev/null 2>&1; then
-  sudo chown -R 999:999 "$MYSQL_DATA_DIR" 2>/dev/null || true
-  sudo chown -R 999:1000 "$REDIS_DATA_DIR" 2>/dev/null || true
-  sudo chmod -R 770 "$DATA_BASE" 2>/dev/null || true
-fi
-export AISOCIAL_MYSQL_DATA_DIR="$MYSQL_DATA_DIR"
-export AISOCIAL_REDIS_DATA_DIR="$REDIS_DATA_DIR"
-
 ensure_pnpm() {
   corepack enable >/dev/null 2>&1 || true
 }
+
+export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:mysql://${MYSQL_HOST:-127.0.0.1}:${MYSQL_PORT:-3308}/${MYSQL_DB:-aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
+export SPRING_DATASOURCE_USERNAME="${SPRING_DATASOURCE_USERNAME:-aisocialgame}"
+export SPRING_DATASOURCE_PASSWORD="${SPRING_DATASOURCE_PASSWORD:-aisocialgame_pwd}"
+export SPRING_DATA_REDIS_HOST="${SPRING_DATA_REDIS_HOST:-127.0.0.1}"
+export SPRING_DATA_REDIS_PORT="${SPRING_DATA_REDIS_PORT:-6381}"
+export CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-http://127.0.0.1:8502}"
+export QDRANT_HOST="${QDRANT_HOST:-http://127.0.0.1}"
+export QDRANT_PORT="${QDRANT_PORT:-6335}"
+export QDRANT_ENABLED="${QDRANT_ENABLED:-true}"
+export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:10030/sso/callback}"
 
 docker_compose_cmd() {
   if command -v docker-compose >/dev/null 2>&1; then
@@ -54,17 +44,10 @@ wait_for_http() {
   return 1
 }
 
-# --- Build & Test ----------------------------------------------------------
-
 step "Backend: test & package"
 (
   cd backend
-  docker run --rm \
-    -v "$PWD":/workspace \
-    -v "$repo_root/.cache/.m2":/root/.m2 \
-    -w /workspace \
-    "$MAVEN_DOCKER_IMAGE" \
-    mvn clean test package
+  mvn clean test package
 )
 
 step "Frontend: install & build"
@@ -75,14 +58,15 @@ step "Frontend: install & build"
   pnpm build
 )
 
-step "Docker compose pull & restart (no local image build)"
+step "Docker compose pull & restart (test)"
 COMPOSE="$(docker_compose_cmd)"
+echo "Using shared services: MYSQL=${MYSQL_HOST:-127.0.0.1}:${MYSQL_PORT:-3308} REDIS=${SPRING_DATA_REDIS_HOST}:${SPRING_DATA_REDIS_PORT} QDRANT=${QDRANT_HOST}:${QDRANT_PORT} CONSUL=${CONSUL_HTTP_ADDR}"
 $COMPOSE down -v || true
 $COMPOSE pull
 $COMPOSE up -d
 
 step "Wait for services"
-wait_for_http "http://aisocialgame.seekerhut.com:10030" 40
-wait_for_http "http://aisocialgame.seekerhut.com:20030/actuator/health" 40
+wait_for_http "http://127.0.0.1:10030" 60
+wait_for_http "http://127.0.0.1:20030/actuator/health" 60
 
 echo "All done. Frontend: http://aisocialgame.seekerhut.com:10030  Backend: http://aisocialgame.seekerhut.com:20030"

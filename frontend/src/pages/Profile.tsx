@@ -2,15 +2,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Coins, Trophy, Clock, LogIn } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Coins, Trophy, Clock, LogIn, Award, PlayCircle } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import WalletPanel from "@/components/wallet/WalletPanel";
+import { achievementApi, replayApi } from "@/services/v2Social";
 
 const Profile = () => {
   const { user, displayName, avatar, logout, redirectToSsoLogin } = useAuth();
   const [searchParams] = useSearchParams();
   const tab = searchParams.get("tab") || "wallet";
+  const userKey = user?.id || `guest:${displayName}`;
+  const unlockedAchievements = achievementApi.listMyAchievements(userKey).filter((item) => item.unlocked).length;
+  const replayCount = replayApi.list(userKey).length;
 
   if (!user) {
     return (
@@ -85,10 +89,12 @@ const Profile = () => {
       </Card>
 
       <Tabs defaultValue={tab} className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="wallet">我的钱包</TabsTrigger>
           <TabsTrigger value="history">对战记录</TabsTrigger>
           <TabsTrigger value="stats">数据统计</TabsTrigger>
+          <TabsTrigger value="achievements">成就</TabsTrigger>
+          <TabsTrigger value="replays">回放</TabsTrigger>
         </TabsList>
         <TabsContent value="wallet" className="mt-6">
           <WalletPanel initialBalance={user.balance} />
@@ -107,6 +113,38 @@ const Profile = () => {
           <Card>
             <CardContent className="pt-6 text-sm text-muted-foreground">
               暂未汇总更详细的数据。完成对局后，系统会将胜场计入排行榜。
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="achievements" className="mt-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">成就总览</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Award className="h-4 w-4 text-amber-500" />
+                已解锁成就 {unlockedAchievements}
+              </div>
+              <Button asChild>
+                <Link to="/achievements">查看全部成就</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="replays" className="mt-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">回放总览</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <PlayCircle className="h-4 w-4 text-blue-500" />
+                已保存回放 {replayCount}
+              </div>
+              <Button asChild>
+                <Link to="/replays">进入回放中心</Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

@@ -34,6 +34,33 @@ class RoomServiceTest {
         Assertions.assertEquals(2, roomService.getRoom(room.getId()).getSeats().size());
     }
 
+    @Test
+    void createRoomShouldClampToGameMinimumPlayers() {
+        var user = createLocalUser("min-clamp@example.com", "人数校验用户");
+
+        Room undercoverRoom = roomService.createRoom(
+                "undercover",
+                "卧底最小人数房间",
+                false,
+                null,
+                "text",
+                Map.of("playerCount", 2),
+                user
+        );
+        Assertions.assertEquals(4, undercoverRoom.getMaxPlayers());
+
+        Room werewolfRoom = roomService.createRoom(
+                "werewolf",
+                "狼人最小人数房间",
+                false,
+                null,
+                "text",
+                Map.of("playerCount", 2),
+                user
+        );
+        Assertions.assertEquals(6, werewolfRoom.getMaxPlayers());
+    }
+
     private User createLocalUser(String email, String nickname) {
         User user = new User();
         user.setId(UUID.randomUUID().toString());

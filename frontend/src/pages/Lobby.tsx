@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,12 +34,14 @@ const Lobby = () => {
   const hasJoinedRef = useRef(false);
   const storedPlayerIdRef = useRef<string | null>(roomId ? localStorage.getItem(`room_player_${roomId}`) : null);
 
-  // ROUTING LOGIC
-  if (gameId === "undercover") {
-    return <UndercoverRoom />;
-  }
-  if (gameId === "werewolf") {
-    return <WerewolfRoom />;
+  const gameRoomComponents: Record<string, ComponentType> = {
+    undercover: UndercoverRoom,
+    werewolf: WerewolfRoom,
+  };
+
+  const GameRoomComponent = gameId ? gameRoomComponents[gameId] : undefined;
+  if (GameRoomComponent) {
+    return <GameRoomComponent />;
   }
 
   // --- GENERIC LOBBY FALLBACK ---

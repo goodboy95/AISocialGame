@@ -129,7 +129,7 @@ test("SSO 回调、钱包操作、AI 流式聊天", async ({ page }) => {
   await page.goto("/profile?tab=wallet");
   await expect(page.getByText("余额概览")).toBeVisible();
   await page.getByRole("button", { name: "签到领积分" }).click();
-  await expect(page.getByText("今日已签到")).toBeVisible();
+  await expect(page.getByRole("button", { name: "今日已签到" })).toBeVisible();
 
   await page.goto("/ai-chat");
   await page.getByPlaceholder("输入问题，按“发送”后将通过 SSE 逐字返回").fill("你好");
