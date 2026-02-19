@@ -3,7 +3,7 @@ services:
     image: eclipse-temurin:21-jre
     container_name: aisocial-backend
     ports:
-      - "20030:20030"
+      - "11031:20030"
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://${MYSQL_HOST:-127.0.0.1}:${MYSQL_PORT:-3308}/${MYSQL_DB:-aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-aisocialgame}
@@ -24,7 +24,7 @@ services:
       QDRANT_HOST: ${QDRANT_HOST:-http://127.0.0.1}
       QDRANT_PORT: ${QDRANT_PORT:-6335}
       QDRANT_ENABLED: ${QDRANT_ENABLED:-true}
-      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:10030/sso/callback}
+      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:11030/sso/callback}
       SERVER_PORT: ${SERVER_PORT:-20030}
       JAVA_OPTS: ""
       SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/
@@ -43,7 +43,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "10030:80"
+      - "11030:80"
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro

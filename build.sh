@@ -22,7 +22,7 @@ export CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-http://127.0.0.1:8502}"
 export QDRANT_HOST="${QDRANT_HOST:-http://127.0.0.1}"
 export QDRANT_PORT="${QDRANT_PORT:-6335}"
 export QDRANT_ENABLED="${QDRANT_ENABLED:-true}"
-export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:10030/sso/callback}"
+export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:11030/sso/callback}"
 
 docker_compose_cmd() {
   if command -v docker-compose >/dev/null 2>&1; then
@@ -66,7 +66,7 @@ $COMPOSE pull
 $COMPOSE up -d
 
 step "Wait for services"
-wait_for_http "http://127.0.0.1:10030" 60
-wait_for_http "http://127.0.0.1:20030/actuator/health" 60
+wait_for_http "http://127.0.0.1:11030" 60
+wait_for_http "http://127.0.0.1:11031/actuator/health" 60
 
-echo "All done. Frontend: http://aisocialgame.seekerhut.com:10030  Backend: http://aisocialgame.seekerhut.com:20030"
+echo "All done. Frontend: http://aisocialgame.seekerhut.com:11030  Backend: http://aisocialgame.seekerhut.com:11031"

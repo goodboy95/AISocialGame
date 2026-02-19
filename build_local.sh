@@ -93,8 +93,8 @@ stop_port_owner() {
 
 autoload_project_env
 
-FRONTEND_PORT="${FRONTEND_PORT:-10030}"
-BACKEND_PORT="${BACKEND_PORT:-20030}"
+FRONTEND_PORT="${FRONTEND_PORT:-11030}"
+BACKEND_PORT="${BACKEND_PORT:-11031}"
 LOG_DIR="$repo_root/artifacts/local-run"
 BACKEND_PID_FILE="$LOG_DIR/backend.pid"
 FRONTEND_PID_FILE="$LOG_DIR/frontend.pid"

@@ -107,8 +107,8 @@ Invoke-Step -Message "Docker compose pull & restart (prod)" -Action {
 }
 
 Invoke-Step -Message "Wait for services" -Action {
-    Wait-Http -Url "http://127.0.0.1:10030"
-    Wait-Http -Url "http://127.0.0.1:20030/actuator/health"
+    Wait-Http -Url "http://127.0.0.1:11030"
+    Wait-Http -Url "http://127.0.0.1:11031/actuator/health"
 }
 
 Write-Host "All done. Frontend: http://aisocialgame.aienie.com  Backend: http://aisocialgame.aienie.com/api" -ForegroundColor Green

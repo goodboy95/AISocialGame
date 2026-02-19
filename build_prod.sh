@@ -67,7 +67,7 @@ $COMPOSE pull
 $COMPOSE up -d
 
 step "Wait for services"
-wait_for_http "http://127.0.0.1:10030" 60
-wait_for_http "http://127.0.0.1:20030/actuator/health" 60
+wait_for_http "http://127.0.0.1:11030" 60
+wait_for_http "http://127.0.0.1:11031/actuator/health" 60
 
 echo "All done. Frontend: http://aisocialgame.aienie.com  Backend: http://aisocialgame.aienie.com/api"

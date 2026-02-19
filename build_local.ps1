@@ -145,8 +145,8 @@ Set-Location $repoRoot
 
 Import-ProjectEnv -RepoRoot $repoRoot
 if ([string]::IsNullOrWhiteSpace($env:CI)) { $env:CI = "true" }
-$frontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { 10030 } else { [int]$env:FRONTEND_PORT }
-$backendPort = if ([string]::IsNullOrWhiteSpace($env:BACKEND_PORT)) { 20030 } else { [int]$env:BACKEND_PORT }
+$frontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { 11030 } else { [int]$env:FRONTEND_PORT }
+$backendPort = if ([string]::IsNullOrWhiteSpace($env:BACKEND_PORT)) { 11031 } else { [int]$env:BACKEND_PORT }
 
 $logDir = Join-Path $repoRoot "artifacts/local-run"
 $backendPidFile = Join-Path $logDir "backend.pid"

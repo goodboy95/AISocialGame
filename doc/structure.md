@@ -31,8 +31,8 @@ AISocialGame/
 │   ├── src/services/api.ts                   # HTTP API 封装
 │   ├── src/services/v2Social.ts              # v2 社交留存能力（好友/成就/回放/快速匹配）
 │   ├── src/types/index.ts                    # 对局状态与 WS/社交/成就/回放类型
-│   ├── vite.config.ts                        # 开发/预览端口 10030，allowedHosts 与后端端口可配置
-│   └── nginx.conf                            # /api 与 /ws 反向代理到 backend:20030
+│   ├── vite.config.ts                        # 开发/预览端口 11030，allowedHosts 与后端端口可配置
+│   └── nginx.conf                            # /api 与 /ws 反向代理到 backend:20030（宿主机映射默认 11031）
 ├── doc/
 │   ├── api/                                  # Controller 接口文档（新增 RoomChatController）
 │   ├── modules/                              # 模块说明（新增 modules/README、realtime-ws-module）
@@ -45,7 +45,7 @@ AISocialGame/
 │   ├── docker-compose.yml                    # MySQL/Redis/Qdrant/Consul 编排（127.0.0.1 + 默认端口+2）
 │   ├── build.sh                              # 依赖容器启动/重启脚本
 │   └── .gitignore                            # 依赖持久化目录忽略规则与 .gitkeep 例外
-├── docker-compose.yml                        # 仅编排前后端（10030/20030），数据库与缓存走外部服务
+├── docker-compose.yml                        # 仅编排前后端（宿主机映射 11030/11031），数据库与缓存走外部服务
 ├── build.sh                                  # 测试环境 Docker 部署脚本（Linux/macOS）
 ├── build_prod.sh                             # 生产环境 Docker 部署脚本（Linux/macOS）
 ├── build_local.sh                            # 本地直启脚本（非 Docker，Linux/macOS）

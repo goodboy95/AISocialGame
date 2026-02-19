@@ -62,7 +62,7 @@ function Set-DefaultEnv {
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_HOST)) { $env:QDRANT_HOST = "http://127.0.0.1" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_PORT)) { $env:QDRANT_PORT = "6335" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_ENABLED)) { $env:QDRANT_ENABLED = "true" }
-    if ([string]::IsNullOrWhiteSpace($env:SSO_CALLBACK_URL)) { $env:SSO_CALLBACK_URL = "http://aisocialgame.seekerhut.com:10030/sso/callback" }
+    if ([string]::IsNullOrWhiteSpace($env:SSO_CALLBACK_URL)) { $env:SSO_CALLBACK_URL = "http://aisocialgame.seekerhut.com:11030/sso/callback" }
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -106,8 +106,8 @@ Invoke-Step -Message "Docker compose pull & restart (test)" -Action {
 }
 
 Invoke-Step -Message "Wait for services" -Action {
-    Wait-Http -Url "http://127.0.0.1:10030"
-    Wait-Http -Url "http://127.0.0.1:20030/actuator/health"
+    Wait-Http -Url "http://127.0.0.1:11030"
+    Wait-Http -Url "http://127.0.0.1:11031/actuator/health"
 }
 
-Write-Host "All done. Frontend: http://aisocialgame.seekerhut.com:10030  Backend: http://aisocialgame.seekerhut.com:20030" -ForegroundColor Green
+Write-Host "All done. Frontend: http://aisocialgame.seekerhut.com:11030  Backend: http://aisocialgame.seekerhut.com:11031" -ForegroundColor Green

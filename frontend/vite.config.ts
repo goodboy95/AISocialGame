@@ -4,14 +4,14 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 export default defineConfig(() => {
-  const backendPort = process.env.VITE_LOCAL_BACKEND_PORT || "20030";
+  const backendPort = process.env.VITE_LOCAL_BACKEND_PORT || "11031";
   const backendTarget = `http://localhost:${backendPort}`;
   const allowedHosts = ["localhost", "127.0.0.1", "aisocialgame.seekerhut.com", "aisocialgame.aienie.com"];
 
   return {
     server: {
       host: "::",
-      port: 10030,
+      port: 11030,
       strictPort: true,
       allowedHosts,
       proxy: {
@@ -28,7 +28,7 @@ export default defineConfig(() => {
     },
     preview: {
       host: "::",
-      port: 10030,
+      port: 11030,
       strictPort: true,
       allowedHosts,
     },
