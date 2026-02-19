@@ -17,7 +17,25 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const LOCAL_TOKEN_KEY = "aisocialgame_token";
+export const LOCAL_SSO_STATE_KEY = "aisocialgame_sso_state";
 const LOCAL_GUEST_KEY = "aisocialgame_guest_name";
+
+const generateSsoState = () => {
+  const bytes = new Uint8Array(24);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+};
+
+const buildSsoEntryUrl = (entry: "login" | "register", state: string) => {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+  return `${apiBase}/auth/sso/${entry}?state=${encodeURIComponent(state)}`;
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -56,13 +74,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const redirectToSsoLogin = async () => {
-    const urls = await authApi.getSsoUrl();
-    window.location.href = urls.loginUrl;
+    const state = generateSsoState();
+    sessionStorage.setItem(LOCAL_SSO_STATE_KEY, state);
+    window.location.assign(buildSsoEntryUrl("login", state));
   };
 
   const redirectToSsoRegister = async () => {
-    const urls = await authApi.getSsoUrl();
-    window.location.href = urls.registerUrl;
+    const state = generateSsoState();
+    sessionStorage.setItem(LOCAL_SSO_STATE_KEY, state);
+    window.location.assign(buildSsoEntryUrl("register", state));
   };
 
   const logout = () => {

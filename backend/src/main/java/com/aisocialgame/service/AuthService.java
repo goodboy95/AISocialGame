@@ -3,7 +3,6 @@ package com.aisocialgame.service;
 import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.dto.AuthResponse;
 import com.aisocialgame.dto.AuthUserView;
-import com.aisocialgame.dto.SsoUrlResponse;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
@@ -21,11 +20,13 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional
 public class AuthService {
     private static final String EXTERNAL_PASSWORD_MARKER = "{external}";
+    private static final Pattern SSO_STATE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{16,128}$");
 
     private final UserRepository userRepository;
     private final TokenStore tokenStore;
@@ -48,14 +49,21 @@ public class AuthService {
         this.consulHttpServiceDiscovery = consulHttpServiceDiscovery;
     }
 
-    public SsoUrlResponse getSsoUrl() {
+    public String buildSsoLoginRedirectUrl(String state) {
+        return buildSsoRedirectUrl("/sso/login", state);
+    }
+
+    public String buildSsoRegisterRedirectUrl(String state) {
+        return buildSsoRedirectUrl("/register", state);
+    }
+
+    private String buildSsoRedirectUrl(String path, String state) {
+        String normalizedState = normalizeAndValidateState(state);
         String serviceAddress = consulHttpServiceDiscovery.resolveHttpAddress(appProperties.getSso().getUserServiceName());
         String base = trimTrailingSlash(serviceAddress);
         String encodedRedirect = URLEncoder.encode(appProperties.getSso().getCallbackUrl(), StandardCharsets.UTF_8);
-        return new SsoUrlResponse(
-                base + "/sso/login?redirect=" + encodedRedirect,
-                base + "/register?redirect=" + encodedRedirect
-        );
+        String encodedState = URLEncoder.encode(normalizedState, StandardCharsets.UTF_8);
+        return base + path + "?redirect=" + encodedRedirect + "&state=" + encodedState;
     }
 
     public AuthResponse ssoCallback(long userId, String username, String sessionId, String accessToken) {
@@ -162,6 +170,17 @@ public class AuthService {
         String normalized = url;
         while (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String normalizeAndValidateState(String state) {
+        if (!StringUtils.hasText(state)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SSO state 不能为空");
+        }
+        String normalized = state.trim();
+        if (!SSO_STATE_PATTERN.matcher(normalized).matches()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SSO state 格式不合法");
         }
         return normalized;
     }

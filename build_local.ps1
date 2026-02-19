@@ -138,6 +138,7 @@ function Set-DefaultEnv {
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_HOST)) { $env:QDRANT_HOST = "http://127.0.0.1" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_PORT)) { $env:QDRANT_PORT = "6335" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_ENABLED)) { $env:QDRANT_ENABLED = "true" }
+    if ([string]::IsNullOrWhiteSpace($env:SSO_CALLBACK_URL)) { $env:SSO_CALLBACK_URL = "http://aisocialgame.seekerhut.com/sso/callback" }
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path

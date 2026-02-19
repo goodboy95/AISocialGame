@@ -1,7 +1,6 @@
 package com.aisocialgame;
 
 import com.aisocialgame.dto.AuthResponse;
-import com.aisocialgame.dto.SsoUrlResponse;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
@@ -73,13 +72,31 @@ class AuthServiceTest {
     }
 
     @Test
-    void getSsoUrlShouldReturnLoginAndRegisterLinks() {
+    void buildSsoLoginRedirectUrlShouldContainRedirectAndState() {
         Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
                 .thenReturn("http://user-service:19090");
 
-        SsoUrlResponse response = authService.getSsoUrl();
-        Assertions.assertTrue(response.getLoginUrl().startsWith("http://user-service:19090/sso/login"));
-        Assertions.assertTrue(response.getRegisterUrl().startsWith("http://user-service:19090/register"));
-        Assertions.assertTrue(response.getLoginUrl().contains("redirect="));
+        String redirectUrl = authService.buildSsoLoginRedirectUrl("state_token_123456");
+        Assertions.assertTrue(redirectUrl.startsWith("http://user-service:19090/sso/login"));
+        Assertions.assertTrue(redirectUrl.contains("redirect="));
+        Assertions.assertTrue(redirectUrl.contains("state=state_token_123456"));
+    }
+
+    @Test
+    void buildSsoRegisterRedirectUrlShouldContainRedirectAndState() {
+        Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
+                .thenReturn("http://user-service:19090");
+
+        String redirectUrl = authService.buildSsoRegisterRedirectUrl("state_token_abcdef");
+        Assertions.assertTrue(redirectUrl.startsWith("http://user-service:19090/register"));
+        Assertions.assertTrue(redirectUrl.contains("redirect="));
+        Assertions.assertTrue(redirectUrl.contains("state=state_token_abcdef"));
+    }
+
+    @Test
+    void buildSsoRedirectUrlShouldFailWhenStateInvalid() {
+        ApiException ex = Assertions.assertThrows(ApiException.class,
+                () -> authService.buildSsoLoginRedirectUrl("bad"));
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
     }
 }

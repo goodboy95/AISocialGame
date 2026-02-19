@@ -79,11 +79,6 @@ export interface AuthResponse {
   user: User;
 }
 
-export interface SsoUrlResponse {
-  loginUrl: string;
-  registerUrl: string;
-}
-
 export interface SsoCallbackData {
   accessToken: string;
   userId: number;

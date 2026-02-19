@@ -22,7 +22,6 @@ import {
   RedemptionRecord,
   Room,
   SsoCallbackData,
-  SsoUrlResponse,
   UsageRecord,
   User
 } from "@/types";
@@ -42,10 +41,6 @@ export const setAuthToken = (token?: string) => {
 };
 
 export const authApi = {
-  async getSsoUrl(): Promise<SsoUrlResponse> {
-    const res = await api.get("/auth/sso-url");
-    return res.data;
-  },
   async ssoCallback(payload: SsoCallbackData): Promise<AuthResponse> {
     const res = await api.post("/auth/sso-callback", payload);
     return res.data;

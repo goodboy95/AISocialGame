@@ -28,7 +28,7 @@ app:
     address: ${CONSUL_HTTP_ADDR:http://127.0.0.1:8502}
   sso:
     user-service-name: ${SSO_USER_SERVICE_NAME:aienie-userservice-http}
-    callback-url: ${SSO_CALLBACK_URL:http://localhost:10030/sso/callback}
+    callback-url: ${SSO_CALLBACK_URL:http://localhost:11030/sso/callback}
   auth:
     token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}
   redis:

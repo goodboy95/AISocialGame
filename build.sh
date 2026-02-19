@@ -22,7 +22,7 @@ export CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-http://127.0.0.1:8502}"
 export QDRANT_HOST="${QDRANT_HOST:-http://127.0.0.1}"
 export QDRANT_PORT="${QDRANT_PORT:-6335}"
 export QDRANT_ENABLED="${QDRANT_ENABLED:-true}"
-export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:11030/sso/callback}"
+export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com/sso/callback}"
 
 docker_compose_cmd() {
   if command -v docker-compose >/dev/null 2>&1; then

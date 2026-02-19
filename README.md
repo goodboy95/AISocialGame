@@ -16,6 +16,7 @@
   - *狼人杀*：分配角色，夜晚行动（刀人/查验/解毒/下毒）、白天发言与投票，支持超时自动推进、断线托管与自动弃票，结算刷新排行榜并发放金币。
 - **社区/排行榜**：社区发帖、点赞；排行榜来源于真实对局统计。
 - **身份与资产**：登录后返回真实金币/等级，结算为人类玩家追加奖励。
+- **统一 SSO 登录**：前端直接访问 `/api/auth/sso/login|register?state=...`，由后端 302 跳转 user-service；回调页 `/sso/callback` 对 `state` 做严格校验后再换取本地会话。
 - **房间聊天**：支持文本、快捷短语、表情消息；服务端含频率限制和夜晚文本管控。
 
 ## 快速启动
@@ -41,7 +42,7 @@
    - Linux/macOS：`./build_local.sh`
    - Windows PowerShell：`.\build_local.ps1`
    - 脚本会自动加载仓库根目录环境文件（优先 `.env`，其次 `env.txt`），并将其中变量注入本次启动环境。
-5. **访问**：前端入口 `http://localhost:10030` 或 `http://aisocialgame.seekerhut.com`，后端 API `http://localhost:20030/api`。
+5. **访问**：前端入口 `http://localhost:11030` 或 `http://aisocialgame.seekerhut.com`，后端 API `http://localhost:11031/api`。
 
 ## LLM 接入配置（OpenAI 兼容）
 平台预留了统一的 LLM 配置，遵循 OpenAI API 格式：
@@ -59,14 +60,15 @@
 ## 测试与运维
 - 后端单测：`cd backend && mvn test`（当前环境若缺少 Maven 可跳过，容器构建会自动执行）。
 - 前端构建：`cd frontend && pnpm build`；E2E：`pnpm test:e2e`（需已启动后端）。
-- 健康检查：`curl http://localhost:20030/actuator/health`。
+- 健康检查：`curl http://localhost:11031/actuator/health`。
 - 排行/社区数据持久化在 MySQL 中，游客身份基于 `selfPlayerId` + 本地缓存。
-- 端口约定：前端 `10030`，后端 `20030`，前端 Nginx 同时代理 `/api` 与 `/ws` 到后端服务。
-- Windows 端口排除场景：若本机出现 `WinError 10013`，先检查 `netsh interface ipv4/ipv6 show excludedportrange protocol=tcp`，确认 `20030` 不在排除区间后再启动后端。
+- 端口约定：前端 `11030`，后端 `11031`，前端 Nginx 同时代理 `/api` 与 `/ws` 到后端服务。
+- Windows 端口排除场景：若本机出现 `WinError 10013`，先检查 `netsh interface ipv4/ipv6 show excludedportrange protocol=tcp`，确认 `11031` 不在排除区间后再启动后端。
 
 ## 联调依赖（外部服务）
 - MySQL：必须通过 `SPRING_DATASOURCE_*` 环境变量提供第三方实例连接信息。
 - Redis：必须通过 `SPRING_DATA_REDIS_HOST` / `SPRING_DATA_REDIS_PORT` 提供第三方实例连接信息。
 - Token 存储 key 前缀：`aisocialgame:auth:token:`。
+- SSO 回调地址：`SSO_CALLBACK_URL`（默认 `http://aisocialgame.seekerhut.com/sso/callback`）。
 
 更多接口说明见 `doc/api/`，模块设计见 `doc/modules/`，运行/测试流程见 `doc/test/`。

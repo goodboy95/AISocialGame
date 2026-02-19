@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { LOCAL_SSO_STATE_KEY, useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 const SsoCallback = () => {
@@ -22,6 +22,15 @@ const SsoCallback = () => {
     const userId = params.get("user_id");
     const username = params.get("username");
     const sessionId = params.get("session_id");
+    const state = params.get("state");
+    const expectedState = sessionStorage.getItem(LOCAL_SSO_STATE_KEY);
+    sessionStorage.removeItem(LOCAL_SSO_STATE_KEY);
+
+    if (!expectedState || !state || expectedState !== state) {
+      toast.error("SSO 状态校验失败，请重新登录");
+      navigate("/", { replace: true });
+      return;
+    }
 
     if (!accessToken || !userId || !username || !sessionId) {
       toast.error("SSO 回调参数不完整，请重新登录");
@@ -29,9 +38,16 @@ const SsoCallback = () => {
       return;
     }
 
+    const parsedUserId = Number(userId);
+    if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
+      toast.error("SSO 用户标识无效，请重新登录");
+      navigate("/", { replace: true });
+      return;
+    }
+
     ssoCallback({
       accessToken,
-      userId: Number(userId),
+      userId: parsedUserId,
       username,
       sessionId,
     })

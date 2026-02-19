@@ -24,7 +24,7 @@ services:
       QDRANT_HOST: ${QDRANT_HOST:-http://127.0.0.1}
       QDRANT_PORT: ${QDRANT_PORT:-6335}
       QDRANT_ENABLED: ${QDRANT_ENABLED:-true}
-      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com:11030/sso/callback}
+      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com/sso/callback}
       SERVER_PORT: ${SERVER_PORT:-20030}
       JAVA_OPTS: ""
       SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/

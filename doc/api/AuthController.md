@@ -2,23 +2,24 @@
 
 ## 简介
 
-- 职责：提供 SSO 跳转地址与 SSO 回调换取本地会话能力。
-- 鉴权要求：`/sso-url`、`/sso-callback` 无需本地鉴权；`/me` 需要 `X-Auth-Token`。
+- 职责：提供 SSO 入口重定向、SSO 回调换取本地会话能力。
+- 鉴权要求：`/sso/login`、`/sso/register`、`/sso-callback` 无需本地鉴权；`/me` 需要 `X-Auth-Token`。
 - 基础路径：`/api/auth`
 
 ## 接口列表
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
-| GET | /api/auth/sso-url | 获取 user-service 的登录/注册跳转地址 |
+| GET | /api/auth/sso/login | 后端 302 跳转到 user-service 登录页 |
+| GET | /api/auth/sso/register | 后端 302 跳转到 user-service 注册页 |
 | POST | /api/auth/sso-callback | 处理 SSO 回调并建立本地会话 |
 | GET | /api/auth/me | 获取当前登录用户信息 |
 
 ## 接口详情
 
-### GET /api/auth/sso-url - 获取 SSO 跳转地址
+### GET /api/auth/sso/login - 重定向到 SSO 登录页
 
-**用途**：根据 Consul 服务发现结果拼接 user-service SSO 登录与注册 URL。
+**用途**：由后端拼接 user-service 登录地址并返回 `302`，浏览器直接跳转。
 
 **鉴权**：无需鉴权
 
@@ -26,36 +27,66 @@
 
 Path params：无
 
-Query params：无
+Query params：
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|------|------|------|------|------|
+| state | String | 是 | 一次性状态参数（16~128 位，`[A-Za-z0-9_-]`） | `"f3f5d4...2ab1"` |
 
 Body：无
 
 **返回值**
 
-| 字段 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| loginUrl | String | SSO 登录地址 | `http://user-service:19090/sso/login?...` |
-| registerUrl | String | SSO 注册地址 | `http://user-service:19090/register?...` |
+- HTTP 状态：`302 Found`
+- 响应头：`Location: http://<user-service>/sso/login?redirect=<callback>&state=<state>`
 
 **示例请求**
 
 ```bash
-curl -X GET "http://localhost:20030/api/auth/sso-url"
-```
-
-**示例响应**
-
-```json
-{
-  "loginUrl": "http://user-service:19090/sso/login?redirect=http%3A%2F%2Flocalhost%3A10030%2Fsso%2Fcallback",
-  "registerUrl": "http://user-service:19090/register?redirect=http%3A%2F%2Flocalhost%3A10030%2Fsso%2Fcallback"
-}
+curl -i -X GET "http://localhost:11031/api/auth/sso/login?state=2f4b47e894fd4d17b09a7f6401896f4a"
 ```
 
 **错误码/常见错误**
 
 | 错误码 | 说明 |
 |--------|------|
+| 400 | `state` 缺失或格式非法 |
+| 503 | Consul 无可用实例或服务发现失败 |
+
+### GET /api/auth/sso/register - 重定向到 SSO 注册页
+
+**用途**：由后端拼接 user-service 注册地址并返回 `302`，浏览器直接跳转。
+
+**鉴权**：无需鉴权
+
+**请求参数**
+
+Path params：无
+
+Query params：
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|------|------|------|------|------|
+| state | String | 是 | 一次性状态参数（16~128 位，`[A-Za-z0-9_-]`） | `"f3f5d4...2ab1"` |
+
+Body：无
+
+**返回值**
+
+- HTTP 状态：`302 Found`
+- 响应头：`Location: http://<user-service>/register?redirect=<callback>&state=<state>`
+
+**示例请求**
+
+```bash
+curl -i -X GET "http://localhost:11031/api/auth/sso/register?state=2f4b47e894fd4d17b09a7f6401896f4a"
+```
+
+**错误码/常见错误**
+
+| 错误码 | 说明 |
+|--------|------|
+| 400 | `state` 缺失或格式非法 |
 | 503 | Consul 无可用实例或服务发现失败 |
 
 ### POST /api/auth/sso-callback - 建立本地会话
@@ -89,7 +120,7 @@ Body：
 **示例请求**
 
 ```bash
-curl -X POST "http://localhost:20030/api/auth/sso-callback" \
+curl -X POST "http://localhost:11031/api/auth/sso-callback" \
   -H "Content-Type: application/json" \
   -d '{
     "accessToken": "remote-token",
@@ -157,7 +188,7 @@ Body：无
 **示例请求**
 
 ```bash
-curl -X GET "http://localhost:20030/api/auth/me" \
+curl -X GET "http://localhost:11031/api/auth/me" \
   -H "X-Auth-Token: <token>"
 ```
 
