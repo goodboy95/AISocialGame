@@ -11,10 +11,12 @@ import com.aisocialgame.integration.grpc.dto.RedeemResult;
 import com.aisocialgame.integration.grpc.dto.RedemptionRecordSnapshot;
 import com.aisocialgame.integration.grpc.dto.UsageRecordSnapshot;
 import fireflychat.billing.v1.BillingCheckinServiceGrpc;
+import fireflychat.billing.v1.BillingConversionServiceGrpc;
 import fireflychat.billing.v1.BillingBalanceServiceGrpc;
 import fireflychat.billing.v1.BillingQueryServiceGrpc;
 import fireflychat.billing.v1.BillingRedeemCodeServiceGrpc;
 import fireflychat.billing.v1.CheckinRequest;
+import fireflychat.billing.v1.ConvertPublicToProjectRequest;
 import fireflychat.billing.v1.GetCheckinStatusRequest;
 import fireflychat.billing.v1.GetProjectBalanceRequest;
 import fireflychat.billing.v1.GetPublicBalanceRequest;
@@ -45,22 +47,52 @@ public class BillingGrpcClient {
     @GrpcClient("billing")
     private BillingRedeemCodeServiceGrpc.BillingRedeemCodeServiceBlockingStub redeemCodeStub;
 
+    @GrpcClient("billing")
+    private BillingConversionServiceGrpc.BillingConversionServiceBlockingStub conversionStub;
+
     public BalanceSnapshot getBalance(String projectKey, long userId) {
         try {
-            var publicResponse = balanceStub.getPublicBalance(GetPublicBalanceRequest.newBuilder()
-                    .setUserId(userId)
-                    .build());
+            long publicTokens = getPublicPermanentTokens(userId);
             var projectResponse = balanceStub.getProjectBalance(GetProjectBalanceRequest.newBuilder()
                     .setProjectKey(projectKey)
                     .setUserId(userId)
                     .build());
             var projectBalance = projectResponse.getBalance();
             return new BalanceSnapshot(
-                    publicResponse.getPublicPermanentTokens(),
+                    publicTokens,
                     projectBalance.getTempTokens(),
                     projectBalance.getPermanentTokens(),
                     GrpcTimeMapper.toInstant(projectBalance.getTempExpiresAt())
             );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public BalanceSnapshot getProjectBalance(String projectKey, long userId) {
+        try {
+            var projectResponse = balanceStub.getProjectBalance(GetProjectBalanceRequest.newBuilder()
+                    .setProjectKey(projectKey)
+                    .setUserId(userId)
+                    .build());
+            var projectBalance = projectResponse.getBalance();
+            return new BalanceSnapshot(
+                    0,
+                    projectBalance.getTempTokens(),
+                    projectBalance.getPermanentTokens(),
+                    GrpcTimeMapper.toInstant(projectBalance.getTempExpiresAt())
+            );
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
+    public long getPublicPermanentTokens(long userId) {
+        try {
+            var publicResponse = balanceStub.getPublicBalance(GetPublicBalanceRequest.newBuilder()
+                    .setUserId(userId)
+                    .build());
+            return publicResponse.getPublicPermanentTokens();
         } catch (StatusRuntimeException ex) {
             throw toApiException(ex);
         }
@@ -167,6 +199,20 @@ public class BillingGrpcClient {
         return new PagedResult<>(snapshot.page(), snapshot.size(), snapshot.total(), snapshot.entries());
     }
 
+    public BalanceSnapshot convertPublicToProject(String requestId, String projectKey, long userId, long tokens) {
+        try {
+            var response = conversionStub.convertPublicToProject(ConvertPublicToProjectRequest.newBuilder()
+                    .setRequestId(requestId == null ? "" : requestId)
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .setTokens(tokens)
+                    .build());
+            return toBalanceSnapshot(response.getPublicPermanentTokens(), response.getProjectBalance());
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
     public RedeemResult redeemCode(String requestId, String projectKey, long userId, String code) {
         try {
             var response = redeemCodeStub.redeemCode(RedeemCodeRequest.newBuilder()
@@ -230,10 +276,7 @@ public class BillingGrpcClient {
     }
 
     private long getPublicTokens(long userId) {
-        var publicResponse = balanceStub.getPublicBalance(GetPublicBalanceRequest.newBuilder()
-                .setUserId(userId)
-                .build());
-        return publicResponse.getPublicPermanentTokens();
+        return getPublicPermanentTokens(userId);
     }
 
     private BalanceSnapshot toBalanceSnapshot(long publicPermanentTokens, fireflychat.billing.v1.ProjectBalance projectBalance) {

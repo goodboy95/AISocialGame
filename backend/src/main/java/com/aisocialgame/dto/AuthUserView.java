@@ -22,7 +22,7 @@ public class AuthUserView {
         this.email = user.getEmail();
         this.avatar = user.getAvatar();
         this.level = user.getLevel();
-        this.coins = balanceSnapshot.totalTokens();
+        this.coins = balanceSnapshot.projectTempTokens() + balanceSnapshot.projectPermanentTokens();
         this.balance = new BalanceView(balanceSnapshot);
     }
 

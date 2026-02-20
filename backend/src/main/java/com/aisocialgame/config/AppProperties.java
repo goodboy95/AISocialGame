@@ -10,6 +10,7 @@ public class AppProperties {
     private Consul consul = new Consul();
     private Sso sso = new Sso();
     private Ai ai = new Ai();
+    private Credit credit = new Credit();
     private Admin admin = new Admin();
 
     public String getProjectKey() {
@@ -50,6 +51,14 @@ public class AppProperties {
 
     public void setAdmin(Admin admin) {
         this.admin = admin;
+    }
+
+    public Credit getCredit() {
+        return credit;
+    }
+
+    public void setCredit(Credit credit) {
+        this.credit = credit;
     }
 
     public static class Ai {
@@ -142,6 +151,45 @@ public class AppProperties {
 
         public void setTokenTtlHours(long tokenTtlHours) {
             this.tokenTtlHours = tokenTtlHours;
+        }
+    }
+
+    public static class Credit {
+        private long checkinGrantTokens = 20;
+        private int tempExpiryDays = 30;
+        private long exchangeDailyLimit = 2000;
+        private int redeemFailureLimitPerDay = 10;
+
+        public long getCheckinGrantTokens() {
+            return checkinGrantTokens;
+        }
+
+        public void setCheckinGrantTokens(long checkinGrantTokens) {
+            this.checkinGrantTokens = checkinGrantTokens;
+        }
+
+        public int getTempExpiryDays() {
+            return tempExpiryDays;
+        }
+
+        public void setTempExpiryDays(int tempExpiryDays) {
+            this.tempExpiryDays = tempExpiryDays;
+        }
+
+        public long getExchangeDailyLimit() {
+            return exchangeDailyLimit;
+        }
+
+        public void setExchangeDailyLimit(long exchangeDailyLimit) {
+            this.exchangeDailyLimit = exchangeDailyLimit;
+        }
+
+        public int getRedeemFailureLimitPerDay() {
+            return redeemFailureLimitPerDay;
+        }
+
+        public void setRedeemFailureLimitPerDay(int redeemFailureLimitPerDay) {
+            this.redeemFailureLimitPerDay = redeemFailureLimitPerDay;
         }
     }
 }

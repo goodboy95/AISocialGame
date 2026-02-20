@@ -36,6 +36,11 @@ app:
   ai:
     default-model: ${APP_AI_DEFAULT_MODEL:}
     system-user-id: ${APP_AI_SYSTEM_USER_ID:0}
+  credit:
+    checkin-grant-tokens: ${APP_CREDIT_CHECKIN_GRANT_TOKENS:20}
+    temp-expiry-days: ${APP_CREDIT_TEMP_EXPIRY_DAYS:30}
+    exchange-daily-limit: ${APP_CREDIT_EXCHANGE_DAILY_LIMIT:2000}
+    redeem-failure-limit-per-day: ${APP_CREDIT_REDEEM_FAILURE_LIMIT_PER_DAY:10}
   websocket:
     enabled: ${APP_WEBSOCKET_ENABLED:true}
   admin:

@@ -196,6 +196,19 @@ export interface RedeemResponse {
   };
 }
 
+export interface ExchangeResponse {
+  success: boolean;
+  requestId: string;
+  exchangedTokens: number;
+  balance: {
+    publicPermanentTokens: number;
+    projectTempTokens: number;
+    projectPermanentTokens: number;
+    totalTokens: number;
+    projectTempExpiresAt?: string;
+  };
+}
+
 export interface RedemptionRecord {
   code: string;
   tokensGranted: number;

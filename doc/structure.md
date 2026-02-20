@@ -1,6 +1,6 @@
 # 项目结构说明
 
-> 更新时间：2026-02-19
+> 更新时间：2026-02-20
 
 ## 结构树
 
@@ -12,7 +12,9 @@ AISocialGame/
 │   │   ├── websocket/                        # WebSocket 认证、连接状态、推送与限流
 │   │   ├── dto/                              # 请求响应 DTO（含 dto/ws 事件模型）
 │   │   ├── model/                            # JPA 实体 + 对局状态对象
+│   │   │   └── credit/                       # 本地积分账户/流水/签到/兑换码/兑换事务实体
 │   │   ├── repository/                       # 数据访问层
+│   │   │   └── credit/                       # 本地积分仓储
 │   │   ├── integration/                      # 外部服务发现与 gRPC 调用封装
 │   │   └── config/                           # 应用配置、CORS、WebSocket Broker 配置
 │   ├── src/main/resources/application.yml    # 服务端口、连接阈值、WS 开关等
@@ -34,8 +36,8 @@ AISocialGame/
 │   ├── vite.config.ts                        # 开发/预览端口 11030，allowedHosts 与后端端口可配置
 │   └── nginx.conf                            # /api 与 /ws 反向代理到 backend:20030（宿主机映射默认 11031）
 ├── doc/
-│   ├── api/                                  # Controller 接口文档（新增 RoomChatController）
-│   ├── modules/                              # 模块说明（新增 modules/README、realtime-ws-module）
+│   ├── api/                                  # Controller 接口文档（含钱包兑换与后台调账/冲正文档）
+│   ├── modules/                              # 模块说明（含本地积分账本迁移说明）
 │   ├── test/                                 # 操作与集成测试说明
 │   ├── issues.md                             # 环境阻塞与遗留问题
 │   └── structure.md                          # 本文件
@@ -56,7 +58,11 @@ AISocialGame/
 ## 关键目录说明
 
 - `backend/src/main/java/com/aisocialgame/controller`
-  - 负责对局 REST 接口和房间聊天 STOMP 入口，统一承接房间、开局、动作提交与聊天消息。
+  - 负责对局 REST 接口、钱包接口、后台计费接口和房间聊天 STOMP 入口。
+- `backend/src/main/java/com/aisocialgame/service/ProjectCreditService.java`
+  - 本地积分领域服务，维护专属积分账户、不可变流水、签到、兑换码、通用转专属、客服调账与冲正。
+- `backend/src/main/java/com/aisocialgame/model/credit`
+  - 本地积分领域实体：账户、流水、签到记录、兑换码、兑换记录、兑换事务。
 - `backend/src/main/java/com/aisocialgame/websocket`
   - 提供 WS 鉴权拦截、连接生命周期跟踪、聊天限流与推送封装，支撑前端实时化。
 - `frontend/src/hooks/useGameSocket.ts`

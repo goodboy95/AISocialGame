@@ -3,6 +3,8 @@ package com.aisocialgame.controller;
 import com.aisocialgame.dto.BalanceView;
 import com.aisocialgame.dto.CheckinResponse;
 import com.aisocialgame.dto.CheckinStatusResponse;
+import com.aisocialgame.dto.ExchangeRequest;
+import com.aisocialgame.dto.ExchangeResponse;
 import com.aisocialgame.dto.LedgerEntryView;
 import com.aisocialgame.dto.PagedResponse;
 import com.aisocialgame.dto.RedeemRequest;
@@ -76,6 +78,15 @@ public class WalletController {
     public ResponseEntity<RedeemResponse> redeem(@RequestHeader(value = "X-Auth-Token", required = false) String token,
                                                  @Valid @RequestBody RedeemRequest request) {
         return ResponseEntity.ok(new RedeemResponse(walletService.redeemCode(requireUser(token), request.getCode())));
+    }
+
+    @PostMapping("/exchange/public-to-project")
+    public ResponseEntity<ExchangeResponse> exchangePublicToProject(
+            @RequestHeader(value = "X-Auth-Token", required = false) String token,
+            @Valid @RequestBody ExchangeRequest request) {
+        return ResponseEntity.ok(new ExchangeResponse(
+                walletService.exchangePublicToProject(requireUser(token), request.getAmount(), request.getRequestId())
+        ));
     }
 
     @GetMapping("/redemption-history")

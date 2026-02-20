@@ -12,6 +12,7 @@ import {
   CheckinResponse,
   CheckinStatusResponse,
   CommunityPost,
+  ExchangeResponse,
   Game,
   GameState,
   LedgerEntry,
@@ -150,6 +151,10 @@ export const walletApi = {
   },
   async getRedemptionHistory(page = 1, size = 20): Promise<PagedResponse<RedemptionRecord>> {
     const res = await api.get("/wallet/redemption-history", { params: { page, size } });
+    return res.data;
+  },
+  async exchangePublicToProject(amount: number, requestId?: string): Promise<ExchangeResponse> {
+    const res = await api.post("/wallet/exchange/public-to-project", { amount, requestId });
     return res.data;
   },
 };
@@ -321,6 +326,18 @@ export const adminApi = {
   },
   async ledger(userId: number, page = 1, size = 20) {
     const res = await adminApiClient.get("/admin/billing/ledger", { params: { userId, page, size } });
+    return res.data;
+  },
+  async adjustBalance(payload: { userId: number; deltaTemp: number; deltaPermanent: number; reason: string; requestId?: string }) {
+    const res = await adminApiClient.post("/admin/billing/adjust", payload);
+    return res.data;
+  },
+  async reverseBalance(payload: { userId: number; originalRequestId: string; reason: string }) {
+    const res = await adminApiClient.post("/admin/billing/reversal", payload);
+    return res.data;
+  },
+  async migrateUserBalance(userId: number) {
+    const res = await adminApiClient.post("/admin/billing/migrate-user", { userId });
     return res.data;
   },
   async aiModels(): Promise<AiModel[]> {

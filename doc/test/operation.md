@@ -42,3 +42,26 @@
 3. 期望：
    - WebSocket 已连接时，聊天消息出现在聊天区。
    - 连接断开时，页面提示重连中且发送失败有提示。
+
+## 6. 专属积分体系与兑换链路（2026-02-20）
+1. 用户登录后进入钱包面板，查看余额字段：
+   - `projectTempTokens`
+   - `projectPermanentTokens`
+   - `publicPermanentTokens`
+2. 执行签到（`POST /api/wallet/checkin`）后刷新余额：
+   - 期望：本地专属积分增加；同日重复签到返回已签到，不重复发放。
+3. 使用项目兑换码（`POST /api/wallet/redeem`）：
+   - 期望：成功时发放本地专属积分并记录流水；
+   - 错误码连续失败达到风控阈值后返回 `429`。
+4. 执行通用转专属（`POST /api/wallet/exchange/public-to-project`）：
+   - 入参：`amount`、可选 `requestId`；
+   - 期望：按 `1:1` 将 payService 通用积分兑换为本地专属积分并记录流水；
+   - 同 `requestId` 重放返回同一成功结果，不重复扣减。
+5. 管理端客服操作（需 `X-Admin-Token`）：
+   - `POST /api/admin/billing/adjust`：补发/扣回临时或永久专属积分；
+   - `POST /api/admin/billing/reversal`：按原始 `requestId` 冲正；
+   - `POST /api/admin/billing/migrate-user`：执行一次性迁移并冻结。
+6. 流水核验：
+   - 用户侧：`GET /api/wallet/ledger`
+   - 管理侧：`GET /api/admin/billing/ledger?userId=<id>`
+   - 期望：可见签到、兑换码、通用转专属、客服调账、冲正、迁移初始化等本地流水类型。

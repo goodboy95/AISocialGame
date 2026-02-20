@@ -182,7 +182,7 @@ Body：无
 | id | String | 本地用户 ID | `"a8f0c8f8-..."` |
 | externalUserId | Long | 外部用户 ID | `1001` |
 | nickname | String | 昵称 | `"demo_user"` |
-| coins | Long | 总积分（聚合） | `1200` |
+| coins | Long | 项目专属积分（临时+永久，不含通用积分） | `1200` |
 | balance | Object | 余额快照 | `{...}` |
 
 **示例请求**

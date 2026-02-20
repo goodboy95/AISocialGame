@@ -43,3 +43,26 @@
 - 证据：
   - `artifacts/test/20260219-sso-rerun/sso-login-redirect.png`
   - `artifacts/test/20260219-sso-rerun/sso-state-mismatch.png`
+
+---
+
+# 集成测试清单（2026-02-20）
+
+## 1. 后端单元测试（含专属积分服务新增分支）
+- 命令：`mvn -q -f backend/pom.xml test`
+- 结果：通过（`28` tests passed, `0` failures）。
+- 重点覆盖：
+  - `ProjectCreditServiceTest`：签到幂等、兑换码失败次数风控、无效兑换码失败记录、通用转专属日限额、`requestId` 幂等重放、冲正防重入。
+
+## 2. 前端构建测试
+- 命令：`npm --prefix frontend run build`
+- 结果：通过（Vite 构建成功，产物输出到 `frontend/dist`）。
+
+## 3. Playwright 页面验收（deploy-test 关键路径）
+- 访问：`http://aisocialgame.seekerhut.com`
+- 结果：首页可打开，页面首屏渲染正常。
+- 控制台与网络：无阻断错误。
+- 证据：
+  - `artifacts/test/20260220-224940/home-full.png`
+  - `artifacts/test/20260220-224940/console.log`
+  - `artifacts/test/20260220-224940/network.log`

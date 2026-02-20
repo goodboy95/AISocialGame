@@ -84,3 +84,102 @@ CREATE TABLE IF NOT EXISTS `player_stats` (
   KEY `idx_stats_player` (`player_id`),
   KEY `idx_stats_game` (`game_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_accounts` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `project_key` VARCHAR(64) NOT NULL,
+  `temp_balance` BIGINT NOT NULL DEFAULT 0,
+  `temp_expires_at` DATETIME NULL,
+  `permanent_balance` BIGINT NOT NULL DEFAULT 0,
+  `version` BIGINT NULL,
+  `created_at` DATETIME NULL,
+  `updated_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_credit_account_user_project` (`user_id`, `project_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_ledger_entries` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `request_id` VARCHAR(128) NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `project_key` VARCHAR(64) NOT NULL,
+  `type` VARCHAR(32) NOT NULL,
+  `token_delta_temp` BIGINT NOT NULL DEFAULT 0,
+  `token_delta_permanent` BIGINT NOT NULL DEFAULT 0,
+  `token_delta_public` BIGINT NOT NULL DEFAULT 0,
+  `balance_temp` BIGINT NOT NULL DEFAULT 0,
+  `balance_permanent` BIGINT NOT NULL DEFAULT 0,
+  `balance_public` BIGINT NOT NULL DEFAULT 0,
+  `source` VARCHAR(64) NULL,
+  `metadata_json` LONGTEXT NULL,
+  `related_entry_id` BIGINT NULL,
+  `created_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_credit_ledger_request_id` (`request_id`),
+  KEY `idx_credit_ledger_user_project_id` (`user_id`, `project_key`, `id`),
+  KEY `idx_credit_ledger_related` (`related_entry_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_checkin_records` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `request_id` VARCHAR(128) NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `project_key` VARCHAR(64) NOT NULL,
+  `checkin_date` DATE NOT NULL,
+  `tokens_granted` BIGINT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_credit_checkin_request_id` (`request_id`),
+  UNIQUE KEY `uk_credit_checkin_user_project_date` (`user_id`, `project_key`, `checkin_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_redeem_codes` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `code` VARCHAR(64) NOT NULL,
+  `credit_type` VARCHAR(32) NOT NULL,
+  `tokens` BIGINT NOT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `valid_from` DATETIME NULL,
+  `valid_until` DATETIME NULL,
+  `max_redemptions` INT NULL,
+  `redeemed_count` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NULL,
+  `updated_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_credit_redeem_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_redemption_records` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `request_id` VARCHAR(128) NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `project_key` VARCHAR(64) NOT NULL,
+  `code` VARCHAR(64) NOT NULL,
+  `tokens_granted` BIGINT NOT NULL DEFAULT 0,
+  `credit_type` VARCHAR(32) NOT NULL,
+  `success` TINYINT(1) NOT NULL DEFAULT 0,
+  `error_message` VARCHAR(255) NULL,
+  `redeemed_at` DATETIME NULL,
+  `created_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_credit_redeem_user_project_id` (`user_id`, `project_key`, `id`),
+  KEY `idx_credit_redeem_user_project_code_success` (`user_id`, `project_key`, `code`, `success`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `credit_exchange_transactions` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `request_id` VARCHAR(128) NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `project_key` VARCHAR(64) NOT NULL,
+  `public_tokens` BIGINT NOT NULL,
+  `project_tokens` BIGINT NOT NULL,
+  `status` VARCHAR(16) NOT NULL,
+  `fail_reason` VARCHAR(255) NULL,
+  `retriable` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` DATETIME NULL,
+  `updated_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_credit_exchange_request_id` (`request_id`),
+  KEY `idx_credit_exchange_user_project_status_created` (`user_id`, `project_key`, `status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

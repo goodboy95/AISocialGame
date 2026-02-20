@@ -6,6 +6,7 @@ import { CheckinStatusResponse, LedgerEntry, RedemptionRecord, UsageRecord, User
 import BalanceOverview from "./BalanceOverview";
 import CheckinCard from "./CheckinCard";
 import RedeemCard from "./RedeemCard";
+import ExchangeCard from "./ExchangeCard";
 import UsageRecordList from "./UsageRecordList";
 import LedgerEntryList from "./LedgerEntryList";
 
@@ -28,6 +29,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
+  const [exchanging, setExchanging] = useState(false);
 
   const loadUsage = async (page: number) => {
     const data = await walletApi.getUsageRecords(page, PAGE_SIZE);
@@ -103,6 +105,20 @@ const WalletPanel = ({ initialBalance }: Props) => {
     }
   };
 
+  const onExchange = async (amount: number) => {
+    setExchanging(true);
+    try {
+      const result = await walletApi.exchangePublicToProject(amount);
+      setBalance(result.balance);
+      toast.success(`兑换成功，到账 ${result.exchangedTokens} 专属积分`);
+      await loadLedger(1);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "兑换失败");
+    } finally {
+      setExchanging(false);
+    }
+  };
+
   const usageHasMore = useMemo(() => usagePage * PAGE_SIZE < usageTotal, [usagePage, usageTotal]);
   const ledgerHasMore = useMemo(() => ledgerPage * PAGE_SIZE < ledgerTotal, [ledgerPage, ledgerTotal]);
 
@@ -115,6 +131,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
       />
       <CheckinCard status={checkinStatus} checking={checking} onCheckin={onCheckin} />
       <RedeemCard redeeming={redeeming} onRedeem={onRedeem} />
+      <ExchangeCard exchanging={exchanging} onExchange={onExchange} />
       <UsageRecordList
         title="消费记录"
         records={usageRecords}

@@ -1,8 +1,6 @@
 package com.aisocialgame.service;
 
-import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.exception.ApiException;
-import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.CheckinResult;
 import com.aisocialgame.integration.grpc.dto.CheckinStatusResult;
@@ -16,35 +14,25 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.UUID;
-
 @Service
 public class WalletService {
-    private final BillingGrpcClient billingGrpcClient;
     private final BalanceService balanceService;
-    private final AppProperties appProperties;
+    private final ProjectCreditService projectCreditService;
 
-    public WalletService(BillingGrpcClient billingGrpcClient,
-                         BalanceService balanceService,
-                         AppProperties appProperties) {
-        this.billingGrpcClient = billingGrpcClient;
+    public WalletService(BalanceService balanceService,
+                         ProjectCreditService projectCreditService) {
         this.balanceService = balanceService;
-        this.appProperties = appProperties;
+        this.projectCreditService = projectCreditService;
     }
 
     public CheckinResult checkin(User user) {
         long userId = requireExternalUserId(user);
-        String requestId = appProperties.getProjectKey() + ":checkin:" + userId + ":"
-                + LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE);
-        return billingGrpcClient.checkin(requestId, appProperties.getProjectKey(), userId);
+        return projectCreditService.checkin(userId, readPublicTokens(userId));
     }
 
     public CheckinStatusResult getCheckinStatus(User user) {
         long userId = requireExternalUserId(user);
-        return billingGrpcClient.getCheckinStatus(appProperties.getProjectKey(), userId);
+        return projectCreditService.getCheckinStatus(userId);
     }
 
     public BalanceSnapshot getBalance(User user) {
@@ -53,12 +41,12 @@ public class WalletService {
 
     public PagedResult<UsageRecordSnapshot> getUsageRecords(User user, int page, int size) {
         long userId = requireExternalUserId(user);
-        return billingGrpcClient.listUsageRecords(appProperties.getProjectKey(), userId, normalizePage(page), normalizeSize(size));
+        return projectCreditService.listUsageRecords(userId, normalizePage(page), normalizeSize(size));
     }
 
     public PagedResult<LedgerEntrySnapshot> getLedgerEntries(User user, int page, int size) {
         long userId = requireExternalUserId(user);
-        return billingGrpcClient.listLedgerEntriesForWallet(userId, appProperties.getProjectKey(), normalizePage(page), normalizeSize(size));
+        return projectCreditService.listLedgerEntries(userId, normalizePage(page), normalizeSize(size));
     }
 
     public RedeemResult redeemCode(User user, String code) {
@@ -66,13 +54,17 @@ public class WalletService {
         if (!StringUtils.hasText(code)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "兑换码不能为空");
         }
-        String requestId = appProperties.getProjectKey() + ":redeem:" + userId + ":" + UUID.randomUUID();
-        return billingGrpcClient.redeemCode(requestId, appProperties.getProjectKey(), userId, code.trim());
+        return projectCreditService.redeemCode(userId, code.trim(), readPublicTokens(userId));
     }
 
     public PagedResult<RedemptionRecordSnapshot> getRedemptionHistory(User user, int page, int size) {
         long userId = requireExternalUserId(user);
-        return billingGrpcClient.getRedemptionHistory(appProperties.getProjectKey(), userId, normalizePage(page), normalizeSize(size));
+        return projectCreditService.getRedemptionHistory(userId, normalizePage(page), normalizeSize(size));
+    }
+
+    public CreditExchangeResult exchangePublicToProject(User user, long tokens, String requestId) {
+        long userId = requireExternalUserId(user);
+        return projectCreditService.exchangePublicToProject(userId, tokens, requestId);
     }
 
     private long requireExternalUserId(User user) {
@@ -91,5 +83,13 @@ public class WalletService {
             return 20;
         }
         return Math.min(size, 100);
+    }
+
+    private long readPublicTokens(long userId) {
+        try {
+            return balanceService.getUserBalance(userId).publicPermanentTokens();
+        } catch (Exception ignored) {
+            return 0;
+        }
     }
 }

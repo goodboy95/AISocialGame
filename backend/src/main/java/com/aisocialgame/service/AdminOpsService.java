@@ -28,6 +28,8 @@ import java.util.List;
 public class AdminOpsService {
     private final UserGrpcClient userGrpcClient;
     private final BillingGrpcClient billingGrpcClient;
+    private final BalanceService balanceService;
+    private final ProjectCreditService projectCreditService;
     private final AiProxyService aiProxyService;
     private final UserRepository userRepository;
     private final RoomRepository roomRepository;
@@ -37,6 +39,8 @@ public class AdminOpsService {
 
     public AdminOpsService(UserGrpcClient userGrpcClient,
                            BillingGrpcClient billingGrpcClient,
+                           BalanceService balanceService,
+                           ProjectCreditService projectCreditService,
                            AiProxyService aiProxyService,
                            UserRepository userRepository,
                            RoomRepository roomRepository,
@@ -45,6 +49,8 @@ public class AdminOpsService {
                            AppProperties appProperties) {
         this.userGrpcClient = userGrpcClient;
         this.billingGrpcClient = billingGrpcClient;
+        this.balanceService = balanceService;
+        this.projectCreditService = projectCreditService;
         this.aiProxyService = aiProxyService;
         this.userRepository = userRepository;
         this.roomRepository = roomRepository;
@@ -83,7 +89,7 @@ public class AdminOpsService {
             throw new ApiException(HttpStatus.NOT_FOUND, "用户不存在");
         }
         var banStatus = userGrpcClient.getBanStatus(userId);
-        BalanceSnapshot balance = billingGrpcClient.getBalance(appProperties.getProjectKey(), userId);
+        BalanceSnapshot balance = balanceService.getUserBalance(userId);
         return new AdminUserView(profile, banStatus, balance);
     }
 
@@ -98,12 +104,45 @@ public class AdminOpsService {
     }
 
     public BalanceSnapshot getBalance(long userId) {
-        return billingGrpcClient.getBalance(appProperties.getProjectKey(), userId);
+        return balanceService.getUserBalance(userId);
     }
 
     public AdminLedgerPageResponse getLedger(long userId, int page, int size) {
         return new AdminLedgerPageResponse(
-                billingGrpcClient.listLedgerEntries(userId, appProperties.getProjectKey(), page, size)
+                projectCreditService.listLedgerEntriesForAdmin(userId, page, size)
+        );
+    }
+
+    public BalanceSnapshot adjustBalance(long userId,
+                                         long deltaTemp,
+                                         long deltaPermanent,
+                                         String reason,
+                                         String operator,
+                                         String requestId) {
+        return projectCreditService.adjustBalance(userId, deltaTemp, deltaPermanent, reason, operator, requestId);
+    }
+
+    public BalanceSnapshot reverseBalance(long userId,
+                                          String originalRequestId,
+                                          String reason,
+                                          String operator) {
+        return projectCreditService.reverseByRequestId(userId, originalRequestId, reason, operator);
+    }
+
+    public BalanceSnapshot migrateUserBalance(long userId, String operator) {
+        BalanceSnapshot projectSnapshot = billingGrpcClient.getProjectBalance(appProperties.getProjectKey(), userId);
+        long publicTokens;
+        try {
+            publicTokens = billingGrpcClient.getPublicPermanentTokens(userId);
+        } catch (Exception ignored) {
+            publicTokens = 0;
+        }
+        return projectCreditService.migrateFromPayServiceSnapshot(
+                userId,
+                projectSnapshot.projectTempTokens(),
+                projectSnapshot.projectPermanentTokens(),
+                publicTokens,
+                operator
         );
     }
 

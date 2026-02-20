@@ -1,9 +1,10 @@
-# 认证与钱包模块说明（v1.2）
+# 认证与钱包模块说明（v1.3）
 
 ## 模块职责
 
 - 认证链路：前端统一走 user-service SSO 页面，回调后由后端建立本地会话。
-- 钱包链路：提供签到、余额、消费记录、账本明细、兑换码兑换、兑换历史能力。
+- 钱包链路：提供本地签到、余额、账本明细、兑换码兑换、通用转专属兑换、兑换历史能力。
+- 积分模型：项目专属积分在本地维护（临时+永久），通用积分只读来自 payService。
 - 统一会话：业务接口通过 `X-Auth-Token` 识别当前用户并复用远端 `session_id`。
 
 ## 关键实现
@@ -11,6 +12,7 @@
 - 后端：
   - `AuthController` / `AuthService`：`/sso/login`、`/sso/register`、`/sso-callback`、`/me`
   - `WalletController` / `WalletService`：`/api/wallet/*`
+  - `ProjectCreditService`：本地积分账户、流水、签到、兑换码、兑换事务
   - `ConsulHttpServiceDiscovery`：解析 `aienie-userservice-http` 实例地址
 - 前端：
   - `useAuth`：生成一次性 `state`，跳转 `/api/auth/sso/login|register`
@@ -31,3 +33,4 @@
 3. 后端 302 跳转 user-service 页面，用户完成登录/注册后回调到 `/sso/callback#...&state=...`。
 4. 前端回调页严格比对 `state`，校验通过后调用 `/api/auth/sso-callback`。
 5. 后端校验远端会话并签发本地 token；钱包页面再携带 `X-Auth-Token` 调用 `/api/wallet/*`。
+6. 钱包签到/兑换码/账本写入本地账本；通用转专属通过 payService 扣减通用积分后写入本地永久专属积分。
