@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { walletApi } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
 import { CheckinStatusResponse, LedgerEntry, RedemptionRecord, UsageRecord, User } from "@/types";
 import BalanceOverview from "./BalanceOverview";
 import CheckinCard from "./CheckinCard";
@@ -17,6 +18,7 @@ interface Props {
 const PAGE_SIZE = 5;
 
 const WalletPanel = ({ initialBalance }: Props) => {
+  const { updateBalance } = useAuth();
   const [balance, setBalance] = useState<User["balance"] | undefined>(initialBalance);
   const [checkinStatus, setCheckinStatus] = useState<CheckinStatusResponse | null>(null);
   const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
@@ -30,6 +32,13 @@ const WalletPanel = ({ initialBalance }: Props) => {
   const [checking, setChecking] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [exchanging, setExchanging] = useState(false);
+
+  const applyBalance = (nextBalance?: User["balance"]) => {
+    setBalance(nextBalance);
+    if (nextBalance) {
+      updateBalance(nextBalance);
+    }
+  };
 
   const loadUsage = async (page: number) => {
     const data = await walletApi.getUsageRecords(page, PAGE_SIZE);
@@ -53,7 +62,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
         walletApi.getCheckinStatus(),
         walletApi.getRedemptionHistory(1, PAGE_SIZE),
       ]);
-      setBalance(balanceData);
+      applyBalance(balanceData);
       setCheckinStatus(statusData);
       setRedemptions(redemptionData.items);
       await Promise.all([loadUsage(1), loadLedger(1)]);
@@ -72,7 +81,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
     setChecking(true);
     try {
       const result = await walletApi.checkin();
-      setBalance(result.balance);
+      applyBalance(result.balance);
       setCheckinStatus((prev) => ({
         checkedInToday: true,
         lastCheckinDate: prev?.lastCheckinDate,
@@ -94,7 +103,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
         toast.error(result.errorMessage || "兑换失败");
         return;
       }
-      setBalance(result.balance);
+      applyBalance(result.balance);
       toast.success(`兑换成功，到账 ${result.tokensGranted} 积分`);
       const redemptionData = await walletApi.getRedemptionHistory(1, PAGE_SIZE);
       setRedemptions(redemptionData.items);
@@ -109,7 +118,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
     setExchanging(true);
     try {
       const result = await walletApi.exchangePublicToProject(amount);
-      setBalance(result.balance);
+      applyBalance(result.balance);
       toast.success(`兑换成功，到账 ${result.exchangedTokens} 专属积分`);
       await loadLedger(1);
     } catch (error: any) {

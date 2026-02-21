@@ -15,6 +15,11 @@ const BillingAdmin = () => {
   const [adjustReason, setAdjustReason] = useState("");
   const [reverseRequestId, setReverseRequestId] = useState("");
   const [reverseReason, setReverseReason] = useState("");
+  const [redeemCodeInput, setRedeemCodeInput] = useState("");
+  const [redeemTokens, setRedeemTokens] = useState("1234");
+  const [redeemCreditType, setRedeemCreditType] = useState("CREDIT_TYPE_PERMANENT");
+  const [redeemMaxRedemptions, setRedeemMaxRedemptions] = useState("1");
+  const [createdRedeemCode, setCreatedRedeemCode] = useState<any>(null);
 
   const load = async () => {
     const id = Number(userId);
@@ -99,6 +104,32 @@ const BillingAdmin = () => {
     }
   };
 
+  const createRedeemCode = async () => {
+    const tokens = Number(redeemTokens);
+    if (!Number.isFinite(tokens) || tokens <= 0) {
+      toast.error("兑换积分必须大于 0");
+      return;
+    }
+    const parsedMax = redeemMaxRedemptions.trim() ? Number(redeemMaxRedemptions) : undefined;
+    if (parsedMax !== undefined && (!Number.isInteger(parsedMax) || parsedMax <= 0)) {
+      toast.error("最大兑换次数必须为正整数");
+      return;
+    }
+    try {
+      const created = await adminApi.createRedeemCode({
+        code: redeemCodeInput.trim() || undefined,
+        tokens,
+        creditType: redeemCreditType,
+        maxRedemptions: parsedMax,
+        active: true,
+      });
+      setCreatedRedeemCode(created);
+      toast.success(`兑换码已生成：${created.code}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "生成兑换码失败");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">积分管理</h2>
@@ -157,6 +188,67 @@ const BillingAdmin = () => {
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">从 payService 读取该用户项目积分快照并落库到本地账本（幂等）。</p>
           <Button variant="secondary" onClick={migrateBalance}>执行迁移</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>生成兑换码</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="create-redeem-code">兑换码（可选）</Label>
+              <Input
+                id="create-redeem-code"
+                data-testid="admin-redeem-code-input"
+                value={redeemCodeInput}
+                onChange={(e) => setRedeemCodeInput(e.target.value)}
+                placeholder="留空自动生成"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="create-redeem-tokens">发放积分</Label>
+              <Input
+                id="create-redeem-tokens"
+                data-testid="admin-redeem-tokens-input"
+                value={redeemTokens}
+                onChange={(e) => setRedeemTokens(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="create-redeem-credit-type">积分类型</Label>
+              <select
+                id="create-redeem-credit-type"
+                data-testid="admin-redeem-credit-type"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={redeemCreditType}
+                onChange={(e) => setRedeemCreditType(e.target.value)}
+              >
+                <option value="CREDIT_TYPE_PERMANENT">永久积分</option>
+                <option value="CREDIT_TYPE_TEMP">临时积分</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="create-redeem-max">最大兑换次数</Label>
+              <Input
+                id="create-redeem-max"
+                data-testid="admin-redeem-max-input"
+                value={redeemMaxRedemptions}
+                onChange={(e) => setRedeemMaxRedemptions(e.target.value)}
+                placeholder="留空不限次数"
+              />
+            </div>
+          </div>
+          <Button data-testid="admin-create-redeem-code-btn" onClick={createRedeemCode}>创建兑换码</Button>
+          {createdRedeemCode && (
+            <div className="rounded border p-2 text-sm" data-testid="admin-created-redeem-code">
+              <p>兑换码：{createdRedeemCode.code}</p>
+              <p>积分：{createdRedeemCode.tokens}（{createdRedeemCode.creditType}）</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

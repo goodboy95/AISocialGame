@@ -9,6 +9,8 @@ interface AuthContextValue {
   redirectToSsoLogin: () => Promise<void>;
   redirectToSsoRegister: () => Promise<void>;
   ssoCallback: (payload: SsoCallbackData) => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateBalance: (balance: NonNullable<User["balance"]>) => void;
   logout: () => void;
   displayName: string;
   avatar: string;
@@ -73,6 +75,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshUser = async () => {
+    if (!token) {
+      return;
+    }
+    const me = await authApi.me();
+    setUser(me);
+  };
+
+  const updateBalance = (balance: NonNullable<User["balance"]>) => {
+    setUser((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        coins: balance.totalTokens,
+        balance,
+      };
+    });
+  };
+
   const redirectToSsoLogin = async () => {
     const state = generateSsoState();
     sessionStorage.setItem(LOCAL_SSO_STATE_KEY, state);
@@ -114,6 +137,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     redirectToSsoLogin,
     redirectToSsoRegister,
     ssoCallback,
+    refreshUser,
+    updateBalance,
     logout,
     displayName,
     avatar,

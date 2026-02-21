@@ -48,6 +48,7 @@ import java.util.UUID;
 public class ProjectCreditService {
     private static final String CREDIT_TYPE_UNSPECIFIED = "CREDIT_TYPE_UNSPECIFIED";
     private static final String CREDIT_TYPE_TEMP = "CREDIT_TYPE_TEMP";
+    private static final String CREDIT_TYPE_PERMANENT = "CREDIT_TYPE_PERMANENT";
 
     private static final String EXCHANGE_PENDING = "PENDING";
     private static final String EXCHANGE_SUCCESS = "SUCCESS";
@@ -164,6 +165,49 @@ public class ProjectCreditService {
         Instant lastCheckinDate = latest.map(item -> item.getCheckinDate().atStartOfDay().toInstant(ZoneOffset.UTC)).orElse(null);
         long grantedToday = todayRecord.map(CreditCheckinRecord::getTokensGranted).orElse(0L);
         return new CheckinStatusResult(todayRecord.isPresent(), lastCheckinDate, grantedToday);
+    }
+
+    @Transactional
+    public CreditRedeemCode createRedeemCode(String code,
+                                             long tokens,
+                                             String creditType,
+                                             Integer maxRedemptions,
+                                             Instant validFrom,
+                                             Instant validUntil,
+                                             Boolean active) {
+        if (tokens <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "兑换积分必须大于 0");
+        }
+        if (maxRedemptions != null && maxRedemptions <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "最大兑换次数必须大于 0");
+        }
+        if (validFrom != null && validUntil != null && !validUntil.isAfter(validFrom)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "失效时间必须晚于生效时间");
+        }
+
+        String normalizedType = normalizeCreditType(creditType);
+        String normalizedCode = normalizeCode(code);
+        if (StringUtils.hasText(normalizedCode)) {
+            if (!normalizedCode.matches("[A-Z0-9\\-]{4,64}")) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "兑换码格式不合法");
+            }
+            if (creditRedeemCodeRepository.findByCode(normalizedCode).isPresent()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "兑换码已存在");
+            }
+        } else {
+            normalizedCode = generateUniqueRedeemCode();
+        }
+
+        CreditRedeemCode redeemCode = new CreditRedeemCode();
+        redeemCode.setCode(normalizedCode);
+        redeemCode.setCreditType(normalizedType);
+        redeemCode.setTokens(tokens);
+        redeemCode.setActive(active == null || active);
+        redeemCode.setMaxRedemptions(maxRedemptions);
+        redeemCode.setValidFrom(validFrom);
+        redeemCode.setValidUntil(validUntil);
+        redeemCode.setRedeemedCount(0);
+        return creditRedeemCodeRepository.save(redeemCode);
     }
 
     @Transactional
@@ -336,6 +380,57 @@ public class ProjectCreditService {
                 ))
                 .toList();
         return new PagedLedgerSnapshot(normalizedPage, normalizedSize, pageData.getTotalElements(), entries);
+    }
+
+    @Transactional
+    public BalanceSnapshot consumeProjectTokens(long userId,
+                                                long billedTokens,
+                                                String source,
+                                                Map<String, String> metadata,
+                                                String requestId) {
+        if (billedTokens <= 0) {
+            return getBalance(userId, safeGetPublicTokens(userId));
+        }
+
+        String normalizedRequestId = normalizeRequestId(requestId, "consume", userId);
+        if (creditLedgerEntryRepository.findByRequestId(normalizedRequestId).isPresent()) {
+            return getBalance(userId, safeGetPublicTokens(userId));
+        }
+
+        long publicTokens = safeGetPublicTokens(userId);
+        CreditAccount account = getOrCreateAccountForUpdate(userId, appProperties.getProjectKey());
+        expireTempIfNeeded(account, publicTokens);
+
+        long available = Math.max(0, account.getTempBalance()) + Math.max(0, account.getPermanentBalance());
+        if (available < billedTokens) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "专属积分不足，请先充值或兑换");
+        }
+
+        long consumeTemp = Math.min(account.getTempBalance(), billedTokens);
+        long consumePermanent = billedTokens - consumeTemp;
+        account.setTempBalance(account.getTempBalance() - consumeTemp);
+        account.setPermanentBalance(account.getPermanentBalance() - consumePermanent);
+        if (account.getTempBalance() == 0) {
+            account.setTempExpiresAt(null);
+        }
+        creditAccountRepository.save(account);
+
+        Map<String, String> normalizedMetadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
+        normalizedMetadata.put("billedTokens", String.valueOf(billedTokens));
+        insertLedgerEntry(
+                normalizedRequestId,
+                userId,
+                "CONSUME",
+                -consumeTemp,
+                -consumePermanent,
+                0,
+                publicTokens,
+                StringUtils.hasText(source) ? source.trim() : "AI_CONSUME",
+                normalizedMetadata,
+                null,
+                account
+        );
+        return toBalanceSnapshot(account, publicTokens);
     }
 
     @Transactional
@@ -673,6 +768,40 @@ public class ProjectCreditService {
             return "";
         }
         return code.trim().toUpperCase();
+    }
+
+    private String normalizeCreditType(String creditType) {
+        if (!StringUtils.hasText(creditType)) {
+            return CREDIT_TYPE_PERMANENT;
+        }
+        String normalized = creditType.trim().toUpperCase();
+        if (CREDIT_TYPE_TEMP.equals(normalized) || CREDIT_TYPE_PERMANENT.equals(normalized)) {
+            return normalized;
+        }
+        throw new ApiException(HttpStatus.BAD_REQUEST, "creditType 不支持");
+    }
+
+    private String generateUniqueRedeemCode() {
+        String prefix = appProperties.getProjectKey();
+        if (!StringUtils.hasText(prefix)) {
+            prefix = "ASG";
+        }
+        prefix = prefix.trim().toUpperCase().replaceAll("[^A-Z0-9]", "");
+        if (!StringUtils.hasText(prefix)) {
+            prefix = "ASG";
+        }
+        if (prefix.length() > 8) {
+            prefix = prefix.substring(0, 8);
+        }
+
+        for (int i = 0; i < 10; i++) {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
+            String candidate = prefix + "-" + suffix;
+            if (creditRedeemCodeRepository.findByCode(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new ApiException(HttpStatus.CONFLICT, "生成兑换码失败，请重试");
     }
 
     private String normalizeRequestId(String requestId, String action, long userId) {

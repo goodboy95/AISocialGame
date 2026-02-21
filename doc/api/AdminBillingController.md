@@ -43,3 +43,20 @@
 - Body：
   - `userId` (long, required)
 - 响应：`BalanceView`
+
+## POST `/redeem-codes`
+- 用途：创建本项目兑换码（用于发放本地专属积分）
+- Body：
+  - `code` (string, optional，留空自动生成)
+  - `tokens` (long, required，>0)
+  - `creditType` (string, optional，默认 `CREDIT_TYPE_PERMANENT`，可选 `CREDIT_TYPE_PERMANENT`/`CREDIT_TYPE_TEMP`)
+  - `maxRedemptions` (int, optional，>0，留空表示不限)
+  - `validFrom` (Instant, optional)
+  - `validUntil` (Instant, optional，必须晚于 `validFrom`)
+  - `active` (boolean, optional，默认 `true`)
+- 响应：`AdminRedeemCodeResponse`
+- 失败：
+  - `tokens <= 0`
+  - `code` 格式不合法或已存在
+  - `creditType` 非法
+  - `validUntil <= validFrom`

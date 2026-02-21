@@ -145,6 +145,18 @@ export interface AdminIntegrationStatus {
   }[];
 }
 
+export interface AdminRedeemCode {
+  id: number;
+  code: string;
+  creditType: string;
+  tokens: number;
+  active: boolean;
+  validFrom?: string;
+  validUntil?: string;
+  maxRedemptions?: number;
+  redeemedCount: number;
+}
+
 export interface CheckinResponse {
   success: boolean;
   tokensGranted: number;

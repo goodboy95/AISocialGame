@@ -8,6 +8,7 @@ import com.aisocialgame.integration.grpc.dto.AiEmbeddingsResult;
 import com.aisocialgame.integration.grpc.dto.AiOcrResult;
 import com.aisocialgame.model.User;
 import com.aisocialgame.service.AiProxyService;
+import com.aisocialgame.service.ProjectCreditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,8 @@ class AiProxyServiceTest {
 
     @Mock
     private AiGrpcClient aiGrpcClient;
+    @Mock
+    private ProjectCreditService projectCreditService;
 
     private AiProxyService aiProxyService;
 
@@ -39,7 +42,7 @@ class AiProxyServiceTest {
         appProperties.setProjectKey("aisocialgame");
         appProperties.getAi().setDefaultModel("default-model");
         appProperties.getAi().setSystemUserId(1L);
-        aiProxyService = new AiProxyService(aiGrpcClient, appProperties);
+        aiProxyService = new AiProxyService(aiGrpcClient, projectCreditService, appProperties);
     }
 
     @Test
@@ -57,6 +60,7 @@ class AiProxyServiceTest {
         aiProxyService.embeddings(request, user);
 
         verify(aiGrpcClient).embeddings("aisocialgame", 1001L, "session-1001", "default-model", List.of("hello", "world"), true);
+        verify(projectCreditService).consumeProjectTokens(eq(1001L), eq(2L), eq("AI_EMBEDDINGS"), org.mockito.ArgumentMatchers.anyMap(), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test

@@ -5,6 +5,10 @@
 - 职责：封装 AI 网关能力（模型、对话、SSE 流式输出、向量、OCR）。
 - 鉴权要求：`/models` 无需鉴权；其余接口需 `X-Auth-Token`。
 - 基础路径：`/api/ai`
+- 计费说明：
+  - chat/embeddings 成功后按 token 扣减本地专属积分并写入本地账本 `CONSUME` 流水。
+  - 扣减口径：`chat = promptTokens + completionTokens`，`embeddings = promptTokens`。
+  - 余额不足返回 `400`（`专属积分不足，请先充值或兑换`）。
 
 ## 接口列表
 
@@ -125,6 +129,7 @@ curl -X POST "http://localhost:20030/api/ai/chat" \
 | 错误码 | 说明 |
 |--------|------|
 | 401 | 未登录 |
+| 400 | 专属积分不足，请先充值或兑换 |
 | 502 | AI 服务调用失败 |
 
 ### POST /api/ai/chat/stream - SSE 流式对话
@@ -175,6 +180,7 @@ data: {"content":"","done":true,"modelKey":"gpt-4o-mini","promptTokens":10,"comp
 | 错误码 | 说明 |
 |--------|------|
 | 401 | 未登录 |
+| 400 | 专属积分不足，请先充值或兑换 |
 | 502 | AI 服务调用失败 |
 
 ### POST /api/ai/embeddings - 生成向量
@@ -235,6 +241,7 @@ curl -X POST "http://localhost:20030/api/ai/embeddings" \
 |--------|------|
 | 401 | 未登录 |
 | 400 | input 为空 |
+| 400 | 专属积分不足，请先充值或兑换 |
 
 ### POST /api/ai/ocr - OCR 解析
 

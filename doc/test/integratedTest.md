@@ -66,3 +66,33 @@
   - `artifacts/test/20260220-224940/home-full.png`
   - `artifacts/test/20260220-224940/console.log`
   - `artifacts/test/20260220-224940/network.log`
+
+---
+
+# 集成测试清单（2026-02-21）
+
+## 1. 部署与构建回归
+- 部署脚本：`powershell -ExecutionPolicy Bypass -File .\build_local.ps1`
+- 结果：通过（前后端服务可用，测试域名可访问）。
+- 后端单测：`mvn -q -f backend/pom.xml test`，通过。
+- 前端构建：`npm --prefix frontend run build`，通过。
+
+## 2. Playwright MCP 端到端验收（管理员生成兑换码 + 用户兑换 + AI 消耗）
+- 验收入口：`http://aisocialgame.seekerhut.com`
+- 管理员链路：
+  - 登录后台（`admin/admin123`）。
+  - 在“积分管理 -> 生成兑换码”创建 `1234` 积分兑换码。
+  - 实际生成兑换码：`AISOCIAL-E738163261`。
+- 用户链路：
+  - 注册并登录新用户（见 `artifacts/test/current-sso-user.json`）。
+  - 在钱包使用上述兑换码，余额增加 `+1234`。
+  - 执行 AI 对话后，账本新增 `CONSUME` 流水，余额由 `1234` 降至 `995`（消耗 `239`）。
+  - 再执行签到，余额升至 `1015`，顶部积分显示与钱包余额保持一致。
+
+## 3. 验收结论与证据
+- 结论：通过。管理端兑换码创建、本地兑换入账、AI 成功后本地扣减、钱包与顶栏余额同步均符合预期。
+- 证据：
+  - `artifacts/test/20260221-084819/wallet-after-checkin.png`
+  - `artifacts/test/20260221-084819/console.log`
+  - `artifacts/test/20260221-084819/network.log`
+  - `artifacts/test/current-sso-user.json`

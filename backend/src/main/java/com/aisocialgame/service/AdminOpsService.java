@@ -14,6 +14,7 @@ import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
+import com.aisocialgame.model.credit.CreditRedeemCode;
 import com.aisocialgame.repository.CommunityPostRepository;
 import com.aisocialgame.repository.GameStateRepository;
 import com.aisocialgame.repository.RoomRepository;
@@ -143,6 +144,24 @@ public class AdminOpsService {
                 projectSnapshot.projectPermanentTokens(),
                 publicTokens,
                 operator
+        );
+    }
+
+    public CreditRedeemCode createRedeemCode(String code,
+                                             long tokens,
+                                             String creditType,
+                                             Integer maxRedemptions,
+                                             Instant validFrom,
+                                             Instant validUntil,
+                                             Boolean active) {
+        return projectCreditService.createRedeemCode(
+                code,
+                tokens,
+                creditType,
+                maxRedemptions,
+                validFrom,
+                validUntil,
+                active
         );
     }
 

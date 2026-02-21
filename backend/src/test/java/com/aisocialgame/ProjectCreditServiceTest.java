@@ -10,6 +10,7 @@ import com.aisocialgame.model.credit.CreditAccount;
 import com.aisocialgame.model.credit.CreditCheckinRecord;
 import com.aisocialgame.model.credit.CreditExchangeTransaction;
 import com.aisocialgame.model.credit.CreditLedgerEntry;
+import com.aisocialgame.model.credit.CreditRedeemCode;
 import com.aisocialgame.model.credit.CreditRedemptionRecord;
 import com.aisocialgame.repository.credit.CreditAccountRepository;
 import com.aisocialgame.repository.credit.CreditCheckinRecordRepository;
@@ -30,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -135,6 +137,43 @@ class ProjectCreditServiceTest {
     }
 
     @Test
+    void createRedeemCodeShouldNormalizeCodeAndSave() {
+        when(creditRedeemCodeRepository.findByCode("ASG-1234")).thenReturn(Optional.empty());
+        when(creditRedeemCodeRepository.save(any(CreditRedeemCode.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreditRedeemCode created = projectCreditService.createRedeemCode(
+                "asg-1234",
+                1234L,
+                "CREDIT_TYPE_PERMANENT",
+                1,
+                null,
+                null,
+                true
+        );
+
+        Assertions.assertEquals("ASG-1234", created.getCode());
+        Assertions.assertEquals("CREDIT_TYPE_PERMANENT", created.getCreditType());
+        Assertions.assertEquals(1234L, created.getTokens());
+        Assertions.assertEquals(1, created.getMaxRedemptions());
+        Assertions.assertTrue(created.isActive());
+        verify(creditRedeemCodeRepository).save(any(CreditRedeemCode.class));
+    }
+
+    @Test
+    void createRedeemCodeShouldRejectDuplicateCode() {
+        CreditRedeemCode existing = new CreditRedeemCode();
+        existing.setCode("ASG-EXISTS");
+        when(creditRedeemCodeRepository.findByCode("ASG-EXISTS")).thenReturn(Optional.of(existing));
+
+        ApiException ex = Assertions.assertThrows(ApiException.class, () ->
+                projectCreditService.createRedeemCode("asg-exists", 10, "CREDIT_TYPE_TEMP", null, null, null, true)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        Assertions.assertEquals("兑换码已存在", ex.getMessage());
+    }
+
+    @Test
     void exchangeShouldRejectWhenExceedDailyLimit() {
         when(creditExchangeTransactionRepository.findByRequestId("req-1")).thenReturn(Optional.empty());
         when(creditExchangeTransactionRepository.sumSuccessTokensBetween(anyLong(), anyString(), any(), any()))
@@ -187,5 +226,50 @@ class ProjectCreditServiceTest {
 
         Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         Assertions.assertEquals("该流水已冲正", ex.getMessage());
+    }
+
+    @Test
+    void consumeProjectTokensShouldDeductTempThenPermanent() {
+        CreditAccount account = new CreditAccount();
+        account.setUserId(1001L);
+        account.setProjectKey("aisocialgame");
+        account.setTempBalance(200L);
+        account.setPermanentBalance(1000L);
+        when(creditLedgerEntryRepository.findByRequestId("consume-req")).thenReturn(Optional.empty());
+        when(creditAccountRepository.findForUpdate(1001L, "aisocialgame")).thenReturn(Optional.of(account));
+        when(creditAccountRepository.save(any(CreditAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(billingGrpcClient.getPublicPermanentTokens(1001L)).thenReturn(0L);
+
+        projectCreditService.consumeProjectTokens(1001L, 250L, "AI_CHAT", Map.of("modelKey", "gemini"), "consume-req");
+
+        Assertions.assertEquals(0L, account.getTempBalance());
+        Assertions.assertEquals(950L, account.getPermanentBalance());
+
+        ArgumentCaptor<CreditLedgerEntry> captor = ArgumentCaptor.forClass(CreditLedgerEntry.class);
+        verify(creditLedgerEntryRepository).save(captor.capture());
+        Assertions.assertEquals("CONSUME", captor.getValue().getType());
+        Assertions.assertEquals(-200L, captor.getValue().getTokenDeltaTemp());
+        Assertions.assertEquals(-50L, captor.getValue().getTokenDeltaPermanent());
+        Assertions.assertEquals("AI_CHAT", captor.getValue().getSource());
+    }
+
+    @Test
+    void consumeProjectTokensShouldRejectWhenBalanceNotEnough() {
+        CreditAccount account = new CreditAccount();
+        account.setUserId(1001L);
+        account.setProjectKey("aisocialgame");
+        account.setTempBalance(10L);
+        account.setPermanentBalance(20L);
+        when(creditLedgerEntryRepository.findByRequestId("consume-poor")).thenReturn(Optional.empty());
+        when(creditAccountRepository.findForUpdate(1001L, "aisocialgame")).thenReturn(Optional.of(account));
+        when(billingGrpcClient.getPublicPermanentTokens(1001L)).thenReturn(0L);
+
+        ApiException ex = Assertions.assertThrows(ApiException.class, () ->
+                projectCreditService.consumeProjectTokens(1001L, 50L, "AI_CHAT", Map.of(), "consume-poor")
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        Assertions.assertEquals("专属积分不足，请先充值或兑换", ex.getMessage());
+        verify(creditLedgerEntryRepository, never()).save(any());
     }
 }

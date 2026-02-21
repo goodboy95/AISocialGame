@@ -1,4 +1,4 @@
-# 系统功能与操作步骤（2026-02-19）
+# 系统功能与操作步骤（2026-02-21）
 
 ## 0. 入口与端口
 1. 测试域名入口：`http://aisocialgame.seekerhut.com`。
@@ -58,6 +58,7 @@
    - 期望：按 `1:1` 将 payService 通用积分兑换为本地专属积分并记录流水；
    - 同 `requestId` 重放返回同一成功结果，不重复扣减。
 5. 管理端客服操作（需 `X-Admin-Token`）：
+   - `POST /api/admin/billing/redeem-codes`：创建项目兑换码（支持指定积分额度与类型）；
    - `POST /api/admin/billing/adjust`：补发/扣回临时或永久专属积分；
    - `POST /api/admin/billing/reversal`：按原始 `requestId` 冲正；
    - `POST /api/admin/billing/migrate-user`：执行一次性迁移并冻结。
@@ -65,3 +66,7 @@
    - 用户侧：`GET /api/wallet/ledger`
    - 管理侧：`GET /api/admin/billing/ledger?userId=<id>`
    - 期望：可见签到、兑换码、通用转专属、客服调账、冲正、迁移初始化等本地流水类型。
+7. AI 调用积分扣减核验（`POST /api/ai/chat` 或 `POST /api/ai/chat/stream`）：
+   - 前置：钱包存在可用本地专属积分；
+   - 操作：发起一次 AI 对话请求；
+   - 期望：请求成功后，本地账本新增 `CONSUME` 类型流水，按返回 `promptTokens + completionTokens` 扣减本地专属积分（临时积分优先扣减）。

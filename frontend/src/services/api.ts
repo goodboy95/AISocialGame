@@ -2,6 +2,7 @@ import axios from "axios";
 import {
   AdminAuthResponse,
   AdminIntegrationStatus,
+  AdminRedeemCode,
   AiChatResponse,
   AiEmbeddingsResponse,
   AiMessage,
@@ -338,6 +339,18 @@ export const adminApi = {
   },
   async migrateUserBalance(userId: number) {
     const res = await adminApiClient.post("/admin/billing/migrate-user", { userId });
+    return res.data;
+  },
+  async createRedeemCode(payload: {
+    code?: string;
+    tokens: number;
+    creditType?: string;
+    maxRedemptions?: number;
+    validFrom?: string;
+    validUntil?: string;
+    active?: boolean;
+  }): Promise<AdminRedeemCode> {
+    const res = await adminApiClient.post("/admin/billing/redeem-codes", payload);
     return res.data;
   },
   async aiModels(): Promise<AiModel[]> {

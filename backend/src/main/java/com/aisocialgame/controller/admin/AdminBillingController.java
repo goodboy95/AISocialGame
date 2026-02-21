@@ -2,8 +2,10 @@ package com.aisocialgame.controller.admin;
 
 import com.aisocialgame.dto.BalanceView;
 import com.aisocialgame.dto.admin.AdminAdjustBalanceRequest;
+import com.aisocialgame.dto.admin.AdminCreateRedeemCodeRequest;
 import com.aisocialgame.dto.admin.AdminLedgerPageResponse;
 import com.aisocialgame.dto.admin.AdminMigrateBalanceRequest;
+import com.aisocialgame.dto.admin.AdminRedeemCodeResponse;
 import com.aisocialgame.dto.admin.AdminReverseBalanceRequest;
 import com.aisocialgame.service.AdminAuthService;
 import com.aisocialgame.service.AdminOpsService;
@@ -67,5 +69,22 @@ public class AdminBillingController {
                                                    @RequestHeader(value = "X-Admin-Token", required = false) String token) {
         String operator = adminAuthService.requireAdmin(token);
         return ResponseEntity.ok(new BalanceView(adminOpsService.migrateUserBalance(request.getUserId(), operator)));
+    }
+
+    @PostMapping("/redeem-codes")
+    public ResponseEntity<AdminRedeemCodeResponse> createRedeemCode(@Valid @RequestBody AdminCreateRedeemCodeRequest request,
+                                                                     @RequestHeader(value = "X-Admin-Token", required = false) String token) {
+        adminAuthService.requireAdmin(token);
+        return ResponseEntity.ok(new AdminRedeemCodeResponse(
+                adminOpsService.createRedeemCode(
+                        request.getCode(),
+                        request.getTokens(),
+                        request.getCreditType(),
+                        request.getMaxRedemptions(),
+                        request.getValidFrom(),
+                        request.getValidUntil(),
+                        request.getActive()
+                )
+        ));
     }
 }

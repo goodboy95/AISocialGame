@@ -13,7 +13,7 @@
 - `AdminDashboardController`：概览统计。
 - `AdminIntegrationController`：外部服务联通检查。
 - `AdminUserController`：用户查询、封禁、解封。
-- `AdminBillingController`：余额与流水查询、客服补发/扣回、冲正、用户级迁移。
+- `AdminBillingController`：余额与流水查询、客服补发/扣回、冲正、用户级迁移、兑换码创建。
 - `AdminAiController`：模型列表与测试对话。
 
 ## 安全边界
@@ -21,3 +21,4 @@
 - 管理账号来自配置 `app.admin.*`。
 - 管理 token 仅用于后台接口，不与前台用户 token 复用。
 - 计费操作（adjust/reversal/migrate）全部落审计流水，支持按 requestId 追踪。
+- 兑换码由管理端创建，实际兑换与发放在项目本地账本闭环完成。
