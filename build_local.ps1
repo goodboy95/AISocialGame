@@ -60,13 +60,8 @@ function Import-EnvFile {
 function Import-ProjectEnv {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
-    $dotEnvPath = Join-Path $RepoRoot ".env"
     $envTxtPath = Join-Path $RepoRoot "env.txt"
 
-    if (Test-Path $dotEnvPath) {
-        Import-EnvFile -Path $dotEnvPath
-        return
-    }
     if (Test-Path $envTxtPath) {
         Import-EnvFile -Path $envTxtPath
     }
@@ -138,7 +133,13 @@ function Set-DefaultEnv {
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_HOST)) { $env:QDRANT_HOST = "http://127.0.0.1" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_PORT)) { $env:QDRANT_PORT = "6335" }
     if ([string]::IsNullOrWhiteSpace($env:QDRANT_ENABLED)) { $env:QDRANT_ENABLED = "true" }
+    if ([string]::IsNullOrWhiteSpace($env:USER_GRPC_ADDR)) { $env:USER_GRPC_ADDR = "consul:///aienie-userservice-grpc" }
+    if ([string]::IsNullOrWhiteSpace($env:BILLING_GRPC_ADDR)) { $env:BILLING_GRPC_ADDR = "consul:///aienie-payservice-grpc" }
+    if ([string]::IsNullOrWhiteSpace($env:AI_GRPC_ADDR)) { $env:AI_GRPC_ADDR = "consul:///aienie-aiservice-grpc" }
+    if ([string]::IsNullOrWhiteSpace($env:SSO_USER_SERVICE_NAME)) { $env:SSO_USER_SERVICE_NAME = "aienie-userservice-http" }
     if ([string]::IsNullOrWhiteSpace($env:SSO_CALLBACK_URL)) { $env:SSO_CALLBACK_URL = "http://aisocialgame.seekerhut.com/sso/callback" }
+    if ([string]::IsNullOrWhiteSpace($env:SSO_LOGIN_PATH)) { $env:SSO_LOGIN_PATH = "/sso/login" }
+    if ([string]::IsNullOrWhiteSpace($env:SSO_REGISTER_PATH)) { $env:SSO_REGISTER_PATH = "/register" }
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path

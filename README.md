@@ -41,7 +41,7 @@
 4. **本地直启（非 Docker，编译后直接启动）**：
    - Linux/macOS：`./build_local.sh`
    - Windows PowerShell：`.\build_local.ps1`
-   - 脚本会自动加载仓库根目录环境文件（优先 `.env`，其次 `env.txt`），并将其中变量注入本次启动环境。
+   - 脚本会自动加载仓库根目录 `env.txt`，并将其中变量注入本次启动环境。
 5. **访问**：前端入口 `http://localhost:11030` 或 `http://aisocialgame.seekerhut.com`，后端 API `http://localhost:11031/api`。
 
 ## LLM 接入配置（OpenAI 兼容）
@@ -68,7 +68,11 @@
 ## 联调依赖（外部服务）
 - MySQL：必须通过 `SPRING_DATASOURCE_*` 环境变量提供第三方实例连接信息。
 - Redis：必须通过 `SPRING_DATA_REDIS_HOST` / `SPRING_DATA_REDIS_PORT` 提供第三方实例连接信息。
+- 三服务 gRPC 地址：`USER_GRPC_ADDR`、`BILLING_GRPC_ADDR`、`AI_GRPC_ADDR`。
+- SSO 跳转配置：`SSO_USER_SERVICE_NAME`、`SSO_CALLBACK_URL`、`SSO_LOGIN_PATH`、`SSO_REGISTER_PATH`。
 - Token 存储 key 前缀：`aisocialgame:auth:token:`。
 - SSO 回调地址：`SSO_CALLBACK_URL`（默认 `http://aisocialgame.seekerhut.com/sso/callback`）。
+
+> `build.sh`、`build_prod.sh`、`build_local.ps1` 均会读取仓库根目录 `env.txt`；切换环境时只需调整该文件的变量值。
 
 更多接口说明见 `doc/api/`，模块设计见 `doc/modules/`，运行/测试流程见 `doc/test/`。

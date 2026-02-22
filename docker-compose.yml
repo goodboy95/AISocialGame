@@ -21,10 +21,13 @@ services:
       USER_GRPC_ADDR: ${USER_GRPC_ADDR:-consul:///aienie-userservice-grpc}
       BILLING_GRPC_ADDR: ${BILLING_GRPC_ADDR:-consul:///aienie-payservice-grpc}
       AI_GRPC_ADDR: ${AI_GRPC_ADDR:-consul:///aienie-aiservice-grpc}
+      SSO_USER_SERVICE_NAME: ${SSO_USER_SERVICE_NAME:-aienie-userservice-http}
       QDRANT_HOST: ${QDRANT_HOST:-http://127.0.0.1}
       QDRANT_PORT: ${QDRANT_PORT:-6335}
       QDRANT_ENABLED: ${QDRANT_ENABLED:-true}
       SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-http://aisocialgame.seekerhut.com/sso/callback}
+      SSO_LOGIN_PATH: ${SSO_LOGIN_PATH:-/sso/login}
+      SSO_REGISTER_PATH: ${SSO_REGISTER_PATH:-/register}
       SERVER_PORT: ${SERVER_PORT:-20030}
       JAVA_OPTS: ""
       SPRING_CONFIG_ADDITIONAL_LOCATION: /app/config/

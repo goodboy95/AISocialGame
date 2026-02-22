@@ -29,6 +29,8 @@ app:
   sso:
     user-service-name: ${SSO_USER_SERVICE_NAME:aienie-userservice-http}
     callback-url: ${SSO_CALLBACK_URL:http://localhost:11030/sso/callback}
+    login-path: ${SSO_LOGIN_PATH:/sso/login}
+    register-path: ${SSO_REGISTER_PATH:/register}
   auth:
     token-ttl-hours: ${APP_AUTH_TOKEN_TTL_HOURS:168}
   redis:

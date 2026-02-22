@@ -50,11 +50,13 @@ public class AuthService {
     }
 
     public String buildSsoLoginRedirectUrl(String state) {
-        return buildSsoRedirectUrl("/sso/login", state);
+        String loginPath = normalizeSsoPath(appProperties.getSso().getLoginPath(), "/sso/login");
+        return buildSsoRedirectUrl(loginPath, state);
     }
 
     public String buildSsoRegisterRedirectUrl(String state) {
-        return buildSsoRedirectUrl("/register", state);
+        String registerPath = normalizeSsoPath(appProperties.getSso().getRegisterPath(), "/register");
+        return buildSsoRedirectUrl(registerPath, state);
     }
 
     private String buildSsoRedirectUrl(String path, String state) {
@@ -170,6 +172,14 @@ public class AuthService {
         String normalized = url;
         while (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String normalizeSsoPath(String configuredPath, String defaultPath) {
+        String normalized = StringUtils.hasText(configuredPath) ? configuredPath.trim() : defaultPath;
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
         }
         return normalized;
     }

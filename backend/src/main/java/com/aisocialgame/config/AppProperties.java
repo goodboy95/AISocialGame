@@ -96,7 +96,9 @@ public class AppProperties {
 
     public static class Sso {
         private String userServiceName = "aienie-userservice-http";
-        private String callbackUrl = "http://localhost:10030/sso/callback";
+        private String callbackUrl = "http://localhost:11030/sso/callback";
+        private String loginPath = "/sso/login";
+        private String registerPath = "/register";
 
         public String getUserServiceName() {
             return userServiceName;
@@ -112,6 +114,22 @@ public class AppProperties {
 
         public void setCallbackUrl(String callbackUrl) {
             this.callbackUrl = callbackUrl;
+        }
+
+        public String getLoginPath() {
+            return loginPath;
+        }
+
+        public void setLoginPath(String loginPath) {
+            this.loginPath = loginPath;
+        }
+
+        public String getRegisterPath() {
+            return registerPath;
+        }
+
+        public void setRegisterPath(String registerPath) {
+            this.registerPath = registerPath;
         }
     }
 

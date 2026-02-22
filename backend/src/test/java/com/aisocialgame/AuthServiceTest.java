@@ -1,5 +1,6 @@
 package com.aisocialgame;
 
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.dto.AuthResponse;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
@@ -10,6 +11,7 @@ import com.aisocialgame.model.User;
 import com.aisocialgame.service.AuthService;
 import com.aisocialgame.service.BalanceService;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,9 @@ class AuthServiceTest {
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private AppProperties appProperties;
+
     @MockBean
     private UserGrpcClient userGrpcClient;
 
@@ -35,6 +40,12 @@ class AuthServiceTest {
 
     @MockBean
     private ConsulHttpServiceDiscovery consulHttpServiceDiscovery;
+
+    @BeforeEach
+    void resetSsoPaths() {
+        appProperties.getSso().setLoginPath("/sso/login");
+        appProperties.getSso().setRegisterPath("/register");
+    }
 
     @Test
     void ssoCallbackAndAuthenticateShouldSucceed() {
@@ -98,5 +109,19 @@ class AuthServiceTest {
         ApiException ex = Assertions.assertThrows(ApiException.class,
                 () -> authService.buildSsoLoginRedirectUrl("bad"));
         Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    }
+
+    @Test
+    void buildSsoRedirectUrlShouldUseConfiguredPaths() {
+        appProperties.getSso().setLoginPath("custom-login");
+        appProperties.getSso().setRegisterPath("/custom/register");
+        Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
+                .thenReturn("http://user-service:19090");
+
+        String loginRedirectUrl = authService.buildSsoLoginRedirectUrl("state_token_custom_1");
+        String registerRedirectUrl = authService.buildSsoRegisterRedirectUrl("state_token_custom_2");
+
+        Assertions.assertTrue(loginRedirectUrl.startsWith("http://user-service:19090/custom-login"));
+        Assertions.assertTrue(registerRedirectUrl.startsWith("http://user-service:19090/custom/register"));
     }
 }
