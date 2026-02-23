@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { walletApi } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckinStatusResponse, LedgerEntry, RedemptionRecord, UsageRecord, User } from "@/types";
+import { CheckinStatusResponse, ExchangeHistoryRecord, LedgerEntry, RedemptionRecord, UsageRecord, User } from "@/types";
 import BalanceOverview from "./BalanceOverview";
 import CheckinCard from "./CheckinCard";
 import RedeemCard from "./RedeemCard";
@@ -28,6 +28,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotal, setLedgerTotal] = useState(0);
   const [redemptions, setRedemptions] = useState<RedemptionRecord[]>([]);
+  const [exchangeHistory, setExchangeHistory] = useState<ExchangeHistoryRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
@@ -57,14 +58,16 @@ const WalletPanel = ({ initialBalance }: Props) => {
   const loadInitial = async () => {
     setLoading(true);
     try {
-      const [balanceData, statusData, redemptionData] = await Promise.all([
+      const [balanceData, statusData, redemptionData, exchangeData] = await Promise.all([
         walletApi.getBalance(),
         walletApi.getCheckinStatus(),
         walletApi.getRedemptionHistory(1, PAGE_SIZE),
+        walletApi.getExchangeHistory(1, PAGE_SIZE),
       ]);
       applyBalance(balanceData);
       setCheckinStatus(statusData);
       setRedemptions(redemptionData.items);
+      setExchangeHistory(exchangeData.items);
       await Promise.all([loadUsage(1), loadLedger(1)]);
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "钱包数据加载失败");
@@ -120,7 +123,11 @@ const WalletPanel = ({ initialBalance }: Props) => {
       const result = await walletApi.exchangePublicToProject(amount);
       applyBalance(result.balance);
       toast.success(`兑换成功，到账 ${result.exchangedTokens} 专属积分`);
-      await loadLedger(1);
+      const [history] = await Promise.all([
+        walletApi.getExchangeHistory(1, PAGE_SIZE),
+        loadLedger(1),
+      ]);
+      setExchangeHistory(history.items);
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "兑换失败");
     } finally {
@@ -170,6 +177,29 @@ const WalletPanel = ({ initialBalance }: Props) => {
               <div className="text-xs text-muted-foreground">
                 +{item.tokensGranted} / {item.creditType}
                 {item.redeemedAt ? ` · ${new Date(item.redeemedAt).toLocaleString()}` : ""}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">通用积分兑换记录</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {!exchangeHistory.length && <div className="text-muted-foreground">暂无兑换记录</div>}
+          {exchangeHistory.map((item) => (
+            <div key={`${item.requestId}-${item.createdAt}`} className="rounded-lg border p-3 space-y-1">
+              <div className="font-medium">请求号：{item.requestId}</div>
+              <div className="text-xs text-muted-foreground">
+                兑换数量：{item.exchangedTokens}
+                {item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString()}` : ""}
+              </div>
+              <div className="text-xs">
+                通用积分：{item.publicBefore} → {item.publicAfter}
+              </div>
+              <div className="text-xs">
+                项目永久积分：{item.projectPermanentBefore} → {item.projectPermanentAfter}
               </div>
             </div>
           ))}

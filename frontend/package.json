@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real": "REAL_E2E=1 playwright test tests/real-flow.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

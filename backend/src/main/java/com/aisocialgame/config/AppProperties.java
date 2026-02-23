@@ -83,7 +83,7 @@ public class AppProperties {
     }
 
     public static class Consul {
-        private String address = "http://127.0.0.1:8500";
+        private String address = "http://192.168.5.141:60000";
 
         public String getAddress() {
             return address;
@@ -96,7 +96,8 @@ public class AppProperties {
 
     public static class Sso {
         private String userServiceName = "aienie-userservice-http";
-        private String callbackUrl = "http://localhost:11030/sso/callback";
+        private String userServiceBaseUrl = "https://userservice.seekerhut.com";
+        private String callbackUrl = "https://aisocialgame.seekerhut.com/sso/callback";
         private String loginPath = "/sso/login";
         private String registerPath = "/register";
 
@@ -114,6 +115,14 @@ public class AppProperties {
 
         public void setCallbackUrl(String callbackUrl) {
             this.callbackUrl = callbackUrl;
+        }
+
+        public String getUserServiceBaseUrl() {
+            return userServiceBaseUrl;
+        }
+
+        public void setUserServiceBaseUrl(String userServiceBaseUrl) {
+            this.userServiceBaseUrl = userServiceBaseUrl;
         }
 
         public String getLoginPath() {

@@ -4,12 +4,14 @@ import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.dto.AuthResponse;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
+import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
 import com.aisocialgame.model.User;
 import com.aisocialgame.service.AuthService;
 import com.aisocialgame.service.BalanceService;
+import com.aisocialgame.service.ProjectCreditService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,10 +43,17 @@ class AuthServiceTest {
     @MockBean
     private ConsulHttpServiceDiscovery consulHttpServiceDiscovery;
 
+    @MockBean
+    private BillingGrpcClient billingGrpcClient;
+
+    @MockBean
+    private ProjectCreditService projectCreditService;
+
     @BeforeEach
     void resetSsoPaths() {
         appProperties.getSso().setLoginPath("/sso/login");
         appProperties.getSso().setRegisterPath("/register");
+        appProperties.getSso().setUserServiceBaseUrl("https://userservice.test.local");
     }
 
     @Test
@@ -84,22 +93,16 @@ class AuthServiceTest {
 
     @Test
     void buildSsoLoginRedirectUrlShouldContainRedirectAndState() {
-        Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
-                .thenReturn("http://user-service:19090");
-
         String redirectUrl = authService.buildSsoLoginRedirectUrl("state_token_123456");
-        Assertions.assertTrue(redirectUrl.startsWith("http://user-service:19090/sso/login"));
+        Assertions.assertTrue(redirectUrl.startsWith("https://userservice.test.local/sso/login"));
         Assertions.assertTrue(redirectUrl.contains("redirect="));
         Assertions.assertTrue(redirectUrl.contains("state=state_token_123456"));
     }
 
     @Test
     void buildSsoRegisterRedirectUrlShouldContainRedirectAndState() {
-        Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
-                .thenReturn("http://user-service:19090");
-
         String redirectUrl = authService.buildSsoRegisterRedirectUrl("state_token_abcdef");
-        Assertions.assertTrue(redirectUrl.startsWith("http://user-service:19090/register"));
+        Assertions.assertTrue(redirectUrl.startsWith("https://userservice.test.local/register"));
         Assertions.assertTrue(redirectUrl.contains("redirect="));
         Assertions.assertTrue(redirectUrl.contains("state=state_token_abcdef"));
     }
@@ -115,13 +118,11 @@ class AuthServiceTest {
     void buildSsoRedirectUrlShouldUseConfiguredPaths() {
         appProperties.getSso().setLoginPath("custom-login");
         appProperties.getSso().setRegisterPath("/custom/register");
-        Mockito.when(consulHttpServiceDiscovery.resolveHttpAddress(Mockito.anyString()))
-                .thenReturn("http://user-service:19090");
 
         String loginRedirectUrl = authService.buildSsoLoginRedirectUrl("state_token_custom_1");
         String registerRedirectUrl = authService.buildSsoRegisterRedirectUrl("state_token_custom_2");
 
-        Assertions.assertTrue(loginRedirectUrl.startsWith("http://user-service:19090/custom-login"));
-        Assertions.assertTrue(registerRedirectUrl.startsWith("http://user-service:19090/custom/register"));
+        Assertions.assertTrue(loginRedirectUrl.startsWith("https://userservice.test.local/custom-login"));
+        Assertions.assertTrue(registerRedirectUrl.startsWith("https://userservice.test.local/custom/register"));
     }
 }

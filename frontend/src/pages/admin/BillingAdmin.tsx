@@ -20,6 +20,7 @@ const BillingAdmin = () => {
   const [redeemCreditType, setRedeemCreditType] = useState("CREDIT_TYPE_PERMANENT");
   const [redeemMaxRedemptions, setRedeemMaxRedemptions] = useState("1");
   const [createdRedeemCode, setCreatedRedeemCode] = useState<any>(null);
+  const [migrateAllResult, setMigrateAllResult] = useState<any>(null);
 
   const load = async () => {
     const id = Number(userId);
@@ -101,6 +102,16 @@ const BillingAdmin = () => {
       await load();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "迁移失败");
+    }
+  };
+
+  const migrateAllBalances = async () => {
+    try {
+      const result = await adminApi.migrateAllUserBalances(100);
+      setMigrateAllResult(result);
+      toast.success(`全量迁移完成：成功 ${result.success}，失败 ${result.failed}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "全量迁移失败");
     }
   };
 
@@ -187,7 +198,15 @@ const BillingAdmin = () => {
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">从 payService 读取该用户项目积分快照并落库到本地账本（幂等）。</p>
-          <Button variant="secondary" onClick={migrateBalance}>执行迁移</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={migrateBalance}>迁移当前用户</Button>
+            <Button variant="outline" onClick={migrateAllBalances}>全量迁移所有用户</Button>
+          </div>
+          {migrateAllResult && (
+            <div className="rounded border p-2 text-sm">
+              <p>扫描：{migrateAllResult.scanned}，成功：{migrateAllResult.success}，失败：{migrateAllResult.failed}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

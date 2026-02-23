@@ -5,6 +5,7 @@ import com.aisocialgame.dto.AuthResponse;
 import com.aisocialgame.dto.AuthUserView;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.consul.ConsulHttpServiceDiscovery;
+import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
@@ -31,20 +32,26 @@ public class AuthService {
     private final UserRepository userRepository;
     private final TokenStore tokenStore;
     private final UserGrpcClient userGrpcClient;
+    private final BillingGrpcClient billingGrpcClient;
     private final BalanceService balanceService;
+    private final ProjectCreditService projectCreditService;
     private final AppProperties appProperties;
     private final ConsulHttpServiceDiscovery consulHttpServiceDiscovery;
 
     public AuthService(UserRepository userRepository,
                        TokenStore tokenStore,
                        UserGrpcClient userGrpcClient,
+                       BillingGrpcClient billingGrpcClient,
                        BalanceService balanceService,
+                       ProjectCreditService projectCreditService,
                        AppProperties appProperties,
                        ConsulHttpServiceDiscovery consulHttpServiceDiscovery) {
         this.userRepository = userRepository;
         this.tokenStore = tokenStore;
         this.userGrpcClient = userGrpcClient;
+        this.billingGrpcClient = billingGrpcClient;
         this.balanceService = balanceService;
+        this.projectCreditService = projectCreditService;
         this.appProperties = appProperties;
         this.consulHttpServiceDiscovery = consulHttpServiceDiscovery;
     }
@@ -61,11 +68,25 @@ public class AuthService {
 
     private String buildSsoRedirectUrl(String path, String state) {
         String normalizedState = normalizeAndValidateState(state);
-        String serviceAddress = consulHttpServiceDiscovery.resolveHttpAddress(appProperties.getSso().getUserServiceName());
+        String serviceAddress = resolveUserServiceBaseUrl();
         String base = trimTrailingSlash(serviceAddress);
         String encodedRedirect = URLEncoder.encode(appProperties.getSso().getCallbackUrl(), StandardCharsets.UTF_8);
         String encodedState = URLEncoder.encode(normalizedState, StandardCharsets.UTF_8);
         return base + path + "?redirect=" + encodedRedirect + "&state=" + encodedState;
+    }
+
+    private String resolveUserServiceBaseUrl() {
+        if (StringUtils.hasText(appProperties.getSso().getUserServiceBaseUrl())) {
+            return appProperties.getSso().getUserServiceBaseUrl().trim();
+        }
+        try {
+            return consulHttpServiceDiscovery.resolveHttpAddress(appProperties.getSso().getUserServiceName());
+        } catch (Exception ex) {
+            if (ex instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "用户服务地址解析失败");
+        }
     }
 
     public AuthResponse ssoCallback(long userId, String username, String sessionId, String accessToken) {
@@ -76,6 +97,9 @@ public class AuthService {
         if (profile == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "SSO 会话无效或已过期");
         }
+        String initRequestId = appProperties.getProjectKey() + ":auth-init:" + userId;
+        billingGrpcClient.ensureUserInitialized(initRequestId, appProperties.getProjectKey(), userId);
+        projectCreditService.ensureAccountInitialized(userId);
 
         User localUser = upsertLocalUser(profile, username);
         localUser.setSessionId(sessionId.trim());

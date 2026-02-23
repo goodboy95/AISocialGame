@@ -17,15 +17,14 @@ public class WebConfig {
                         .allowedOrigins(
                                 "http://localhost:5173",
                                 "http://localhost:4173",
-                                "http://localhost:10030",
+                                "http://localhost:11030",
                                 "http://localhost",
+                                "https://localhost",
                                 "http://aisocialgame.seekerhut.com",
-                                "http://aisocialgame.seekerhut.com:10030",
-                                "http://aisocialgame.seekerhut.com:20030",
+                                "http://aisocialgame.seekerhut.com:11030",
                                 "https://aisocialgame.seekerhut.com",
                                 "http://aisocialgame.aienie.com",
-                                "http://aisocialgame.aienie.com:10030",
-                                "http://aisocialgame.aienie.com:20030",
+                                "http://aisocialgame.aienie.com:11030",
                                 "https://aisocialgame.aienie.com")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")

@@ -8,6 +8,7 @@ import com.aisocialgame.integration.grpc.dto.LedgerEntrySnapshot;
 import com.aisocialgame.integration.grpc.dto.PagedResult;
 import com.aisocialgame.integration.grpc.dto.RedeemResult;
 import com.aisocialgame.integration.grpc.dto.RedemptionRecordSnapshot;
+import com.aisocialgame.integration.grpc.dto.ExchangeHistorySnapshot;
 import com.aisocialgame.integration.grpc.dto.UsageRecordSnapshot;
 import com.aisocialgame.model.User;
 import org.springframework.http.HttpStatus;
@@ -65,6 +66,11 @@ public class WalletService {
     public CreditExchangeResult exchangePublicToProject(User user, long tokens, String requestId) {
         long userId = requireExternalUserId(user);
         return projectCreditService.exchangePublicToProject(userId, tokens, requestId);
+    }
+
+    public PagedResult<ExchangeHistorySnapshot> getExchangeHistory(User user, int page, int size) {
+        long userId = requireExternalUserId(user);
+        return projectCreditService.listExchangeHistory(userId, normalizePage(page), normalizeSize(size));
     }
 
     private long requireExternalUserId(User user) {

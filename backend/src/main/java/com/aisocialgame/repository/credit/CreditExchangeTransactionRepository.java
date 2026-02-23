@@ -4,6 +4,8 @@ import com.aisocialgame.model.credit.CreditExchangeTransaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -18,5 +20,9 @@ public interface CreditExchangeTransactionRepository extends JpaRepository<Credi
                                  @Param("projectKey") String projectKey,
                                  @Param("start") LocalDateTime start,
                                  @Param("end") LocalDateTime end);
-}
 
+    Page<CreditExchangeTransaction> findByUserIdAndProjectKeyAndStatusOrderByIdDesc(long userId,
+                                                                                     String projectKey,
+                                                                                     String status,
+                                                                                     Pageable pageable);
+}

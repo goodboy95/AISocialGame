@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package fireflychat.billing.v1;
+
+option java_multiple_files = true;
+option java_package = "fireflychat.billing.v1";
+option java_outer_classname = "BillingOnboardingProto";
+
+message EnsureUserInitializedRequest {
+  string request_id = 1;
+  string project_key = 2;
+  int64 user_id = 3;
+}
+
+message EnsureUserInitializedResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+service BillingOnboardingService {
+  rpc EnsureUserInitialized(EnsureUserInitializedRequest) returns (EnsureUserInitializedResponse);
+}

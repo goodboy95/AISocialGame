@@ -1,6 +1,6 @@
 # v2 社交留存与导航模块
 
-> 更新时间：2026-02-18
+> 更新时间：2026-02-23
 
 ## 模块目标
 - 补齐 `design-doc/v2` 中前端侧的快速匹配、好友、成就、回放、观战、新手引导和全局导航入口。
@@ -40,4 +40,4 @@
 
 ## 已验证路径
 - Playwright E2E：`basic.spec.ts`、`full-flow.spec.ts`、`v2-features.spec.ts` 通过。
-- Playwright MCP：域名 `http://aisocialgame.seekerhut.com` 下验证导航、快速匹配弹窗、好友面板可见与可交互。
+- 在 `https://aisocialgame.seekerhut.com` 下已验证导航、快速匹配弹窗、好友面板可见与可交互。

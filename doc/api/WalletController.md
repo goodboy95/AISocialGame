@@ -1,13 +1,10 @@
 # WalletController
 
-## 简介
-- 基础路径：`/api/wallet`
-- 鉴权：全部接口要求 `X-Auth-Token`
-- 说明：
-  - 项目专属积分（`projectTempTokens`/`projectPermanentTokens`）由本项目本地账本维护
-  - 通用积分（`publicPermanentTokens`）仍来自 payService，只读展示 + 兑换来源
+基址：`/api/wallet`  
+鉴权：全部接口要求 `X-Auth-Token`
 
 ## 接口列表
+
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | POST | `/api/wallet/checkin` | 每日签到，发放本地专属积分 |
@@ -17,44 +14,50 @@
 | GET | `/api/wallet/ledger` | 查询本地积分流水分页 |
 | POST | `/api/wallet/redeem` | 使用本项目兑换码 |
 | POST | `/api/wallet/exchange/public-to-project` | 通用积分按 1:1 兑换专属积分 |
-| GET | `/api/wallet/redemption-history` | 查询兑换历史分页 |
+| GET | `/api/wallet/redemption-history` | 查询兑换码兑换历史 |
+| GET | `/api/wallet/exchange-history` | 查询通用转专属历史（含兑换前后余额） |
 
 ## 关键接口说明
 
 ### POST `/api/wallet/exchange/public-to-project`
-- Body：
+
+- Body
   - `amount` (Long, required, `>=1`)
   - `requestId` (String, optional, 幂等键)
-- 响应：
+- 响应
   - `success` (Boolean)
   - `requestId` (String)
   - `exchangedTokens` (Long)
   - `balance` (`BalanceView`)
-- 失败码：
+- 失败码
   - `400` 参数不合法 / 超出日限额 / requestId 已失败
   - `401` 未登录
   - `409` requestId 正在处理中
 
-### POST `/api/wallet/redeem`
-- Body：
-  - `code` (String, required)
-- 响应：
-  - `success` (Boolean)
-  - `tokensGranted` (Long)
-  - `creditType` (`CREDIT_TYPE_TEMP|CREDIT_TYPE_PERMANENT|CREDIT_TYPE_UNSPECIFIED`)
-  - `errorMessage` (String)
-  - `balance` (`BalanceView`)
-- 失败码：
-  - `401` 未登录
-  - `429` 当日失败次数过多（风控）
+### GET `/api/wallet/exchange-history`
+
+- Query
+  - `page` (int, optional, default `1`)
+  - `size` (int, optional, default `20`)
+- 响应：`PagedResponse<ExchangeHistoryView>`
+- `ExchangeHistoryView` 字段
+  - `requestId`
+  - `exchangedTokens`
+  - `publicBefore`
+  - `publicAfter`
+  - `projectPermanentBefore`
+  - `projectPermanentAfter`
+  - `createdAt` (ISO-8601)
 
 ### GET `/api/wallet/ledger`
-- 返回本地不可变流水，包含签到、兑换、通用转专属、客服调账、冲正、迁移初始化等类型。
 
-## 响应模型（BalanceView）
+返回本地不可变流水，覆盖签到、兑换码、通用转专属、客服调账、冲正、迁移初始化、AI 消耗等类型。
+
+## BalanceView 字段
+
 | 字段 | 含义 |
 |---|---|
-| `publicPermanentTokens` | 通用积分（payService） |
+| `publicPermanentTokens` | 通用积分（pay-service） |
 | `projectTempTokens` | 项目临时专属积分（本地） |
 | `projectPermanentTokens` | 项目永久专属积分（本地） |
 | `projectTempExpiresAt` | 项目临时积分过期时间 |

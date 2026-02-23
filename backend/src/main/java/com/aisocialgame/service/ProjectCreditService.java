@@ -9,6 +9,7 @@ import com.aisocialgame.integration.grpc.dto.CheckinStatusResult;
 import com.aisocialgame.integration.grpc.dto.LedgerEntrySnapshot;
 import com.aisocialgame.integration.grpc.dto.PagedLedgerSnapshot;
 import com.aisocialgame.integration.grpc.dto.PagedResult;
+import com.aisocialgame.integration.grpc.dto.ExchangeHistorySnapshot;
 import com.aisocialgame.integration.grpc.dto.RedeemResult;
 import com.aisocialgame.integration.grpc.dto.RedemptionRecordSnapshot;
 import com.aisocialgame.integration.grpc.dto.UsageRecordSnapshot;
@@ -103,6 +104,14 @@ public class ProjectCreditService {
                 account.getPermanentBalance(),
                 tempExpiresAt
         );
+    }
+
+    @Transactional
+    public void ensureAccountInitialized(long userId) {
+        if (userId <= 0) {
+            return;
+        }
+        getOrCreateAccountForUpdate(userId, appProperties.getProjectKey());
     }
 
     @Transactional
@@ -470,12 +479,19 @@ public class ProjectCreditService {
         txn.setProjectTokens(tokens);
         txn.setStatus(EXCHANGE_PENDING);
         txn.setRetriable(true);
+        long publicBefore = safeGetPublicTokens(userId);
+        CreditAccount account = getOrCreateAccountForUpdate(userId, projectKey);
+        expireTempIfNeeded(account, publicBefore);
+        long projectPermanentBefore = account.getPermanentBalance();
+        txn.setPublicBefore(publicBefore);
+        txn.setPublicAfter(publicBefore);
+        txn.setProjectPermanentBefore(projectPermanentBefore);
+        txn.setProjectPermanentAfter(projectPermanentBefore);
         creditExchangeTransactionRepository.save(txn);
 
         try {
             BalanceSnapshot converted = billingGrpcClient.convertPublicToProject(normalizedRequestId, projectKey, userId, tokens);
             long publicAfterConvert = converted.publicPermanentTokens();
-            CreditAccount account = getOrCreateAccountForUpdate(userId, projectKey);
             expireTempIfNeeded(account, publicAfterConvert);
             account.setPermanentBalance(account.getPermanentBalance() + tokens);
             creditAccountRepository.save(account);
@@ -496,6 +512,8 @@ public class ProjectCreditService {
 
             txn.setStatus(EXCHANGE_SUCCESS);
             txn.setRetriable(false);
+            txn.setPublicAfter(publicAfterConvert);
+            txn.setProjectPermanentAfter(account.getPermanentBalance());
             creditExchangeTransactionRepository.save(txn);
             return new CreditExchangeResult(normalizedRequestId, tokens, toBalanceSnapshot(account, publicAfterConvert));
         } catch (Exception ex) {
@@ -505,6 +523,30 @@ public class ProjectCreditService {
             creditExchangeTransactionRepository.save(txn);
             throw ex;
         }
+    }
+
+    public PagedResult<ExchangeHistorySnapshot> listExchangeHistory(long userId, int page, int size) {
+        int normalizedPage = Math.max(1, page);
+        int normalizedSize = Math.min(Math.max(1, size), 100);
+        var pageData = creditExchangeTransactionRepository.findByUserIdAndProjectKeyAndStatusOrderByIdDesc(
+                userId,
+                appProperties.getProjectKey(),
+                EXCHANGE_SUCCESS,
+                PageRequest.of(normalizedPage - 1, normalizedSize)
+        );
+        List<ExchangeHistorySnapshot> records = pageData.getContent().stream()
+                .map(item -> new ExchangeHistorySnapshot(
+                        item.getId(),
+                        item.getRequestId(),
+                        item.getProjectTokens(),
+                        item.getPublicBefore(),
+                        item.getPublicAfter(),
+                        item.getProjectPermanentBefore(),
+                        item.getProjectPermanentAfter(),
+                        item.getCreatedAt() == null ? null : item.getCreatedAt().toInstant(ZoneOffset.UTC)
+                ))
+                .toList();
+        return new PagedResult<>(normalizedPage, normalizedSize, pageData.getTotalElements(), records);
     }
 
     @Transactional

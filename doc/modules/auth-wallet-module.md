@@ -1,38 +1,56 @@
-# 认证与钱包模块说明（v1.4）
+# 认证与钱包模块说明（v1.5）
+
+> 更新时间：2026-02-23
 
 ## 模块职责
 
-- 认证链路：前端统一走 user-service SSO 页面，回调后由后端建立本地会话。
-- 钱包链路：提供本地签到、余额、账本明细、兑换码兑换、通用转专属兑换、兑换历史能力，并在 AI 成功调用后扣减本地专属积分。
-- 积分模型：项目专属积分在本地维护（临时+永久），通用积分只读来自 payService；AI 消耗只扣本地专属积分。
-- 统一会话：业务接口通过 `X-Auth-Token` 识别当前用户并复用远端 `session_id`。
+- 认证：统一通过 user-service SSO 登录/注册，本项目仅负责回调校验与本地会话建立。
+- 钱包：项目专属积分由本地账本维护，通用积分通过 pay-service 读取与兑换。
+- 扣费：AI 调用成功后，仅扣减本地项目专属积分（临时优先，永久补足）。
 
 ## 关键实现
 
-- 后端：
-  - `AuthController` / `AuthService`：`/sso/login`、`/sso/register`、`/sso-callback`、`/me`
-  - `WalletController` / `WalletService`：`/api/wallet/*`
-  - `ProjectCreditService`：本地积分账户、流水、签到、兑换码、兑换事务、AI 消耗扣减
-  - `AiProxyService`：AI chat/embeddings 成功后写入 `CONSUME` 流水并扣减本地专属积分
-  - `ConsulHttpServiceDiscovery`：解析 `aienie-userservice-http` 实例地址
-- 前端：
-  - `useAuth`：生成一次性 `state`，跳转 `/api/auth/sso/login|register`
-  - `SsoCallback` 页面：解析 hash 参数，强校验 `state` 后调用后端回调
-  - `Profile` + `WalletPanel`：钱包入口与操作页面，钱包操作后同步更新顶栏积分显示
+- 后端
+  - `AuthController` / `AuthService`
+    - `GET /api/auth/sso/login`
+    - `GET /api/auth/sso/register`
+    - `POST /api/auth/sso-callback`
+    - `GET /api/auth/me`
+  - `WalletController` / `WalletService`
+    - `GET/POST /api/wallet/*`
+  - `ProjectCreditService`
+    - 本地账户初始化、签到、兑换码、账本、通用转专属、消耗流水
+- 前端
+  - `useAuth`：生成一次性 `state` 并跳转 SSO
+  - `SsoCallback`：校验 `state` 并调用后端回调
+  - `Profile` + `WalletPanel`：余额、兑换、历史记录
 
-## 关键配置
+## SSO 地址解析策略
 
-- `app.consul.address`：Consul HTTP 地址
-- `app.sso.user-service-name`：user-service HTTP 服务名
-- `app.sso.callback-url`：SSO 回跳地址
-- `SERVER_PORT`：后端端口（应用默认 `20030`，项目脚本默认 `11031`）
+`AuthService` 的 user-service 地址解析顺序：
 
-## 主要流程
+1. 优先使用 `app.sso.user-service-base-url`（默认 `https://userservice.seekerhut.com`）
+2. 当未配置该值时，回退到 Consul HTTP 服务发现（`app.sso.user-service-name`）
 
-1. 前端点击登录/注册，生成一次性 `state`。
-2. 前端生成一次性 `state`，访问 `/api/auth/sso/login?state=...`（或 `/sso/register`）。
-3. 后端 302 跳转 user-service 页面，用户完成登录/注册后回调到 `/sso/callback#...&state=...`。
-4. 前端回调页严格比对 `state`，校验通过后调用 `/api/auth/sso-callback`。
-5. 后端校验远端会话并签发本地 token；钱包页面再携带 `X-Auth-Token` 调用 `/api/wallet/*`。
-6. 钱包签到/兑换码/账本写入本地账本；通用转专属通过 payService 扣减通用积分后写入本地永久专属积分。
-7. 用户调用 AI chat/embeddings 成功后，后端按 token 消耗写入本地 `CONSUME` 流水并扣减专属积分（临时优先、永久补足）。
+这样可在跨网络/容器场景下优先走稳定域名，减少 Consul 解析失败导致的回调异常。
+
+## 首次登录初始化
+
+`POST /api/auth/sso-callback` 在首次登录时会初始化用户所需数据：
+
+- 调用 pay-service onboarding：`billingGrpcClient.ensureUserInitialized(...)`
+- 初始化本地专属积分账户：`projectCreditService.ensureAccountInitialized(...)`
+
+确保首次登录用户可直接访问钱包与业务功能。
+
+## 钱包能力清单
+
+- 每日签到：`POST /api/wallet/checkin`
+- 签到状态：`GET /api/wallet/checkin-status`
+- 余额：`GET /api/wallet/balance`
+- 消耗记录：`GET /api/wallet/usage-records`
+- 本地账本：`GET /api/wallet/ledger`
+- 兑换码：`POST /api/wallet/redeem`
+- 通用转专属：`POST /api/wallet/exchange/public-to-project`
+- 兑换码历史：`GET /api/wallet/redemption-history`
+- 通用转专属历史（含前后余额）：`GET /api/wallet/exchange-history`

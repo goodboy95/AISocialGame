@@ -15,8 +15,10 @@ import fireflychat.billing.v1.BillingConversionServiceGrpc;
 import fireflychat.billing.v1.BillingBalanceServiceGrpc;
 import fireflychat.billing.v1.BillingQueryServiceGrpc;
 import fireflychat.billing.v1.BillingRedeemCodeServiceGrpc;
+import fireflychat.billing.v1.BillingOnboardingServiceGrpc;
 import fireflychat.billing.v1.CheckinRequest;
 import fireflychat.billing.v1.ConvertPublicToProjectRequest;
+import fireflychat.billing.v1.EnsureUserInitializedRequest;
 import fireflychat.billing.v1.GetCheckinStatusRequest;
 import fireflychat.billing.v1.GetProjectBalanceRequest;
 import fireflychat.billing.v1.GetPublicBalanceRequest;
@@ -49,6 +51,9 @@ public class BillingGrpcClient {
 
     @GrpcClient("billing")
     private BillingConversionServiceGrpc.BillingConversionServiceBlockingStub conversionStub;
+
+    @GrpcClient("billing")
+    private BillingOnboardingServiceGrpc.BillingOnboardingServiceBlockingStub onboardingStub;
 
     public BalanceSnapshot getBalance(String projectKey, long userId) {
         try {
@@ -213,6 +218,21 @@ public class BillingGrpcClient {
         }
     }
 
+    public void ensureUserInitialized(String requestId, String projectKey, long userId) {
+        try {
+            var response = onboardingStub.ensureUserInitialized(EnsureUserInitializedRequest.newBuilder()
+                    .setRequestId(requestId == null ? "" : requestId)
+                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setUserId(userId)
+                    .build());
+            if (!response.getSuccess()) {
+                throw new ApiException(HttpStatus.BAD_GATEWAY, normalizeError(response.getErrorMessage(), "计费账户初始化失败"));
+            }
+        } catch (StatusRuntimeException ex) {
+            throw toApiException(ex);
+        }
+    }
+
     public RedeemResult redeemCode(String requestId, String projectKey, long userId, String code) {
         try {
             var response = redeemCodeStub.redeemCode(RedeemCodeRequest.newBuilder()
@@ -277,6 +297,13 @@ public class BillingGrpcClient {
 
     private long getPublicTokens(long userId) {
         return getPublicPermanentTokens(userId);
+    }
+
+    private String normalizeError(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value;
     }
 
     private BalanceSnapshot toBalanceSnapshot(long publicPermanentTokens, fireflychat.billing.v1.ProjectBalance projectBalance) {

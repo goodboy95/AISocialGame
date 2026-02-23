@@ -8,6 +8,7 @@ import com.aisocialgame.dto.AiModelView;
 import com.aisocialgame.dto.admin.AdminDashboardSummaryResponse;
 import com.aisocialgame.dto.admin.AdminIntegrationStatusResponse;
 import com.aisocialgame.dto.admin.AdminLedgerPageResponse;
+import com.aisocialgame.dto.admin.AdminMigrateAllBalanceResponse;
 import com.aisocialgame.dto.admin.AdminUserView;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
@@ -21,8 +22,11 @@ import com.aisocialgame.repository.RoomRepository;
 import com.aisocialgame.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -145,6 +149,49 @@ public class AdminOpsService {
                 publicTokens,
                 operator
         );
+    }
+
+    public AdminMigrateAllBalanceResponse migrateAllUsersBalance(String operator, Integer batchSize) {
+        int effectiveBatchSize = batchSize == null ? 100 : Math.min(Math.max(batchSize, 1), 500);
+        long scanned = 0;
+        long success = 0;
+        long failed = 0;
+        List<AdminMigrateAllBalanceResponse.FailureItem> failureItems = new ArrayList<>();
+
+        int page = 0;
+        while (true) {
+            var pageData = userRepository.findByExternalUserIdGreaterThan(
+                    0L,
+                    PageRequest.of(page, effectiveBatchSize, Sort.by(Sort.Direction.ASC, "externalUserId"))
+            );
+            if (pageData.isEmpty()) {
+                break;
+            }
+            for (var user : pageData.getContent()) {
+                if (user.getExternalUserId() == null || user.getExternalUserId() <= 0) {
+                    continue;
+                }
+                scanned++;
+                try {
+                    migrateUserBalance(user.getExternalUserId(), operator);
+                    success++;
+                } catch (Exception ex) {
+                    failed++;
+                    if (failureItems.size() < 100) {
+                        failureItems.add(new AdminMigrateAllBalanceResponse.FailureItem(
+                                user.getExternalUserId(),
+                                ex.getMessage() == null ? "unknown_error" : ex.getMessage()
+                        ));
+                    }
+                }
+            }
+            if (!pageData.hasNext()) {
+                break;
+            }
+            page++;
+        }
+
+        return new AdminMigrateAllBalanceResponse(scanned, success, failed, effectiveBatchSize, failureItems);
     }
 
     public CreditRedeemCode createRedeemCode(String code,

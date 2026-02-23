@@ -33,6 +33,18 @@ public class CreditExchangeTransaction {
     @Column(name = "project_tokens", nullable = false)
     private long projectTokens;
 
+    @Column(name = "public_before", nullable = false)
+    private long publicBefore;
+
+    @Column(name = "public_after", nullable = false)
+    private long publicAfter;
+
+    @Column(name = "project_permanent_before", nullable = false)
+    private long projectPermanentBefore;
+
+    @Column(name = "project_permanent_after", nullable = false)
+    private long projectPermanentAfter;
+
     @Column(nullable = false, length = 16)
     private String status;
 
@@ -104,6 +116,38 @@ public class CreditExchangeTransaction {
         this.projectTokens = projectTokens;
     }
 
+    public long getPublicBefore() {
+        return publicBefore;
+    }
+
+    public void setPublicBefore(long publicBefore) {
+        this.publicBefore = publicBefore;
+    }
+
+    public long getPublicAfter() {
+        return publicAfter;
+    }
+
+    public void setPublicAfter(long publicAfter) {
+        this.publicAfter = publicAfter;
+    }
+
+    public long getProjectPermanentBefore() {
+        return projectPermanentBefore;
+    }
+
+    public void setProjectPermanentBefore(long projectPermanentBefore) {
+        this.projectPermanentBefore = projectPermanentBefore;
+    }
+
+    public long getProjectPermanentAfter() {
+        return projectPermanentAfter;
+    }
+
+    public void setProjectPermanentAfter(long projectPermanentAfter) {
+        this.projectPermanentAfter = projectPermanentAfter;
+    }
+
     public String getStatus() {
         return status;
     }
@@ -127,5 +171,20 @@ public class CreditExchangeTransaction {
     public void setRetriable(boolean retriable) {
         this.retriable = retriable;
     }
-}
 
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+}

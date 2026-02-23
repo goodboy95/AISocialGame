@@ -4,7 +4,7 @@ spring:
   application:
     name: ${SPRING_APPLICATION_NAME:ai-social-game}
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3308}/${MYSQL_DB:aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${MYSQL_HOST:192.168.5.141}:${MYSQL_PORT:3306}/${MYSQL_DB:aisocialgame}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${SPRING_DATASOURCE_USERNAME:aisocialgame}
     password: ${SPRING_DATASOURCE_PASSWORD:aisocialgame_pwd}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,8 +16,8 @@ spring:
         format_sql: false
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
-      port: ${SPRING_DATA_REDIS_PORT:6381}
+      host: ${SPRING_DATA_REDIS_HOST:192.168.5.141}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
 server:
   port: ${SERVER_PORT:20030}
@@ -25,10 +25,11 @@ server:
 app:
   project-key: ${APP_PROJECT_KEY:aisocialgame}
   consul:
-    address: ${CONSUL_HTTP_ADDR:http://127.0.0.1:8502}
+    address: ${CONSUL_HTTP_ADDR:http://192.168.5.141:60000}
   sso:
     user-service-name: ${SSO_USER_SERVICE_NAME:aienie-userservice-http}
-    callback-url: ${SSO_CALLBACK_URL:http://localhost:11030/sso/callback}
+    user-service-base-url: ${SSO_USER_SERVICE_BASE_URL:https://userservice.seekerhut.com}
+    callback-url: ${SSO_CALLBACK_URL:https://aisocialgame.seekerhut.com/sso/callback}
     login-path: ${SSO_LOGIN_PATH:/sso/login}
     register-path: ${SSO_REGISTER_PATH:/register}
   auth:
@@ -52,8 +53,8 @@ app:
     token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
 
 qdrant:
-  host: ${QDRANT_HOST:http://127.0.0.1}
-  http-port: ${QDRANT_PORT:6335}
+  host: ${QDRANT_HOST:http://192.168.5.141}
+  http-port: ${QDRANT_PORT:6333}
   enabled: ${QDRANT_ENABLED:true}
 
 connection:
@@ -62,11 +63,11 @@ connection:
 grpc:
   client:
     user:
-      address: ${USER_GRPC_ADDR:consul:///aienie-userservice-grpc}
+      address: ${USER_GRPC_ADDR:consul:///${USER_GRPC_SERVICE_NAME:aienie-userservice-grpc}}
       negotiationType: PLAINTEXT
     billing:
-      address: ${BILLING_GRPC_ADDR:consul:///aienie-payservice-grpc}
+      address: ${BILLING_GRPC_ADDR:consul:///${BILLING_GRPC_SERVICE_NAME:aienie-payservice-grpc}}
       negotiationType: PLAINTEXT
     ai:
-      address: ${AI_GRPC_ADDR:consul:///aienie-aiservice-grpc}
+      address: ${AI_GRPC_ADDR:consul:///${AI_GRPC_SERVICE_NAME:aienie-aiservice-grpc}}
       negotiationType: PLAINTEXT

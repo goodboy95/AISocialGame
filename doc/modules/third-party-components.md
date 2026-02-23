@@ -1,26 +1,30 @@
 # 第三方组件对齐说明
 
-## 对齐基线来源
+> 更新时间：2026-02-23
 
-以下基线来自 `user-service`、`fireflyChat`、`fireflychat_studio` 当前配置：
+## 依赖清单
+
+当前项目对接以下基础组件（部署在 `192.168.5.141`）：
 
 - MySQL
 - Redis
 - Qdrant
 - Consul
 
-## AISocialGame 对齐结果
+## 对齐结果
 
-- 服务本体配置（`docker-compose.yml`、`backend/src/main/resources/application.yml`、`build.sh`、`build.ps1`）已统一包含上述四类组件配置。
-- 默认连接统一为 `127.0.0.1` + 默认端口 `+2`：
-  - MySQL：`3308`
-  - Redis：`6381`
-  - Qdrant：`6335`
-  - Consul：`8502`
+- 后端默认配置与脚本默认值已统一：
+  - MySQL：`192.168.5.141:3306`
+  - Redis：`192.168.5.141:6379`
+  - Qdrant：`http://192.168.5.141:6333`
+  - Consul：`http://192.168.5.141:60000`
+- 配置落点：
+  - `backend/src/main/resources/application.yml`
+  - `env.txt`
+  - `build.sh` / `build_prod.sh`
+- 运行时可通过 `env.txt` 覆盖所有连接参数。
 
-## 依赖部署脚本
+## 说明
 
-- `deploy/docker-compose.yml`：独立编排 `MySQL + Redis + Qdrant + Consul`
-- `deploy/build.sh`：独立启动/重启依赖容器
-
-本项目当前无额外独立第三方组件（例如 Neo4j），因此无需新增额外 deploy 子脚本。
+- 本仓库当前不维护第三方依赖的独立 `deploy/` 目录，依赖服务由外部 Docker 环境统一提供。
+- `build.sh` 仅负责本项目前后端部署，并包含 MySQL 库/账号引导步骤（可通过 `MYSQL_BOOTSTRAP_ENABLED` 控制）。

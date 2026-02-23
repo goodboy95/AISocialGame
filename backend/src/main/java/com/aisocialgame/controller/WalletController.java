@@ -5,6 +5,7 @@ import com.aisocialgame.dto.CheckinResponse;
 import com.aisocialgame.dto.CheckinStatusResponse;
 import com.aisocialgame.dto.ExchangeRequest;
 import com.aisocialgame.dto.ExchangeResponse;
+import com.aisocialgame.dto.ExchangeHistoryView;
 import com.aisocialgame.dto.LedgerEntryView;
 import com.aisocialgame.dto.PagedResponse;
 import com.aisocialgame.dto.RedeemRequest;
@@ -95,6 +96,16 @@ public class WalletController {
                                                                            @RequestParam(defaultValue = "20") int size) {
         var result = walletService.getRedemptionHistory(requireUser(token), page, size);
         List<RedemptionView> items = result.items().stream().map(RedemptionView::new).toList();
+        return ResponseEntity.ok(new PagedResponse<>(items, result.page(), result.size(), result.total()));
+    }
+
+    @GetMapping("/exchange-history")
+    public ResponseEntity<PagedResponse<ExchangeHistoryView>> exchangeHistory(
+            @RequestHeader(value = "X-Auth-Token", required = false) String token,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = walletService.getExchangeHistory(requireUser(token), page, size);
+        List<ExchangeHistoryView> items = result.items().stream().map(ExchangeHistoryView::new).toList();
         return ResponseEntity.ok(new PagedResponse<>(items, result.page(), result.size(), result.total()));
     }
 

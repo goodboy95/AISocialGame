@@ -221,6 +221,16 @@ export interface ExchangeResponse {
   };
 }
 
+export interface ExchangeHistoryRecord {
+  requestId: string;
+  exchangedTokens: number;
+  publicBefore: number;
+  publicAfter: number;
+  projectPermanentBefore: number;
+  projectPermanentAfter: number;
+  createdAt?: string;
+}
+
 export interface RedemptionRecord {
   code: string;
   tokensGranted: number;

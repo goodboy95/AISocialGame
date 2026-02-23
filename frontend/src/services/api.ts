@@ -14,6 +14,7 @@ import {
   CheckinStatusResponse,
   CommunityPost,
   ExchangeResponse,
+  ExchangeHistoryRecord,
   Game,
   GameState,
   LedgerEntry,
@@ -156,6 +157,10 @@ export const walletApi = {
   },
   async exchangePublicToProject(amount: number, requestId?: string): Promise<ExchangeResponse> {
     const res = await api.post("/wallet/exchange/public-to-project", { amount, requestId });
+    return res.data;
+  },
+  async getExchangeHistory(page = 1, size = 20): Promise<PagedResponse<ExchangeHistoryRecord>> {
+    const res = await api.get("/wallet/exchange-history", { params: { page, size } });
     return res.data;
   },
 };
@@ -339,6 +344,10 @@ export const adminApi = {
   },
   async migrateUserBalance(userId: number) {
     const res = await adminApiClient.post("/admin/billing/migrate-user", { userId });
+    return res.data;
+  },
+  async migrateAllUserBalances(batchSize = 100) {
+    const res = await adminApiClient.post("/admin/billing/migrate-all", { batchSize });
     return res.data;
   },
   async createRedeemCode(payload: {
