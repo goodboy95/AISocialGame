@@ -1,6 +1,7 @@
 package com.aisocialgame.integration.grpc.client;
 
 import com.aisocialgame.exception.ApiException;
+import com.aisocialgame.integration.grpc.auth.AiGrpcHmacClientInterceptor;
 import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
 import com.aisocialgame.integration.grpc.dto.AiChatResult;
 import com.aisocialgame.integration.grpc.dto.AiEmbeddingsResult;
@@ -27,7 +28,7 @@ import java.util.UUID;
 @Component
 public class AiGrpcClient {
 
-    @GrpcClient("ai")
+    @GrpcClient(value = "ai", interceptors = AiGrpcHmacClientInterceptor.class)
     private AiGatewayServiceGrpc.AiGatewayServiceBlockingStub aiStub;
 
     public List<AiModelOptionDto> listModels() {

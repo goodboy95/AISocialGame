@@ -24,6 +24,8 @@ app:
     username: admin
     password: admin123
     token-ttl-hours: 1
+  external:
+    grpc-auth-required: false
 
 grpc:
   client:

@@ -1,15 +1,13 @@
 package com.aisocialgame.integration.grpc.client;
 
 import com.aisocialgame.exception.ApiException;
-import com.aisocialgame.integration.grpc.dto.AuthSessionResult;
+import com.aisocialgame.integration.grpc.auth.UserGrpcAuthClientInterceptor;
 import com.aisocialgame.integration.grpc.dto.BanStatusSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
 import fireflychat.user.v1.BanType;
 import fireflychat.user.v1.BanUserRequest;
 import fireflychat.user.v1.GetBanStatusRequest;
 import fireflychat.user.v1.GetUserBasicRequest;
-import fireflychat.user.v1.LoginUserRequest;
-import fireflychat.user.v1.RegisterUserRequest;
 import fireflychat.user.v1.UnbanUserRequest;
 import fireflychat.user.v1.UserAuthServiceGrpc;
 import fireflychat.user.v1.UserBanServiceGrpc;
@@ -28,62 +26,14 @@ import java.util.UUID;
 @Component
 public class UserGrpcClient {
 
-    @GrpcClient("user")
+    @GrpcClient(value = "user", interceptors = UserGrpcAuthClientInterceptor.class)
     private UserAuthServiceGrpc.UserAuthServiceBlockingStub userAuthStub;
 
-    @GrpcClient("user")
+    @GrpcClient(value = "user", interceptors = UserGrpcAuthClientInterceptor.class)
     private UserDirectoryServiceGrpc.UserDirectoryServiceBlockingStub userDirectoryStub;
 
-    @GrpcClient("user")
+    @GrpcClient(value = "user", interceptors = UserGrpcAuthClientInterceptor.class)
     private UserBanServiceGrpc.UserBanServiceBlockingStub userBanStub;
-
-    public AuthSessionResult register(String username,
-                                      String email,
-                                      String password,
-                                      String displayName,
-                                      String avatarUrl,
-                                      String ipAddress,
-                                      String userAgent) {
-        try {
-            var response = userAuthStub.registerUser(RegisterUserRequest.newBuilder()
-                    .setRequestId(UUID.randomUUID().toString())
-                    .setUsername(normalize(username))
-                    .setEmail(normalize(email))
-                    .setPassword(password)
-                    .setDisplayName(normalize(displayName))
-                    .setAvatarUrl(normalize(avatarUrl))
-                    .setIpAddress(normalize(ipAddress))
-                    .setUserAgent(normalize(userAgent))
-                    .build());
-            if (!response.getSuccess()) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, normalizeError(response.getErrorMessage(), "注册失败"));
-            }
-            return new AuthSessionResult(toProfile(response.getUser()), response.getAccessToken(), response.getSessionId());
-        } catch (StatusRuntimeException ex) {
-            throw toApiException(ex);
-        }
-    }
-
-    public AuthSessionResult login(String username,
-                                   String password,
-                                   String ipAddress,
-                                   String userAgent) {
-        try {
-            var response = userAuthStub.loginUser(LoginUserRequest.newBuilder()
-                    .setRequestId(UUID.randomUUID().toString())
-                    .setUsername(normalize(username))
-                    .setPassword(password)
-                    .setIpAddress(normalize(ipAddress))
-                    .setUserAgent(normalize(userAgent))
-                    .build());
-            if (!response.getSuccess()) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, normalizeError(response.getErrorMessage(), "用户名或密码错误"));
-            }
-            return new AuthSessionResult(toProfile(response.getUser()), response.getAccessToken(), response.getSessionId());
-        } catch (StatusRuntimeException ex) {
-            throw toApiException(ex);
-        }
-    }
 
     public ExternalUserProfile validateSession(long userId, String sessionId) {
         try {

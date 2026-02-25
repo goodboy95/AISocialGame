@@ -12,6 +12,7 @@ public class AppProperties {
     private Ai ai = new Ai();
     private Credit credit = new Credit();
     private Admin admin = new Admin();
+    private External external = new External();
 
     public String getProjectKey() {
         return projectKey;
@@ -59,6 +60,14 @@ public class AppProperties {
 
     public void setCredit(Credit credit) {
         this.credit = credit;
+    }
+
+    public External getExternal() {
+        return external;
+    }
+
+    public void setExternal(External external) {
+        this.external = external;
     }
 
     public static class Ai {
@@ -217,6 +226,54 @@ public class AppProperties {
 
         public void setRedeemFailureLimitPerDay(int redeemFailureLimitPerDay) {
             this.redeemFailureLimitPerDay = redeemFailureLimitPerDay;
+        }
+    }
+
+    public static class External {
+        private boolean grpcAuthRequired = true;
+        private String userserviceInternalGrpcToken = "";
+        private String payserviceJwt = "";
+        private String aiserviceHmacCaller = "";
+        private String aiserviceHmacSecret = "";
+
+        public boolean isGrpcAuthRequired() {
+            return grpcAuthRequired;
+        }
+
+        public void setGrpcAuthRequired(boolean grpcAuthRequired) {
+            this.grpcAuthRequired = grpcAuthRequired;
+        }
+
+        public String getUserserviceInternalGrpcToken() {
+            return userserviceInternalGrpcToken;
+        }
+
+        public void setUserserviceInternalGrpcToken(String userserviceInternalGrpcToken) {
+            this.userserviceInternalGrpcToken = userserviceInternalGrpcToken;
+        }
+
+        public String getPayserviceJwt() {
+            return payserviceJwt;
+        }
+
+        public void setPayserviceJwt(String payserviceJwt) {
+            this.payserviceJwt = payserviceJwt;
+        }
+
+        public String getAiserviceHmacCaller() {
+            return aiserviceHmacCaller;
+        }
+
+        public void setAiserviceHmacCaller(String aiserviceHmacCaller) {
+            this.aiserviceHmacCaller = aiserviceHmacCaller;
+        }
+
+        public String getAiserviceHmacSecret() {
+            return aiserviceHmacSecret;
+        }
+
+        public void setAiserviceHmacSecret(String aiserviceHmacSecret) {
+            this.aiserviceHmacSecret = aiserviceHmacSecret;
         }
     }
 }

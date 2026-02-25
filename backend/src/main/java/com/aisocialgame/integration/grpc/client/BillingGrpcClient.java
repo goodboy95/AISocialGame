@@ -1,6 +1,7 @@
 package com.aisocialgame.integration.grpc.client;
 
 import com.aisocialgame.exception.ApiException;
+import com.aisocialgame.integration.grpc.auth.BillingGrpcAuthClientInterceptor;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.CheckinResult;
 import com.aisocialgame.integration.grpc.dto.CheckinStatusResult;
@@ -37,22 +38,22 @@ import java.util.List;
 @Component
 public class BillingGrpcClient {
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingBalanceServiceGrpc.BillingBalanceServiceBlockingStub balanceStub;
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingQueryServiceGrpc.BillingQueryServiceBlockingStub queryStub;
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingCheckinServiceGrpc.BillingCheckinServiceBlockingStub checkinStub;
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingRedeemCodeServiceGrpc.BillingRedeemCodeServiceBlockingStub redeemCodeStub;
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingConversionServiceGrpc.BillingConversionServiceBlockingStub conversionStub;
 
-    @GrpcClient("billing")
+    @GrpcClient(value = "billing", interceptors = BillingGrpcAuthClientInterceptor.class)
     private BillingOnboardingServiceGrpc.BillingOnboardingServiceBlockingStub onboardingStub;
 
     public BalanceSnapshot getBalance(String projectKey, long userId) {

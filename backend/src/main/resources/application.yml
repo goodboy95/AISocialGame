@@ -51,6 +51,12 @@ app:
     password: ${APP_ADMIN_PASSWORD:admin123}
     display-name: ${APP_ADMIN_DISPLAY_NAME:系统管理员}
     token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
+  external:
+    grpc-auth-required: ${APP_EXTERNAL_GRPC_AUTH_REQUIRED:true}
+    userservice-internal-grpc-token: ${APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN:}
+    payservice-jwt: ${APP_EXTERNAL_PAYSERVICE_JWT:}
+    aiservice-hmac-caller: ${APP_EXTERNAL_AISERVICE_HMAC_CALLER:}
+    aiservice-hmac-secret: ${APP_EXTERNAL_AISERVICE_HMAC_SECRET:}
 
 qdrant:
   host: ${QDRANT_HOST:http://192.168.5.141}
