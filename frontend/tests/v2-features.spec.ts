@@ -16,5 +16,5 @@ test("v2 导航入口与社交面板可用", async ({ page }) => {
   await page.getByRole("button", { name: "取消" }).click({ force: true });
 
   await page.locator("button:has(svg.lucide-users)").first().click({ force: true });
-  await expect(page.getByText("好友请求")).toBeVisible();
+  await expect(page.getByText(/好友请求/).first()).toBeVisible();
 });

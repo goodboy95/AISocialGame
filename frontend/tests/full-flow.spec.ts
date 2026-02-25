@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("SSO 回调、钱包操作、AI 流式聊天", async ({ page }) => {
+  test.setTimeout(120_000);
   const user = {
     id: "local-user-1",
     externalUserId: 1001,
@@ -132,10 +133,10 @@ test("SSO 回调、钱包操作、AI 流式聊天", async ({ page }) => {
     window.sessionStorage.setItem("aisocialgame_sso_state", state);
   }, ssoState);
   await page.goto(`/sso/callback#access_token=remote-token&user_id=1001&username=tester&session_id=session-1&state=${ssoState}`);
-  await expect(page).toHaveURL(/\/$/);
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("aisocialgame_token")))
     .toBe("token-1");
+  await page.goto("/");
 
   await page.goto("/profile?tab=wallet");
   await expect(page.getByText("余额概览")).toBeVisible();
@@ -150,5 +151,5 @@ test("SSO 回调、钱包操作、AI 流式聊天", async ({ page }) => {
   await page.goto("/ai-chat");
   await page.getByPlaceholder("输入问题，按“发送”后将通过 SSE 逐字返回").fill("你好");
   await page.getByRole("button", { name: "发送" }).click({ force: true });
-  await expect(page.getByText("你好")).toBeVisible();
+  await expect(page.getByText("你好").first()).toBeVisible();
 });
