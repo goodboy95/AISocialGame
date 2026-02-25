@@ -1,10 +1,10 @@
-# gRPC 集成模块说明（v1.4）
+# gRPC 集成模块说明（v1.5）
 
-> 更新时间：2026-02-23
+> 更新时间：2026-02-24
 
 ## 目标
 
-对接 user-service、pay-service、ai-service 三个外部服务，并支持 Consul 服务发现与静态域名地址两种模式。
+对接 user-service、pay-service、ai-service 三个外部服务，并通过 Consul 进行服务发现。
 
 ## 组成
 
@@ -14,29 +14,45 @@
   - 通用积分读取、通用转专属、项目积分迁移、onboarding 初始化
 - `integration/grpc/client/AiGrpcClient`
   - 模型列表、对话、embeddings、ocr
+- `integration/grpc/auth/UserGrpcAuthClientInterceptor`
+  - 自动注入 `x-internal-token`
+- `integration/grpc/auth/BillingGrpcAuthClientInterceptor`
+  - 自动注入 `authorization: Bearer <service_jwt>`
+- `integration/grpc/auth/AiGrpcHmacClientInterceptor`
+  - 自动注入 `x-aienie-*` HMAC metadata
 - `integration/consul/ConsulNameResolverProvider`
-  - 支持 `consul:///service-name` 的 gRPC 名称解析
+  - 支持 `consul:///service-name` 名称解析
 - `integration/consul/ConsulHttpServiceDiscovery`
-  - SSO HTTP 地址发现（AuthService 的回退路径）
+  - SSO HTTP 地址发现回退
 
 ## 当前配置策略
 
-- Consul 地址配置：`CONSUL_HTTP_ADDR`（默认 `http://192.168.5.141:60000`）
-- Consul 服务名：
+- Consul 地址：`CONSUL_HTTP_ADDR`（默认 `http://192.168.5.141:60000`）
+- 服务名：
   - `USER_GRPC_SERVICE_NAME=aienie-userservice-grpc`
   - `BILLING_GRPC_SERVICE_NAME=aienie-payservice-grpc`
   - `AI_GRPC_SERVICE_NAME=aienie-aiservice-grpc`
-- `env.txt` 当前默认 gRPC 地址为静态域名，优先避免跨网络 Consul 解析问题：
-  - `USER_GRPC_ADDR=static://userservice.seekerhut.com:10001`
-  - `BILLING_GRPC_ADDR=static://payservice.seekerhut.com:20021`
-  - `AI_GRPC_ADDR=static://aiservice.seekerhut.com:10011`
+- 地址：
+  - `USER_GRPC_ADDR=consul:///aienie-userservice-grpc`
+  - `BILLING_GRPC_ADDR=consul:///aienie-payservice-grpc`
+  - `AI_GRPC_ADDR=consul:///aienie-aiservice-grpc`
 
-当未显式指定 `*_GRPC_ADDR` 时，应用默认回退到 `consul:///${*_GRPC_SERVICE_NAME}`。
+## 鉴权约束（严格）
+
+默认 `APP_EXTERNAL_GRPC_AUTH_REQUIRED=true`，并要求：
+
+- `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
+- `APP_EXTERNAL_PAYSERVICE_JWT`
+- `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
+- `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
+
+启动期由 `ExternalGrpcAuthValidator` 进行 fail-fast 校验，缺失即拒绝启动。
 
 ## 运行链路
 
-1. 启动阶段按 `grpc.client.*.address` 建立 gRPC 通道。
-2. SSO 回调时通过 `UserGrpcClient.validateSession(...)` 校验外部会话。
-3. 首次登录执行 pay-service onboarding + 本地账户初始化。
-4. 钱包兑换时调用 `BillingGrpcClient.exchangePublicToProject(...)`，本地账本同步记账。
-5. AI 请求经 `AiGrpcClient` 执行后，在本地落地 `CONSUME` 流水。
+1. 启动后基于 `grpc.client.*.address` 建立三服务 gRPC 通道。
+2. 每次调用由对应拦截器自动注入鉴权 metadata。
+3. SSO 回调中调用 user-service 校验会话。
+4. 首次登录调用 pay-service onboarding + 本地账户初始化。
+5. 钱包兑换调用 pay-service 并在本地账本落地流水。
+6. AI 请求成功后在本地落地 `CONSUME` 流水。

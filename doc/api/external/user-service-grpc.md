@@ -1,23 +1,27 @@
 # user-service gRPC 接口（外部依赖）
 
-- 来源：gRPC Reflection + Consul 服务发现
-- 获取时间：2026-02-16
-- 说明：以下为本项目 v1.1 实际使用/运维相关接口。
+> 更新时间：2026-02-24
 
-## 服务
-- `fireflychat.user.v1.UserAuthService`
-  - `RegisterUser`
-  - `LoginUser`
-  - `ValidateSession`
-- `fireflychat.user.v1.UserDirectoryService`
-  - `GetUserBasic`
-- `fireflychat.user.v1.UserBanService`
-  - `GetBanStatus`
-  - `BanUser`
-  - `UnbanUser`
+## 服务名
 
-## 核心请求字段
-- `RegisterUserRequest`: `request_id`, `username`, `email`, `password`, `display_name`, `avatar_url`, `ip_address`, `user_agent`
-- `LoginUserRequest`: `request_id`, `username`, `password`, `ip_address`, `user_agent`
-- `ValidateSessionRequest`: `user_id`, `session_id`
-- `BanUserRequest`: `user_id`, `ban_type`, `reason`, `expires_at`, `operator_user_id`
+- Consul：`aienie-userservice-grpc`
+- gRPC 服务：
+  - `fireflychat.user.v1.UserAuthService`
+  - `fireflychat.user.v1.UserDirectoryService`
+  - `fireflychat.user.v1.UserBanService`
+
+## 本项目使用的方法
+
+- `UserAuthService/ValidateSession`
+- `UserDirectoryService/GetUserBasic`
+- `UserBanService/GetBanStatus`
+- `UserBanService/BanUser`
+- `UserBanService/UnbanUser`
+
+## 鉴权要求
+
+除少数公开方法外，user-service 受保护方法需携带：
+
+- `x-internal-token: ${USERSERVICE_INTERNAL_GRPC_TOKEN}`
+
+本项目由 `UserGrpcAuthClientInterceptor` 自动注入该 header。

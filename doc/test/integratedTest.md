@@ -1,61 +1,75 @@
-# 集成测试清单（2026-02-23）
+# 集成测试记录（2026-02-25）
 
-## 1. 本地部署回归
+## 1. 执行环境与前置
 
-- 命令
-  - `echo "$SUDO_PASSWORD" | sudo -S bash ./build.sh`
-- 结果
-  - 通过（后端测试 + 打包、前端构建、Docker 重建、健康等待全部通过）
-  - 输出末尾：`All done. Frontend: https://aisocialgame.seekerhut.com  Backend API: https://aisocialgame.seekerhut.com/api`
+- 部署命令：`sudo ./build.sh`
+- 测试域名：`https://aisocialgame.seekerhut.com`
+- 账号：`goodboy95 / superhs2cr1`
+- 严格 gRPC 鉴权变量已注入：
+  - `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
+  - `APP_EXTERNAL_PAYSERVICE_JWT`
+  - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
+  - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
 
-## 2. 后端测试
+## 2. 系统级修复（本次执行）
 
-- 来源：`build.sh` 内部执行 `mvn clean test package`
-- 结果：通过（`Tests run: 33, Failures: 0, Errors: 0, Skipped: 0`）
+### 2.1 hosts 修复
 
-## 3. 前端 E2E（Mock + Real）
+将三服务域名指向 `192.168.5.141`：
 
-### 3.1 Mock E2E
+- `userservice.seekerhut.com`
+- `payservice.seekerhut.com`
+- `aiservice.seekerhut.com`
 
-- 命令
-  - `PLAYWRIGHT_BASE_URL=http://127.0.0.1:11030 pnpm --dir frontend test:e2e`
-- 结果
-  - `3 passed, 1 skipped`
-  - 覆盖：首页、v2 导航、SSO 回调/钱包基础链路
+保留 `aisocialgame.seekerhut.com -> 127.0.0.1` 用于本机站点访问。
 
-### 3.2 Real E2E（真实 SSO + 真实兑换）
+### 2.2 nginx 反代修复
 
-- 命令
-  - `PLAYWRIGHT_BASE_URL=https://aisocialgame.seekerhut.com REAL_E2E=1 E2E_USERNAME=goodboy95 E2E_PASSWORD=superhs2cr1 pnpm --dir frontend test:e2e:real`
-- 结果
-  - `1 passed`
-- 覆盖点
-  - 使用真实 user-service 登录
-  - 调用本项目 `/api/auth/sso-callback` 建立本地会话
-  - 执行 `100` 通用积分兑换专属积分
-  - 校验兑换历史展示“兑换前后通用积分/项目永久积分”
+修复文件：`/etc/nginx/sites-enabled/aisocialgame.seekerhut.com.conf`
 
-## 4. 接口抽检
+- 移除错误配置：`location /sso/ { proxy_pass http://127.0.0.1:11031/sso/; ... }`
+- 原因：`/sso/callback` 应由前端路由接管，错误反代会导致回调页 500。
+- 执行：`nginx -t && nginx -s reload`
 
-### 4.1 SSO 跳转
+## 3. build.sh 结果
 
-- 命令
-  - `curl --noproxy "*" -k -i "https://aisocialgame.seekerhut.com/api/auth/sso/login?state=1234567890abcdef1234567890abcdef"`
-- 结果
-  - `302 Found`
-  - `Location` 指向 `https://userservice.seekerhut.com/sso/login?...&state=...`
+`build.sh` 全流程成功：
 
-### 4.2 管理端全量迁移
+1. 后端 `mvn clean test package` 成功（`Tests run: 33, Failures: 0, Errors: 0, Skipped: 0`）
+2. 前端构建成功
+3. Docker Compose 重建成功
+4. 健康检查通过
+5. 自动全量迁移通过：
+   - `{"scanned":1,"success":1,"failed":0,"batchSize":100,"failures":[]}`
+6. Playwright 冒烟 + 真实链路全部通过
 
-- 命令
-  - 登录获取管理员 token：`POST /api/admin/auth/login`
-  - 执行：`POST /api/admin/billing/migrate-all`
-- 结果示例
-  - `{"scanned":1,"success":1,"failed":0,"batchSize":100,"failures":[]}`
+## 4. Playwright 结果
 
-### 4.3 基础可用性
+### 4.1 冒烟/功能回归
 
-- 域名首页
-  - `curl --noproxy "*" -k -I https://aisocialgame.seekerhut.com` -> `HTTP/2 200`
-- 后端健康
-  - `curl --noproxy "*" http://127.0.0.1:11031/actuator/health` -> `{"status":"UP"}`
+执行：
+
+- `tests/basic.spec.ts`
+- `tests/full-flow.spec.ts`
+- `tests/v2-features.spec.ts`
+
+结果：`3 passed`
+
+### 4.2 真实链路
+
+执行：`tests/real-flow.spec.ts`（`REAL_E2E=1`）
+
+结果：`1 passed`
+
+覆盖点：
+
+- 真实 SSO 登录
+- 用户个人页钱包可访问
+- 执行 `100` 通用积分兑换专属积分
+- 展示兑换历史（通用积分与项目永久积分兑换前后值）
+
+## 5. 抽检
+
+- `https://aisocialgame.seekerhut.com` 可访问
+- `http://127.0.0.1:11031/actuator/health` 返回 `UP`
+- `GET /api/auth/sso/login?state=...` 返回 `302` 到 user-service

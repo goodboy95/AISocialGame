@@ -1,26 +1,30 @@
 # ai-service gRPC 接口（外部依赖）
 
-- 来源：gRPC Reflection + Consul 服务发现 + 本仓库 `backend/src/main/proto/ai/v1/ai_service.proto`
-- 获取时间：2026-02-17
+> 更新时间：2026-02-24
 
-## 服务
-- `fireflychat.ai.v1.AiGatewayService`
-  - `ListModels`
-  - `ChatCompletions`
-  - `Embeddings`
-  - `OcrParse`
+## 服务名
 
-## 核心请求字段
-- `ChatCompletionsRequest`: `request_id`, `project_key`, `user_id`, `session_id`, `model`, `messages[]`
-- `ChatMessage`: `role`, `content`
-- `EmbeddingsRequest`: `request_id`, `project_key`, `user_id`, `session_id`, `model`, `input[]`, `normalize`
-- `OcrParseRequest`: `request_id`, `project_key`, `user_id`, `session_id`, `model`, `image_url`, `image_base64`, `document_url`, `pages`, `output_type`
+- Consul：`aienie-aiservice-grpc`
+- gRPC 服务：`fireflychat.ai.v1.AiGatewayService`
 
-## 核心响应字段
-- `ListModelsResponse.models[]`: `id`, `display_name`, `provider`, `input_rate`, `output_rate`, `type`
-- `ChatCompletionsResponse`: `content`, `model_key`, `prompt_tokens`, `completion_tokens`
-- `EmbeddingsResponse`: `model_key`, `dimensions`, `vectors[].values[]`, `prompt_tokens`
-- `OcrParseResponse`: `request_id`, `model_key`, `output_type`, `content`, `raw_json`
+## 本项目使用的方法
 
-## 说明
-- 若线上 ai-service 尚未升级到含 `Embeddings` / `OcrParse` 的版本，调用将返回 gRPC 未实现错误（`UNIMPLEMENTED`），BFF 侧会透传为网关错误。
+- `ListModels`
+- `ChatCompletions`
+- `Embeddings`
+- `OcrParse`
+
+## 鉴权要求
+
+ai-service 默认要求 HMAC metadata：
+
+- `x-aienie-caller`
+- `x-aienie-ts`
+- `x-aienie-nonce`
+- `x-aienie-signature`
+
+签名串规则：
+
+`caller + "\n" + "/" + fullMethodName + "\n" + ts + "\n" + nonce`
+
+本项目由 `AiGrpcHmacClientInterceptor` 自动计算并注入这些 headers。

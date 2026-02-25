@@ -1,6 +1,6 @@
-# 认证与钱包模块说明（v1.5）
+# 认证与钱包模块说明（v1.6）
 
-> 更新时间：2026-02-23
+> 更新时间：2026-02-24
 
 ## 模块职责
 
@@ -29,19 +29,17 @@
 
 `AuthService` 的 user-service 地址解析顺序：
 
-1. 优先使用 `app.sso.user-service-base-url`（默认 `https://userservice.seekerhut.com`）
-2. 当未配置该值时，回退到 Consul HTTP 服务发现（`app.sso.user-service-name`）
-
-这样可在跨网络/容器场景下优先走稳定域名，减少 Consul 解析失败导致的回调异常。
+1. 优先 `app.sso.user-service-base-url`（默认 `https://userservice.seekerhut.com`）
+2. 未配置时回退 Consul HTTP 服务发现（`app.sso.user-service-name`）
 
 ## 首次登录初始化
 
-`POST /api/auth/sso-callback` 在首次登录时会初始化用户所需数据：
+`POST /api/auth/sso-callback` 在首次登录时执行：
 
-- 调用 pay-service onboarding：`billingGrpcClient.ensureUserInitialized(...)`
-- 初始化本地专属积分账户：`projectCreditService.ensureAccountInitialized(...)`
+- `billingGrpcClient.ensureUserInitialized(...)`
+- `projectCreditService.ensureAccountInitialized(...)`
 
-确保首次登录用户可直接访问钱包与业务功能。
+确保首次登录用户可直接使用钱包与业务能力。
 
 ## 钱包能力清单
 
@@ -53,4 +51,9 @@
 - 兑换码：`POST /api/wallet/redeem`
 - 通用转专属：`POST /api/wallet/exchange/public-to-project`
 - 兑换码历史：`GET /api/wallet/redemption-history`
-- 通用转专属历史（含前后余额）：`GET /api/wallet/exchange-history`
+- 通用转专属历史（含兑换前后余额）：`GET /api/wallet/exchange-history`
+
+## 登录边界
+
+- 本项目不提供本地账号密码注册/登录页面。
+- 用户所有注册登录流程均在 user-service SSO 页面完成。

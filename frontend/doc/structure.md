@@ -1,46 +1,45 @@
-# NexusPlay 项目结构与网站地图
+# AISocialGame 前端结构与路由
 
-本文档概述了 NexusPlay 社交推理游戏平台的页面结构、路由关系及各页面对应的详细开发文档。
+> 更新时间：2026-02-24
 
-## 1. 网站地图 (Sitemap)
+## 路由总览
 
-```mermaid
-graph TD
-    L[登录 (Login)] --> A[首页 (Index)]
-    R[注册 (Register)] --> L
-    
-    A --> B[游戏大厅 (RoomList)]
-    A --> C[社区广场 (Community)]
-    A --> D[排行榜 (Rankings)]
-    A --> E[个人中心 (Profile)]
-    
-    B --> F[创建房间 (CreateRoom)]
-    B --> G[游戏房间/等待室 (Lobby)]
-    
-    G --> H[谁是卧底 (UndercoverRoom)]
-    G --> I[狼人杀 (WerewolfRoom)]
-```
+| 页面名称 | 路由路径 | 说明 |
+| :--- | :--- | :--- |
+| 首页 | `/` | 游戏入口与热门玩法 |
+| 房间列表 | `/game/:gameId` | 指定游戏的房间大厅 |
+| 创建房间 | `/create/:gameId` | 创建并配置房间 |
+| 等待室/游戏入口 | `/room/:gameId/:roomId` | 统一房间入口，按玩法分发 |
+| 个人中心 | `/profile` | SSO 登录态、钱包、历史记录 |
+| 社区 | `/community` | 社区帖子与互动 |
+| AI 聊天 | `/ai-chat` | 对话与流式返回 |
+| 排行榜 | `/rankings` | 玩家排行 |
+| 成就中心 | `/achievements` | 成就解锁与进度 |
+| 回放中心 | `/replays` | 对局回放列表 |
+| 回放详情 | `/replay/:archiveId` | 单局回放 |
+| 新手指南 | `/guide` | 规则与引导 |
+| 观战页 | `/spectate/:gameId/:roomId` | 观战与评论 |
+| SSO 回调页 | `/sso/callback` | 校验 `state` 并回调后端换取本地 token |
+| 管理员登录 | `/admin/login` | 管理台登录入口 |
+| 管理台-首页 | `/admin` | 运营总览 |
+| 管理台-用户 | `/admin/users` | 用户查询与封禁管理 |
+| 管理台-积分 | `/admin/billing` | 调账、冲正、迁移、兑换码 |
+| 管理台-AI | `/admin/ai` | 模型列表与联调测试 |
+| 管理台-集成状态 | `/admin/integration` | user/pay/ai 连通性探测 |
 
-## 2. 页面清单与文档索引
+## 目录约束
 
-| 页面名称 | 路由路径 | 作用描述 | 详细文档 |
-| :--- | :--- | :--- | :--- |
-| **登录** | `/login` | 用户登录入口，支持账号密码及第三方登录。 | [page_login.md](./page_login.md) |
-| **注册** | `/register` | 新用户注册页面，包含表单验证。 | [page_register.md](./page_register.md) |
-| **首页** | `/` | 平台的落地页，展示游戏列表、Banner 和入口。 | [page_index.md](./page_index.md) |
-| **房间列表** | `/game/:gameId` | 特定游戏的房间大厅，展示当前活跃房间，提供搜索和筛选。 | [page_room_list.md](./page_room_list.md) |
-| **创建房间** | `/create/:gameId` | 房间配置表单，根据游戏类型动态生成配置项。 | [page_create_room.md](./page_create_room.md) |
-| **通用大厅** | `/room/:gameId/:roomId` | 游戏前的等待室，负责座位管理、聊天和游戏路由分发。 | [page_lobby.md](./page_lobby.md) |
-| **谁是卧底** | (嵌入在 Lobby 中) | “谁是卧底”玩法的核心游戏页面，包含发牌、描述、投票等全流程。 | [page_game_undercover.md](./page_game_undercover.md) |
-| **狼人杀** | (嵌入在 Lobby 中) | “狼人杀”玩法的核心页面，包含昼夜切换、技能交互、投票结算。 | [page_game_werewolf.md](./page_game_werewolf.md) |
-| **社区广场** | `/community` | 玩家交流论坛，包含帖子流、话题和发布功能。 | [page_community.md](./page_community.md) |
-| **排行榜** | `/rankings` | 展示全服玩家排名，支持按游戏类型切换榜单。 | [page_rankings.md](./page_rankings.md) |
-| **个人中心** | `/profile` | 展示玩家数据、战绩历史和资产信息。 | [page_profile.md](./page_profile.md) |
+- 业务页面位于 `frontend/src/pages/`。
+- 通用组件位于 `frontend/src/components/`。
+- API 封装位于 `frontend/src/services/api.ts`。
+- 路由入口位于 `frontend/src/App.tsx`。
+- E2E 位于 `frontend/tests/`。
 
-## 3. 核心目录说明
+## 认证与登录说明
 
-*   `src/pages/`: 存放上述所有页面组件。
-*   `src/components/`: 通用 UI 组件 (基于 shadcn/ui)。
-*   `src/services/`: 后端 API 封装（`gameApi`/`roomApi`/`personaApi`/`authApi`）。首页和房间列表等页面的数据均来自这些接口。
-*   `src/config/`: 游戏静态配置（`games.ts` 为开发期的参考/兜底 Schema，实际渲染依赖后端返回的数据）。
-*   `src/types/`: TypeScript 类型定义。
+- 前端不再提供本地账号注册/登录页。
+- 登录和注册统一由 user-service SSO 页面承接。
+- 前端只负责：
+  - 生成一次性 `state`
+  - 跳转 `/api/auth/sso/login|register`
+  - 在 `/sso/callback` 校验 `state` 并调用 `/api/auth/sso-callback`

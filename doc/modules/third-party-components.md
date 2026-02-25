@@ -1,10 +1,10 @@
 # 第三方组件对齐说明
 
-> 更新时间：2026-02-23
+> 更新时间：2026-02-24
 
 ## 依赖清单
 
-当前项目对接以下基础组件（部署在 `192.168.5.141`）：
+当前项目依赖以下外部组件（默认地址 `192.168.5.141`）：
 
 - MySQL
 - Redis
@@ -13,18 +13,29 @@
 
 ## 对齐结果
 
-- 后端默认配置与脚本默认值已统一：
+- 默认配置已统一到：
+  - `backend/src/main/resources/application.yml`
+  - `env.txt`
+  - `build_common.sh`（`build.sh/build_prod.sh` 共用）
+- 默认连接：
   - MySQL：`192.168.5.141:3306`
   - Redis：`192.168.5.141:6379`
   - Qdrant：`http://192.168.5.141:6333`
   - Consul：`http://192.168.5.141:60000`
-- 配置落点：
-  - `backend/src/main/resources/application.yml`
-  - `env.txt`
-  - `build.sh` / `build_prod.sh`
-- 运行时可通过 `env.txt` 覆盖所有连接参数。
 
-## 说明
+## 服务发现与域名策略
 
-- 本仓库当前不维护第三方依赖的独立 `deploy/` 目录，依赖服务由外部 Docker 环境统一提供。
-- `build.sh` 仅负责本项目前后端部署，并包含 MySQL 库/账号引导步骤（可通过 `MYSQL_BOOTSTRAP_ENABLED` 控制）。
+- 三服务 gRPC 默认走 consul：
+  - `consul:///aienie-userservice-grpc`
+  - `consul:///aienie-payservice-grpc`
+  - `consul:///aienie-aiservice-grpc`
+- SSO/HTTP 对外地址默认使用域名：
+  - `userservice.seekerhut.com`
+  - `payservice.seekerhut.com`
+  - `aiservice.seekerhut.com`
+
+## 部署脚本行为
+
+- `build_common.sh` 在部署前会检测上述依赖可达性。
+- 若依赖未就绪，脚本直接失败退出，不会在本机拉起替代依赖。
+- MySQL 库/账号引导可通过 `MYSQL_BOOTSTRAP_ENABLED` 控制。
