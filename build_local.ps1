@@ -147,6 +147,21 @@ function Set-DefaultEnv {
     if ([string]::IsNullOrWhiteSpace($env:USER_SERVICE_BASE_URL)) { $env:USER_SERVICE_BASE_URL = "https://userservice.seekerhut.com" }
     if ([string]::IsNullOrWhiteSpace($env:PAY_SERVICE_BASE_URL)) { $env:PAY_SERVICE_BASE_URL = "https://payservice.seekerhut.com" }
     if ([string]::IsNullOrWhiteSpace($env:AI_SERVICE_BASE_URL)) { $env:AI_SERVICE_BASE_URL = "https://aiservice.seekerhut.com" }
+    if ([string]::IsNullOrWhiteSpace($env:APP_EXTERNAL_GRPC_AUTH_REQUIRED)) { $env:APP_EXTERNAL_GRPC_AUTH_REQUIRED = "true" }
+}
+
+function Assert-RequiredEnv {
+    param([Parameter(Mandatory = $true)][string[]]$Names)
+
+    $missing = @()
+    foreach ($name in $Names) {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'Process'))) {
+            $missing += $name
+        }
+    }
+    if ($missing.Count -gt 0) {
+        throw "Missing required environment variables: $($missing -join ', ')"
+    }
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -167,6 +182,14 @@ $frontendStderr = Join-Path $logDir "frontend.stderr.log"
 
 New-Item -Path $logDir -ItemType Directory -Force | Out-Null
 Set-DefaultEnv
+if ($env:APP_EXTERNAL_GRPC_AUTH_REQUIRED -eq "true") {
+    Assert-RequiredEnv -Names @(
+        "APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN",
+        "APP_EXTERNAL_PAYSERVICE_JWT",
+        "APP_EXTERNAL_AISERVICE_HMAC_CALLER",
+        "APP_EXTERNAL_AISERVICE_HMAC_SECRET"
+    )
+}
 $env:SERVER_PORT = "$backendPort"
 
 Invoke-Step -Message "Stop previous local services" -Action {
