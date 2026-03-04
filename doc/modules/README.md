@@ -15,6 +15,5 @@
 
 ## 回归说明
 
-- 当前部署链路 `build.sh` 已内置执行：
-  - 冒烟功能：`basic.spec.ts`、`v2-features.spec.ts`、`full-flow.spec.ts`
-  - 真实链路：`real-flow.spec.ts`、`real-full-e2e.spec.ts`
+- `build.sh` 当前仅负责构建、部署、健康检查与积分迁移，不自动执行 Playwright。
+- 真实验收统一采用 subagent + Playwright 真人流程，详见 `doc/test/integratedTest.md` 与 `doc/test/operation.md`。

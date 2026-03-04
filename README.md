@@ -10,7 +10,7 @@
 
 ## 项目结构
 
-- `frontend/`：前端源码、构建配置、Playwright 测试
+- `frontend/`：前端源码、构建配置、Playwright 工具配置
 - `backend/`：后端源码、SQL、proto、单测
 - `doc/`：接口、模块、测试与运维文档
 - `build.sh`：测试域名部署脚本（`aisocialgame.seekerhut.com`）
@@ -70,11 +70,14 @@
 脚本流程包含：
 
 1. 后端 `mvn clean test package`
-2. 前端 `pnpm install && pnpm build`
+2. 前端 `pnpm install --frozen-lockfile && pnpm build`
 3. Docker Compose 重建前后端
 4. 健康检查
 5. 自动执行“全量积分迁移”
-6. Playwright 回归（含真实链路测试）
+
+说明：
+- `build.sh` / `build_prod.sh` 仅默认域名不同，其他逻辑必须保持一致。
+- 真实验收测试（含 4 场完整游戏）采用 subagent + Playwright 手工流程，不由 `build.sh` 自动触发。
 
 ### Windows（本地直启）
 

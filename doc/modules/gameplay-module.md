@@ -1,10 +1,12 @@
 # 游戏流程模块（狼人杀 / 谁是卧底）
 
 ## 模块作用
+
 - 提供“开局 -> 阶段推进 -> 投票/夜晚行动 -> 结算”的统一对局主流程。
 - 在 v2 中补充实时推送、断线状态同步、超时托管（AI takeover）与自动推进能力。
 
 ## 功能点清单
+
 | 功能点 | 作用 | 实现位置 |
 |---|---|---|
 | 状态查询 `/state` | 返回当前阶段、回合、当前座位、日志、玩家私有身份信息、夜晚待办 | `backend/src/main/java/com/aisocialgame/controller/GamePlayController.java`、`backend/src/main/java/com/aisocialgame/service/GamePlayService.java` |
@@ -14,25 +16,29 @@
 | 前端房间实时渲染 | 取消轮询，改为 WS 事件驱动刷新；展示倒计时、阶段过渡、连接状态、聊天面板 | `frontend/src/hooks/useGameSocket.ts`、`frontend/src/pages/games/UndercoverRoom.tsx`、`frontend/src/pages/games/WerewolfRoom.tsx`、`frontend/src/components/game/*` |
 
 ## 关键流程
+
 1. 房主调用 `/start`，后端初始化 `GameState` 并推送 `PHASE_CHANGE`。
 2. 玩家通过 `/speak`、`/vote`、`/night-action` 交互，后端保存状态并推送 `state` 事件。
 3. 玩家连接状态由 STOMP 连接 + 活跃打点共同维护，断线后进入 `DISCONNECTED`，超时后进入 `AI_TAKEOVER`。
 4. 阶段超时或操作完备时自动推进，结算后记录统计并回写房间状态。
 
 ## 相关文件
+
 - `backend/src/main/java/com/aisocialgame/dto/GamePlayerView.java`：响应新增 `connectionStatus`。
 - `backend/src/main/java/com/aisocialgame/model/GamePlayerState.java`：新增连接状态与活跃时间字段。
 - `backend/src/main/java/com/aisocialgame/dto/ws/*`：WS 推送事件 DTO。
 - `frontend/src/types/index.ts`：新增 WS 事件与聊天消息类型。
 
-## 自动化测试覆盖（2026-03-04）
+## 验收方式（2026-03-04）
 
-- 真实链路用例：`frontend/tests/real-full-e2e.spec.ts`
-- 已覆盖：
-  - 谁是卧底：单人 + AI 到结算；3 人 + AI 到结算（含观战）
-  - 狼人杀：单人 + AI 到结算；3 人 + AI 到结算
-- 测试稳定性策略：
-  - 基于阶段文本的推进监控
-  - 无进展窗口自动刷新恢复
-  - 投票动作的目标选择与提交重试
-- 房间页为 E2E 暴露了稳定选择器（如 `game-phase-text`、`game-player-card`、`game-vote-submit-btn`、`game-log-item`、`game-settlement-panel`）。
+- 本模块不再依赖自动化 4 局脚本进行最终验收。
+- 采用 subagent + Playwright 真人流程完成 4 场完整对局：
+  - 谁是卧底：1 用户 + AI
+  - 谁是卧底：3 用户 + AI
+  - 狼人杀：1 用户 + AI
+  - 狼人杀：3 用户 + AI
+- 每场需记录：
+  - 人类玩家发言、投票、夜晚行动与决策依据
+  - AI 角色发言与行为
+  - 系统日志与结算结果
+- 报告目录：`result/game-reports/<run-id>/`（本地产物，不入库）。

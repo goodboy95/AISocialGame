@@ -41,16 +41,37 @@
 - 修复：
   - 重新签发满足 pay-service 鉴权约束的服务 JWT；
   - 通过 `sudo ./build.sh` 重新部署生效。
-- 验证：`build.sh` 内置真实链路回归 `6 passed`，SSO 回调可正常换取应用 token。
+- 验证：SSO 回调可正常换取应用 token。
 
-### 5. 卧底/狼人真实流程 E2E 长时卡住
+### 5. build.sh / build_prod.sh 漂移风险
 
-- 现象：真实链路测试在投票或等待阶段偶发长时间无进展。
+- 现象：两脚本虽然共用 `build_common.sh`，但缺少自动校验，后续可能引入非域名差异。
 - 修复：
-  - 测试编排增加阶段推进日志、无进展检测与自动 reload 恢复；
-  - 投票阶段增加目标选择与提交重试；
-  - 对局日志区域增加稳定 `data-testid`。
-- 验证：`tests/real-full-e2e.spec.ts` 全场景通过（单人/三人 + AI，卧底/狼人）。
+  - 在 `build_common.sh` 增加 wrapper 一致性校验（忽略 `APP_DOMAIN_DEFAULT` 差异）；
+  - 检测到其他差异时立即失败。
+- 验证：当前脚本仅域名默认值不同，校验通过。
+
+### 6. 自动化 4 局脚本与真人验收策略冲突
+
+- 现象：历史 `real-full-e2e.spec.ts` 通过脚本自动完成 4 局，和“必须 subagent 真人流程”要求冲突。
+- 修复：
+  - 移除 `frontend/tests/real-full-e2e.spec.ts`；
+  - `build.sh` 不再自动执行 Playwright；
+  - 统一改为部署后由 subagent 执行真人流程并产出报告。
+- 验证：测试与运维文档已同步到真人验收口径。
+
+### 7. AI 对话默认模型偶发不可用
+
+- 现象：`/api/ai/chat` 在未显式指定模型时，返回 `模型不可用` 或 `AI 调用失败`。
+- 根因：默认模型选择命中不可用文本模型，且未做候选模型回退。
+- 修复：
+  - `AiProxyService.chatByIdentity` 增加候选模型回退机制；
+  - 对无显式模型请求，按候选模型顺序重试（默认模型 + 可用 TEXT 模型 id/name）；
+  - 保持显式模型请求快速失败（便于问题暴露）。
+- 验证：
+  - 修复后 `POST /api/ai/chat` 默认模型路径返回 200；
+  - `sudo ./build.sh` 完整重部署通过；
+  - subagent Playwright 复测 AI 对话通过。
 
 ## 观察项（非阻塞）
 

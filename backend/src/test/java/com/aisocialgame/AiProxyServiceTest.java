@@ -1,14 +1,21 @@
 package com.aisocialgame;
 
 import com.aisocialgame.config.AppProperties;
+import com.aisocialgame.dto.AiChatRequest;
+import com.aisocialgame.dto.AiMessageRequest;
 import com.aisocialgame.dto.AiEmbeddingsRequest;
 import com.aisocialgame.dto.AiOcrRequest;
+import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.client.AiGrpcClient;
+import com.aisocialgame.integration.grpc.dto.AiChatResult;
+import com.aisocialgame.integration.grpc.dto.AiModelOptionDto;
 import com.aisocialgame.integration.grpc.dto.AiEmbeddingsResult;
 import com.aisocialgame.integration.grpc.dto.AiOcrResult;
 import com.aisocialgame.model.User;
 import com.aisocialgame.service.AiProxyService;
 import com.aisocialgame.service.ProjectCreditService;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +26,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -82,5 +92,49 @@ class AiProxyServiceTest {
         verify(aiGrpcClient).ocrParse(eq("aisocialgame"), eq(1002L), eq("session-1002"), eq("default-model"), paramsCaptor.capture());
         assertEquals("https://example.com/a.png", paramsCaptor.getValue().imageUrl());
         assertEquals("JSON", paramsCaptor.getValue().outputType());
+    }
+
+    @Test
+    void chatShouldFallbackToNextAvailableTextModelWhenDefaultModelUnavailable() {
+        AiChatRequest request = buildChatRequest(null, "请回复ok");
+        when(aiGrpcClient.listModels()).thenReturn(List.of(
+                new AiModelOptionDto(2L, "Gemini 2.5 Flash", "PackyAPI", 1, 1, "MODEL_TYPE_TEXT"),
+                new AiModelOptionDto(5L, "Gemini 2.5 Flash Image", "PackyAPI", 1, 1, "MODEL_TYPE_TEXT")
+        ));
+        when(aiGrpcClient.chatCompletions(anyString(), anyLong(), anyString(), eq("default-model"), anyList()))
+                .thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "模型不可用"));
+        when(aiGrpcClient.chatCompletions(anyString(), anyLong(), anyString(), eq("2"), anyList()))
+                .thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "AI 调用失败"));
+        when(aiGrpcClient.chatCompletions(anyString(), anyLong(), anyString(), eq("Gemini 2.5 Flash"), anyList()))
+                .thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "模型不可用"));
+        when(aiGrpcClient.chatCompletions(anyString(), anyLong(), anyString(), eq("5"), anyList()))
+                .thenReturn(new AiChatResult("ok", "gemini-2.5-flash-image", 4, 1));
+
+        AiChatResult result = aiProxyService.chatByIdentity(request, 1001L, "sess-1");
+
+        assertEquals("ok", result.content());
+        assertEquals("gemini-2.5-flash-image", result.modelKey());
+        verify(projectCreditService).consumeProjectTokens(eq(1001L), eq(5L), eq("AI_CHAT"), org.mockito.ArgumentMatchers.anyMap(), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void chatShouldFailFastWhenExplicitModelIsInvalid() {
+        AiChatRequest request = buildChatRequest("invalid-model", "请回复ok");
+        when(aiGrpcClient.chatCompletions(anyString(), anyLong(), anyString(), eq("invalid-model"), anyList()))
+                .thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "模型不可用"));
+
+        assertThrows(ApiException.class, () -> aiProxyService.chatByIdentity(request, 1001L, "sess-1"));
+
+        verify(aiGrpcClient, never()).listModels();
+    }
+
+    private AiChatRequest buildChatRequest(String model, String content) {
+        AiMessageRequest message = new AiMessageRequest();
+        ReflectionTestUtils.setField(message, "role", "user");
+        ReflectionTestUtils.setField(message, "content", content);
+        AiChatRequest request = new AiChatRequest();
+        request.setModel(model);
+        request.setMessages(List.of(message));
+        return request;
     }
 }

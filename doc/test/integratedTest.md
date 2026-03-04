@@ -1,81 +1,85 @@
-# 集成测试记录（2026-03-04）
+# 集成测试基线（持续更新）
 
-## 1. 执行环境与前置
+## 1. 执行入口
 
-- 部署命令：`sudo ./build.sh`
+- 部署入口：`sudo ./build.sh`
 - 测试域名：`https://aisocialgame.seekerhut.com`
-- 验证账号：`goodboy95 / superhs2cr1`
-- 严格 gRPC 鉴权变量已注入：
-  - `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
-  - `APP_EXTERNAL_PAYSERVICE_JWT`
-  - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
-  - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
-- 说明：`APP_EXTERNAL_PAYSERVICE_JWT` 有过期时间，若过期会导致 `/api/auth/sso-callback` 返回 `401 Invalid token`。
+- 前端端口：`11030`
+- 后端端口：`11031`
 
-## 2. 本次关键修复
+## 2. build.sh 标准链路
 
-### 2.1 真实链路 E2E 完整覆盖
+`build.sh` / `build_prod.sh` 通过 `build_common.sh` 共用流程，仅默认域名不同。
 
-新增并接入 `frontend/tests/real-full-e2e.spec.ts`，`build.sh` 现在会执行：
+标准链路包含：
 
-- `tests/real-flow.spec.ts`
-- `tests/real-full-e2e.spec.ts`
+1. 后端 `mvn clean test package`
+2. 前端 `pnpm install --frozen-lockfile && pnpm build`
+3. Docker Compose 重建前后端
+4. 健康检查（前端首页、后端 `/actuator/health`）
+5. 自动执行全量积分迁移（`/api/admin/billing/migrate-all`）
 
-### 2.2 卧底/狼人流程稳定性修复
+说明：`build.sh` 不再自动执行 Playwright。
 
-在 E2E 编排中补充：
+## 3. 真人验收（强制）
 
-- 阶段推进日志与无进展检测
-- 卡住自动刷新恢复
-- 投票阶段目标选择与提交重试
+部署成功后必须执行 subagent + Playwright 真人验收，不可用脚本代替：
 
-## 3. build.sh 结果
+1. 谁是卧底：`1 用户 + 其余 AI`
+2. 谁是卧底：`3 用户 + 其余 AI`
+3. 狼人杀：`1 用户 + 其余 AI`
+4. 狼人杀：`3 用户 + 其余 AI`
 
-`build.sh` 全流程成功：
+验收要求：
 
-1. 后端 `mvn clean test package` 成功（`Tests run: 33, Failures: 0, Errors: 0, Skipped: 0`）
-2. 前端构建成功
-3. Docker Compose 重建成功
-4. 健康检查通过
-5. 自动全量迁移通过：
-   - `{"scanned":23,"success":23,"failed":0,"batchSize":100,"failures":[]}`
-6. Playwright 冒烟 + 真实链路全部通过
+- 每场必须从建房到结算完整闭环。
+- 发言与投票需基于场上信息做出可解释判断，不允许随机行为。
+- 若余额不足，现场创建兑换码并完成兑换后继续。
 
-## 4. Playwright 结果
+## 4. 账号与余额策略
 
-### 4.1 冒烟/功能回归
+- 普通账号从仓库根目录 `testuser.txt` 获取。
+- 管理账号默认 `admin/admin123`（可被环境变量覆盖）。
+- 余额不足时流程：
+  1. 管理员登录
+  2. 创建兑换码
+  3. 目标玩家兑换
+  4. 复查余额继续对局
 
-执行：
+## 5. 报告产物（本地）
 
-- `tests/basic.spec.ts`
-- `tests/full-flow.spec.ts`
-- `tests/v2-features.spec.ts`
+每次真人验收输出 4 篇完整报告：
 
-结果：`3 passed`
+- `01-undercover-1user-plus-ai.md`
+- `02-undercover-3user-plus-ai.md`
+- `03-werewolf-1user-plus-ai.md`
+- `04-werewolf-3user-plus-ai.md`
+- `index.md`
 
-### 4.2 真实链路（REAL_E2E=1）
+目录：`result/game-reports/<run-id>/`
 
-执行：
+报告必须包含：
 
-- `tests/real-flow.spec.ts`
-- `tests/real-full-e2e.spec.ts`
+- 人类玩家完整行为时间线（含发言/投票/夜晚行动）
+- AI 角色发言与行为
+- 系统关键日志
+- 结算结果与问题处理记录
 
-结果：`6 passed`
+`result/` 为本地产物目录，默认不入库。
 
-覆盖点：
+## 6. 常见失败信号
 
-- 真实 SSO 登录 + 应用 token 换取
-- 钱包签到、兑换码创建与兑换、通用转专属
-- 社区发帖、AI 对话、排行/成就/回放/百科页面可达
-- 谁是卧底：
-  - 单人玩家 + 其他 AI（完整到结算）
-  - 3 人玩家 + 其他 AI（完整到结算，含观战）
-- 狼人杀：
-  - 单人玩家 + 其他 AI（完整到结算）
-  - 3 人玩家 + 其他 AI（完整到结算）
+- `POST /api/auth/sso-callback` 返回 `401 Invalid token`
+  - 常见根因：`APP_EXTERNAL_PAYSERVICE_JWT` 过期
+  - 处置：按 pay-service 鉴权约束重签服务 JWT，再执行 `sudo ./build.sh`
 
-## 5. 抽检
+- 对局流程卡住（未推进到结算）
+  - 处置：按真实用户视角重试当前回合动作；若可稳定复现，先修复代码再重新部署与复测。
 
-- `https://aisocialgame.seekerhut.com` 可访问
-- `http://127.0.0.1:11031/actuator/health` 返回 `UP`
-- `POST /api/auth/sso-callback` 可正常换取应用 token（修复过期 JWT 后）
+## 7. 最近一次执行记录（2026-03-04）
+
+- 报告目录：`result/game-reports/20260304110943-subagent/`
+- 4 场真人对局均完成到结算。
+- 期间发现并修复：
+  - `/api/ai/chat` 默认模型不可用导致 AI 调用失败；
+  - 修复后重新部署并完成 Playwright 复测（登录、AI 对话、钱包）。

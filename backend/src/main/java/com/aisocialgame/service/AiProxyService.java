@@ -4,6 +4,7 @@ import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.dto.AiChatRequest;
 import com.aisocialgame.dto.AiEmbeddingsRequest;
 import com.aisocialgame.dto.AiOcrRequest;
+import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.client.AiGrpcClient;
 import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
 import com.aisocialgame.integration.grpc.dto.AiChatResult;
@@ -12,12 +13,16 @@ import com.aisocialgame.integration.grpc.dto.AiModelOptionDto;
 import com.aisocialgame.integration.grpc.dto.AiOcrParams;
 import com.aisocialgame.integration.grpc.dto.AiOcrResult;
 import com.aisocialgame.model.User;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class AiProxyService {
@@ -46,17 +51,43 @@ public class AiProxyService {
     }
 
     public AiChatResult chatByIdentity(AiChatRequest request, long userId, String sessionId) {
-        String model = resolveModel(request.getModel());
+        List<String> candidateModels = resolveChatModels(request.getModel());
+        boolean explicitModel = StringUtils.hasText(request.getModel());
         List<AiChatMessageDto> messages = request.getMessages().stream()
                 .map(message -> new AiChatMessageDto(message.getRole(), message.getContent()))
                 .toList();
-        AiChatResult result = aiGrpcClient.chatCompletions(
-                appProperties.getProjectKey(),
-                userId,
-                sessionId == null ? "" : sessionId,
-                model,
-                messages
-        );
+        ApiException lastError = null;
+        AiChatResult result = null;
+        for (int i = 0; i < candidateModels.size(); i++) {
+            String model = candidateModels.get(i);
+            try {
+                result = aiGrpcClient.chatCompletions(
+                        appProperties.getProjectKey(),
+                        userId,
+                        sessionId == null ? "" : sessionId,
+                        model,
+                        messages
+                );
+                break;
+            } catch (ApiException ex) {
+                lastError = ex;
+                // For explicit model selection, fail fast and expose the backend error.
+                if (explicitModel) {
+                    throw ex;
+                }
+                // Retry with next fallback model only for model-level bad request failures.
+                boolean canRetry = ex.getStatus() == HttpStatus.BAD_REQUEST && i < candidateModels.size() - 1;
+                if (!canRetry) {
+                    throw ex;
+                }
+            }
+        }
+        if (result == null) {
+            if (lastError != null) {
+                throw lastError;
+            }
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "AI 服务调用失败");
+        }
         Map<String, String> metadata = new HashMap<>();
         metadata.put("modelKey", result.modelKey());
         metadata.put("promptTokens", String.valueOf(result.promptTokens()));
@@ -132,5 +163,41 @@ public class AiProxyService {
         } catch (Exception ignored) {
             return "";
         }
+    }
+
+    private List<String> resolveChatModels(String requestedModel) {
+        if (StringUtils.hasText(requestedModel)) {
+            return List.of(requestedModel.trim());
+        }
+        Set<String> candidates = new LinkedHashSet<>();
+        if (StringUtils.hasText(appProperties.getAi().getDefaultModel())) {
+            candidates.add(appProperties.getAi().getDefaultModel().trim());
+        }
+        try {
+            for (AiModelOptionDto model : aiGrpcClient.listModels()) {
+                String type = model.type() == null ? "" : model.type().toUpperCase();
+                if (!type.contains("TEXT")) {
+                    continue;
+                }
+                if (StringUtils.hasText(String.valueOf(model.id()))) {
+                    candidates.add(String.valueOf(model.id()));
+                }
+                if (StringUtils.hasText(model.displayName())) {
+                    candidates.add(model.displayName().trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // Keep best-effort fallback candidates.
+        }
+        if (candidates.isEmpty()) {
+            String fallback = resolveModel(requestedModel);
+            if (StringUtils.hasText(fallback)) {
+                candidates.add(fallback);
+            }
+        }
+        if (candidates.isEmpty()) {
+            candidates.add("");
+        }
+        return new ArrayList<>(candidates);
     }
 }

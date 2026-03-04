@@ -12,6 +12,18 @@ step() {
   echo "== $1 =="
 }
 
+ensure_build_wrapper_sync() {
+  step "Validate build wrapper scripts"
+  local normalized_build normalized_prod
+  normalized_build="$(sed -E 's#APP_DOMAIN_DEFAULT="[^"]+"#APP_DOMAIN_DEFAULT="<APP_DOMAIN_DEFAULT>"#' "$repo_root/build.sh")"
+  normalized_prod="$(sed -E 's#APP_DOMAIN_DEFAULT="[^"]+"#APP_DOMAIN_DEFAULT="<APP_DOMAIN_DEFAULT>"#' "$repo_root/build_prod.sh")"
+  if [[ "$normalized_build" != "$normalized_prod" ]]; then
+    echo "build.sh and build_prod.sh differ beyond APP_DOMAIN_DEFAULT" >&2
+    diff -u <(echo "$normalized_build") <(echo "$normalized_prod") || true
+    exit 1
+  fi
+}
+
 ensure_pnpm() {
   corepack enable >/dev/null 2>&1 || true
 }
@@ -59,6 +71,7 @@ load_env_file() {
 }
 
 load_env_file "$repo_root/env.txt"
+ensure_build_wrapper_sync
 
 export MYSQL_HOST="${MYSQL_HOST:-192.168.5.141}"
 export MYSQL_PORT="${MYSQL_PORT:-3306}"
@@ -214,34 +227,6 @@ run_migration() {
   fi
 }
 
-run_playwright_tests() {
-  if [[ "${RUN_PLAYWRIGHT_TESTS:-true}" != "true" ]]; then
-    echo "Skip playwright tests (RUN_PLAYWRIGHT_TESTS=${RUN_PLAYWRIGHT_TESTS:-false})"
-    return 0
-  fi
-
-  step "Playwright: smoke + features"
-  (
-    cd frontend
-    PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://${APP_DOMAIN}}" \
-    PLAYWRIGHT_IGNORE_HTTPS_ERRORS="${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}" \
-    pnpm exec playwright test tests/basic.spec.ts tests/v2-features.spec.ts tests/full-flow.spec.ts
-  )
-
-  step "Playwright: real e2e"
-  (
-    cd frontend
-    REAL_E2E=1 \
-    E2E_USERNAME="${E2E_USERNAME:-goodboy95}" \
-    E2E_PASSWORD="${E2E_PASSWORD:-superhs2cr1}" \
-    PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://${APP_DOMAIN}}" \
-    PLAYWRIGHT_IGNORE_HTTPS_ERRORS="${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}" \
-    E2E_USER_SSO_LOGIN_URL="${E2E_USER_SSO_LOGIN_URL:-https://userservice.seekerhut.com/sso/login}" \
-    E2E_SSO_CALLBACK_URL="${E2E_SSO_CALLBACK_URL:-https://${APP_DOMAIN}/sso/callback}" \
-    pnpm exec playwright test tests/real-flow.spec.ts tests/real-full-e2e.spec.ts
-  )
-}
-
 step "Backend: test & package"
 (
   cd backend
@@ -278,6 +263,5 @@ wait_for_http "http://127.0.0.1:${FRONTEND_PORT}" 60
 wait_for_http "http://127.0.0.1:${BACKEND_PORT}/actuator/health" 60
 
 run_migration
-run_playwright_tests
 
 echo "All done. Frontend: https://${APP_DOMAIN}  Backend API: https://${APP_DOMAIN}/api"

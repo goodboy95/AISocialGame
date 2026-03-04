@@ -21,10 +21,11 @@ AISocialGame/
 │   ├── src/pages/
 │   ├── src/components/
 │   ├── src/services/
-│   ├── tests/                                # Playwright E2E
+│   ├── tests/                                # Playwright 相关测试资产
 │   └── playwright.config.ts
 ├── doc/                                      # 项目文档
 ├── design-doc/                               # 设计草案与历史方案文档
+├── result/                                   # 本地测试产物（默认不入库）
 ├── docker-compose.yml                        # 仅编排本项目前后端容器
 ├── env.txt                                   # 部署环境变量
 ├── build.sh                                  # 测试域名部署（Linux）
@@ -40,6 +41,7 @@ AISocialGame/
 - 前端代码必须位于 `frontend/`。
 - 后端代码与 SQL 必须位于 `backend/`。
 - `frontend/` 与 `backend/` 外仅保留：文档、部署脚本、测试结果、`env.txt` 与项目元信息。
+- `result/` 为运行时产物目录（例如真人对局报告），由 `.gitignore` 忽略，不参与提交。
 
 ## 部署脚本一致性
 
@@ -48,7 +50,7 @@ AISocialGame/
 - `build.sh` -> `aisocialgame.seekerhut.com`
 - `build_prod.sh` -> `aisocialgame.aienie.com`
 
-两者共同调用 `build_common.sh`。
+两者共同调用 `build_common.sh`，并在运行期执行一致性校验。
 
 ## 关键配置约束
 
@@ -58,4 +60,4 @@ AISocialGame/
   - `AI_GRPC_ADDR=consul:///aienie-aiservice-grpc`
 - Consul 地址通过 `CONSUL_HTTP_ADDR` 配置，不在业务代码写死。
 - 三服务 gRPC 鉴权变量通过 `env.txt` + 系统环境注入。
-- `build_common.sh` 已统一纳入真实链路回归（`real-flow.spec.ts` + `real-full-e2e.spec.ts`）。
+- `build_common.sh` 当前职责是构建、部署、依赖检查与迁移，不自动执行 Playwright。
