@@ -206,7 +206,7 @@ const UndercoverRoom = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">{room?.name || "卧底房间"}</h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-testid="game-phase-text">
               阶段：{phase} {currentSpeaker ? `• 当前发言：${currentSpeaker.displayName}` : ""} {stateQuery.data?.round ? `• 第${stateQuery.data.round}轮` : ""}
             </p>
           </div>
@@ -225,6 +225,10 @@ const UndercoverRoom = () => {
                 {players.map((p) => (
                   <div
                     key={p.playerId}
+                    data-testid="game-player-card"
+                    data-player-id={p.playerId}
+                    data-is-me={p.playerId === stateQuery.data?.myPlayerId ? "true" : "false"}
+                    data-alive={p.alive ? "true" : "false"}
                     className={`flex items-center gap-3 rounded-lg border p-2 transition ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"} ${
                       selectedVote === p.playerId ? "ring-2 ring-amber-400" : ""
                     } ${phase === "VOTING" && p.playerId !== stateQuery.data?.myPlayerId ? "cursor-pointer hover:bg-amber-50" : ""}`}
@@ -268,15 +272,15 @@ const UndercoverRoom = () => {
                   {phase === "WAITING" && (
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">满足人数后房主可以开局。</p>
-                      <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending} className="w-full">
+                      <Button data-testid="game-start-btn" onClick={() => startMutation.mutate()} disabled={startMutation.isPending} className="w-full">
                         <Play className="mr-2 h-4 w-4" /> 开始游戏
                       </Button>
                     </div>
                   )}
                   {canSpeak && (
                     <div className="space-y-2">
-                      <Input value={speakContent} onChange={(e) => setSpeakContent(e.target.value)} placeholder="输入你的描述" />
-                      <Button className="w-full" onClick={() => speakMutation.mutate()} disabled={speakMutation.isPending}>
+                      <Input data-testid="game-speak-input" value={speakContent} onChange={(e) => setSpeakContent(e.target.value)} placeholder="输入你的描述" />
+                      <Button data-testid="game-speak-submit-btn" className="w-full" onClick={() => speakMutation.mutate()} disabled={speakMutation.isPending}>
                         <Send className="mr-2 h-4 w-4" /> 提交发言
                       </Button>
                     </div>
@@ -284,7 +288,7 @@ const UndercoverRoom = () => {
                   {phase === "VOTING" && (
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">点击玩家头像投票，重复点击同一目标可直接确认。</div>
-                      <Button className="w-full" disabled={!canVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
+                      <Button data-testid="game-vote-submit-btn" className="w-full" disabled={!canVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
                         <CheckSquare className="mr-2 h-4 w-4" /> 投票
                       </Button>
                     </div>
@@ -296,7 +300,7 @@ const UndercoverRoom = () => {
                 <Card className="space-y-3 p-3">
                   <div className="flex items-center justify-between text-sm">
                     <span>添加 AI 补位</span>
-                    <Badge>
+                    <Badge data-testid="game-ai-seat-count">
                       {room?.seats?.length ?? 0}/{room?.maxPlayers}
                     </Badge>
                   </div>
@@ -312,14 +316,14 @@ const UndercoverRoom = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!selectedAiId}>
+                  <Button data-testid="game-add-ai-btn" variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!selectedAiId}>
                     <Bot className="mr-2 h-4 w-4" /> 添加 AI
                   </Button>
                 </Card>
               </div>
             </Card>
 
-            <Card className="p-4">
+            <Card className="p-4" data-testid="game-logs-panel">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="font-semibold">游戏日志</h3>
                 <Badge variant="outline">实时</Badge>
@@ -327,12 +331,16 @@ const UndercoverRoom = () => {
               <ScrollArea className="h-64 pr-2">
                 <div className="space-y-2 text-sm">
                   {(stateQuery.data?.logs || []).map((log, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div key={idx} data-testid="game-log-item" className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{new Date(log.time).toLocaleTimeString()}</span>
                       <span>{log.message}</span>
                     </div>
                   ))}
-                  {(!stateQuery.data?.logs || stateQuery.data.logs.length === 0) && <div className="text-sm text-muted-foreground">暂无日志，等待开局或操作。</div>}
+                  {(!stateQuery.data?.logs || stateQuery.data.logs.length === 0) && (
+                    <div data-testid="game-log-empty" className="text-sm text-muted-foreground">
+                      暂无日志，等待开局或操作。
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </Card>

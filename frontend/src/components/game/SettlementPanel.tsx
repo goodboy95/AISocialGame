@@ -18,7 +18,7 @@ export const SettlementPanel = ({ gameId, state, userKey }: SettlementPanelProps
   const cards = useMemo(() => state.players || [], [state.players]);
 
   return (
-    <Card className="space-y-4 border-purple-200 bg-gradient-to-br from-violet-50 via-slate-50 to-amber-50 p-4">
+    <Card data-testid="game-settlement-panel" className="space-y-4 border-purple-200 bg-gradient-to-br from-violet-50 via-slate-50 to-amber-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-lg font-semibold">结算揭秘</h3>

@@ -24,3 +24,15 @@
 - `backend/src/main/java/com/aisocialgame/model/GamePlayerState.java`：新增连接状态与活跃时间字段。
 - `backend/src/main/java/com/aisocialgame/dto/ws/*`：WS 推送事件 DTO。
 - `frontend/src/types/index.ts`：新增 WS 事件与聊天消息类型。
+
+## 自动化测试覆盖（2026-03-04）
+
+- 真实链路用例：`frontend/tests/real-full-e2e.spec.ts`
+- 已覆盖：
+  - 谁是卧底：单人 + AI 到结算；3 人 + AI 到结算（含观战）
+  - 狼人杀：单人 + AI 到结算；3 人 + AI 到结算
+- 测试稳定性策略：
+  - 基于阶段文本的推进监控
+  - 无进展窗口自动刷新恢复
+  - 投票动作的目标选择与提交重试
+- 房间页为 E2E 暴露了稳定选择器（如 `game-phase-text`、`game-player-card`、`game-vote-submit-btn`、`game-log-item`、`game-settlement-panel`）。

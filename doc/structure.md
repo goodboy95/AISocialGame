@@ -1,6 +1,6 @@
 # 项目结构说明
 
-> 更新时间：2026-02-24
+> 更新时间：2026-03-04
 
 ## 结构树
 
@@ -58,3 +58,4 @@ AISocialGame/
   - `AI_GRPC_ADDR=consul:///aienie-aiservice-grpc`
 - Consul 地址通过 `CONSUL_HTTP_ADDR` 配置，不在业务代码写死。
 - 三服务 gRPC 鉴权变量通过 `env.txt` + 系统环境注入。
+- `build_common.sh` 已统一纳入真实链路回归（`real-flow.spec.ts` + `real-full-e2e.spec.ts`）。

@@ -1,6 +1,6 @@
-# gRPC 集成模块说明（v1.5）
+# gRPC 集成模块说明（v1.6）
 
-> 更新时间：2026-02-24
+> 更新时间：2026-03-04
 
 ## 目标
 
@@ -47,6 +47,18 @@
 - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
 
 启动期由 `ExternalGrpcAuthValidator` 进行 fail-fast 校验，缺失即拒绝启动。
+
+### pay-service JWT 时效要求
+
+- `APP_EXTERNAL_PAYSERVICE_JWT` 为服务间 Bearer JWT，必须包含：
+  - `iss=aienie-services`
+  - `aud=aienie-payservice-grpc`
+  - `role=SERVICE`
+  - `scopes` 至少包含 `billing.read`、`billing.write`
+- 若该 JWT 过期，会在 SSO 回调阶段触发 pay-service onboarding 调用失败，外显为：
+  - `POST /api/auth/sso-callback` 返回 `401`
+  - 响应消息：`Invalid token`
+- 部署前建议重新签发该 JWT 并注入环境变量，再执行 `build.sh`/`build_prod.sh`。
 
 ## 运行链路
 

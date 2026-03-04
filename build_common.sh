@@ -238,7 +238,7 @@ run_playwright_tests() {
     PLAYWRIGHT_IGNORE_HTTPS_ERRORS="${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}" \
     E2E_USER_SSO_LOGIN_URL="${E2E_USER_SSO_LOGIN_URL:-https://userservice.seekerhut.com/sso/login}" \
     E2E_SSO_CALLBACK_URL="${E2E_SSO_CALLBACK_URL:-https://${APP_DOMAIN}/sso/callback}" \
-    pnpm exec playwright test tests/real-flow.spec.ts
+    pnpm exec playwright test tests/real-flow.spec.ts tests/real-full-e2e.spec.ts
   )
 }
 

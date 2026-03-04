@@ -1,6 +1,6 @@
 # 模块文档索引
 
-> 更新时间：2026-02-25
+> 更新时间：2026-03-04
 
 | 模块 | 作用 | 入口实现位置 |
 |---|---|---|
@@ -12,3 +12,9 @@
 | 管理后台模块 | 管理管理员登录、用户封禁、积分流水检查、调账/冲正/迁移、兑换码创建、联通性诊断 | `backend/src/main/java/com/aisocialgame/controller/admin/*.java`、`frontend/src/pages/admin/*` |
 | gRPC 集成模块 | 管理 user/pay/ai 服务发现与调用封装（默认 consul，并含严格鉴权拦截器） | `backend/src/main/java/com/aisocialgame/integration/*` |
 | 第三方组件对齐模块 | 记录 MySQL/Redis/Qdrant/Consul 依赖对接与配置策略 | `doc/modules/third-party-components.md`、`backend/src/main/resources/application.yml`、`env.txt`、`build.sh` |
+
+## 回归说明
+
+- 当前部署链路 `build.sh` 已内置执行：
+  - 冒烟功能：`basic.spec.ts`、`v2-features.spec.ts`、`full-flow.spec.ts`
+  - 真实链路：`real-flow.spec.ts`、`real-full-e2e.spec.ts`

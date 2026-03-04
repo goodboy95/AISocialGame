@@ -1,35 +1,33 @@
-# 集成测试记录（2026-02-25）
+# 集成测试记录（2026-03-04）
 
 ## 1. 执行环境与前置
 
 - 部署命令：`sudo ./build.sh`
 - 测试域名：`https://aisocialgame.seekerhut.com`
-- 账号：`goodboy95 / superhs2cr1`
+- 验证账号：`goodboy95 / superhs2cr1`
 - 严格 gRPC 鉴权变量已注入：
   - `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
   - `APP_EXTERNAL_PAYSERVICE_JWT`
   - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
   - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
+- 说明：`APP_EXTERNAL_PAYSERVICE_JWT` 有过期时间，若过期会导致 `/api/auth/sso-callback` 返回 `401 Invalid token`。
 
-## 2. 系统级修复（本次执行）
+## 2. 本次关键修复
 
-### 2.1 hosts 修复
+### 2.1 真实链路 E2E 完整覆盖
 
-将三服务域名指向 `192.168.5.141`：
+新增并接入 `frontend/tests/real-full-e2e.spec.ts`，`build.sh` 现在会执行：
 
-- `userservice.seekerhut.com`
-- `payservice.seekerhut.com`
-- `aiservice.seekerhut.com`
+- `tests/real-flow.spec.ts`
+- `tests/real-full-e2e.spec.ts`
 
-保留 `aisocialgame.seekerhut.com -> 127.0.0.1` 用于本机站点访问。
+### 2.2 卧底/狼人流程稳定性修复
 
-### 2.2 nginx 反代修复
+在 E2E 编排中补充：
 
-修复文件：`/etc/nginx/sites-enabled/aisocialgame.seekerhut.com.conf`
-
-- 移除错误配置：`location /sso/ { proxy_pass http://127.0.0.1:11031/sso/; ... }`
-- 原因：`/sso/callback` 应由前端路由接管，错误反代会导致回调页 500。
-- 执行：`nginx -t && nginx -s reload`
+- 阶段推进日志与无进展检测
+- 卡住自动刷新恢复
+- 投票阶段目标选择与提交重试
 
 ## 3. build.sh 结果
 
@@ -40,7 +38,7 @@
 3. Docker Compose 重建成功
 4. 健康检查通过
 5. 自动全量迁移通过：
-   - `{"scanned":1,"success":1,"failed":0,"batchSize":100,"failures":[]}`
+   - `{"scanned":23,"success":23,"failed":0,"batchSize":100,"failures":[]}`
 6. Playwright 冒烟 + 真实链路全部通过
 
 ## 4. Playwright 结果
@@ -55,21 +53,29 @@
 
 结果：`3 passed`
 
-### 4.2 真实链路
+### 4.2 真实链路（REAL_E2E=1）
 
-执行：`tests/real-flow.spec.ts`（`REAL_E2E=1`）
+执行：
 
-结果：`1 passed`
+- `tests/real-flow.spec.ts`
+- `tests/real-full-e2e.spec.ts`
+
+结果：`6 passed`
 
 覆盖点：
 
-- 真实 SSO 登录
-- 用户个人页钱包可访问
-- 执行 `100` 通用积分兑换专属积分
-- 展示兑换历史（通用积分与项目永久积分兑换前后值）
+- 真实 SSO 登录 + 应用 token 换取
+- 钱包签到、兑换码创建与兑换、通用转专属
+- 社区发帖、AI 对话、排行/成就/回放/百科页面可达
+- 谁是卧底：
+  - 单人玩家 + 其他 AI（完整到结算）
+  - 3 人玩家 + 其他 AI（完整到结算，含观战）
+- 狼人杀：
+  - 单人玩家 + 其他 AI（完整到结算）
+  - 3 人玩家 + 其他 AI（完整到结算）
 
 ## 5. 抽检
 
 - `https://aisocialgame.seekerhut.com` 可访问
 - `http://127.0.0.1:11031/actuator/health` 返回 `UP`
-- `GET /api/auth/sso/login?state=...` 返回 `302` 到 user-service
+- `POST /api/auth/sso-callback` 可正常换取应用 token（修复过期 JWT 后）

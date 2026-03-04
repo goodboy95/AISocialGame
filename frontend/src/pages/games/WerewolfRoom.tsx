@@ -200,7 +200,7 @@ const WerewolfRoom = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">{room?.name || "狼人杀房间"}</h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-testid="game-phase-text">
               阶段：{phase} {currentSpeaker ? `• 当前发言：${currentSpeaker.displayName}` : ""} {state?.round ? `• 第${state.round}天` : ""}
             </p>
           </div>
@@ -220,6 +220,10 @@ const WerewolfRoom = () => {
                 {players.map((p) => (
                   <div
                     key={p.playerId}
+                    data-testid="game-player-card"
+                    data-player-id={p.playerId}
+                    data-is-me={p.playerId === state?.myPlayerId ? "true" : "false"}
+                    data-alive={p.alive ? "true" : "false"}
                     className={`flex items-center gap-3 rounded-lg border p-2 transition ${p.alive ? "border-slate-200" : "border-red-200 bg-red-50"} ${
                       selectedVote === p.playerId ? "ring-2 ring-amber-400" : ""
                     } ${phase === "DAY_VOTE" && p.playerId !== state?.myPlayerId ? "cursor-pointer hover:bg-amber-50" : ""}`}
@@ -263,7 +267,7 @@ const WerewolfRoom = () => {
                   {phase === "WAITING" && (
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">满足人数后由房主开局。</p>
-                      <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending} className="w-full">
+                      <Button data-testid="game-start-btn" onClick={() => startMutation.mutate()} disabled={startMutation.isPending} className="w-full">
                         <Play className="mr-2 h-4 w-4" /> 开始游戏
                       </Button>
                     </div>
@@ -295,7 +299,7 @@ const WerewolfRoom = () => {
                                 ))}
                             </SelectContent>
                           </Select>
-                          <Button disabled={!nightTarget} onClick={() => nightTarget && nightMutation.mutate({ action: "WITCH_POISON", targetPlayerId: nightTarget })}>
+                          <Button data-testid="game-night-poison-btn" disabled={!nightTarget} onClick={() => nightTarget && nightMutation.mutate({ action: "WITCH_POISON", targetPlayerId: nightTarget })}>
                             毒药
                           </Button>
                         </div>
@@ -315,7 +319,7 @@ const WerewolfRoom = () => {
                                 ))}
                             </SelectContent>
                           </Select>
-                          <Button disabled={!nightTarget} className="w-full" onClick={() => nightTarget && nightMutation.mutate({ action: pending.type, targetPlayerId: nightTarget })}>
+                          <Button data-testid="game-night-submit-btn" disabled={!nightTarget} className="w-full" onClick={() => nightTarget && nightMutation.mutate({ action: pending.type, targetPlayerId: nightTarget })}>
                             提交夜晚行动
                           </Button>
                         </>
@@ -324,8 +328,8 @@ const WerewolfRoom = () => {
                   )}
                   {canSpeak && (
                     <div className="space-y-2">
-                      <Input value={speakContent} onChange={(e) => setSpeakContent(e.target.value)} placeholder="输入你的发言" />
-                      <Button className="w-full" onClick={() => speakMutation.mutate()} disabled={speakMutation.isPending}>
+                      <Input data-testid="game-speak-input" value={speakContent} onChange={(e) => setSpeakContent(e.target.value)} placeholder="输入你的发言" />
+                      <Button data-testid="game-speak-submit-btn" className="w-full" onClick={() => speakMutation.mutate()} disabled={speakMutation.isPending}>
                         结束发言
                       </Button>
                     </div>
@@ -333,7 +337,7 @@ const WerewolfRoom = () => {
                   {phase === "DAY_VOTE" && (
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">点击玩家头像投票，重复点击同一目标可直接确认。</div>
-                      <Button className="w-full" disabled={!selectedVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
+                      <Button data-testid="game-vote-submit-btn" className="w-full" disabled={!selectedVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
                         <CheckSquare className="mr-2 h-4 w-4" /> 投票
                       </Button>
                     </div>
@@ -344,7 +348,7 @@ const WerewolfRoom = () => {
                 <Card className="space-y-3 p-3">
                   <div className="flex items-center justify-between text-sm">
                     <span>添加 AI 补位</span>
-                    <Badge>
+                    <Badge data-testid="game-ai-seat-count">
                       {room?.seats?.length ?? 0}/{room?.maxPlayers}
                     </Badge>
                   </div>
@@ -360,14 +364,14 @@ const WerewolfRoom = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!selectedAiId}>
+                  <Button data-testid="game-add-ai-btn" variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!selectedAiId}>
                     <Bot className="mr-2 h-4 w-4" /> 添加 AI
                   </Button>
                 </Card>
               </div>
             </Card>
 
-            <Card className="p-4">
+            <Card className="p-4" data-testid="game-logs-panel">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="font-semibold">游戏日志</h3>
                 <Badge variant="outline">实时</Badge>
@@ -375,12 +379,16 @@ const WerewolfRoom = () => {
               <ScrollArea className="h-64 pr-2">
                 <div className="space-y-2 text-sm">
                   {(state?.logs || []).map((log, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div key={idx} data-testid="game-log-item" className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{new Date(log.time).toLocaleTimeString()}</span>
                       <span>{log.message}</span>
                     </div>
                   ))}
-                  {(!state?.logs || state.logs.length === 0) && <div className="text-sm text-muted-foreground">暂无日志，等待对局操作。</div>}
+                  {(!state?.logs || state.logs.length === 0) && (
+                    <div data-testid="game-log-empty" className="text-sm text-muted-foreground">
+                      暂无日志，等待对局操作。
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </Card>
