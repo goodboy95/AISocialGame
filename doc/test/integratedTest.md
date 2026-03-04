@@ -78,8 +78,16 @@
 
 ## 7. 最近一次执行记录（2026-03-04）
 
-- 报告目录：`result/game-reports/20260304110943-subagent/`
-- 4 场真人对局均完成到结算。
+- 报告目录：`result/game-reports/20260304132122-subagent-rerun/`
+- 4 场真人对局均完成到结算：
+  - `01-undercover-1user-plus-ai.md`
+  - `02-undercover-3user-plus-ai.md`
+  - `03-werewolf-1user-plus-ai.md`
+  - `04-werewolf-3user-plus-ai.md`
 - 期间发现并修复：
-  - `/api/ai/chat` 默认模型不可用导致 AI 调用失败；
-  - 修复后重新部署并完成 Playwright 复测（登录、AI 对话、钱包）。
+  - 满房重连时 `joinRoom` 误判导致真人 `myPlayerId/mySeatNumber` 丢失，出现“轮到发言但无输入框”；
+  - 构建迁移阶段 pay-service JWT 使用了错误 claim（`scope`），修正为 `scopes` 后恢复。
+- 修复后复测：
+  - `sudo ./build.sh` 成功，迁移 `failed=0`；
+  - `pnpm test:e2e`：3 passed / 1 skipped；
+  - `REAL_E2E=1 pnpm playwright test tests/real-flow.spec.ts`：1 passed。

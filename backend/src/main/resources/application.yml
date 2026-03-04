@@ -64,7 +64,7 @@ qdrant:
   enabled: ${QDRANT_ENABLED:true}
 
 connection:
-  disconnect-threshold-seconds: ${APP_CONNECTION_DISCONNECT_THRESHOLD_SECONDS:15}
+  disconnect-threshold-seconds: ${APP_CONNECTION_DISCONNECT_THRESHOLD_SECONDS:60}
 
 grpc:
   client:

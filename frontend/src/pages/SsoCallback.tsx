@@ -1,14 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
-import { LOCAL_SSO_STATE_KEY, useAuth } from "@/hooks/useAuth";
+import { LOCAL_SSO_STATE_KEY, LOCAL_TOKEN_KEY, useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 const SsoCallback = () => {
   const navigate = useNavigate();
   const { ssoCallback } = useAuth();
+  const processedRef = useRef(false);
 
   useEffect(() => {
+    if (processedRef.current) {
+      return;
+    }
+    processedRef.current = true;
+
     const parseParams = () => {
       const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
       if (hash) {
@@ -23,8 +29,17 @@ const SsoCallback = () => {
     const username = params.get("username");
     const sessionId = params.get("session_id");
     const state = params.get("state");
+    const hasToken = !!localStorage.getItem(LOCAL_TOKEN_KEY);
     const expectedState = sessionStorage.getItem(LOCAL_SSO_STATE_KEY);
-    sessionStorage.removeItem(LOCAL_SSO_STATE_KEY);
+    if (expectedState) {
+      sessionStorage.removeItem(LOCAL_SSO_STATE_KEY);
+    }
+
+    // Ignore stale callback tabs if user already logged in and callback payload is incomplete.
+    if (hasToken && (!accessToken || !userId || !username || !sessionId || !state || !expectedState)) {
+      navigate("/", { replace: true });
+      return;
+    }
 
     if (!expectedState || !state || expectedState !== state) {
       toast.error("SSO 状态校验失败，请重新登录");

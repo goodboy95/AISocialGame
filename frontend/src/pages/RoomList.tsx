@@ -10,11 +10,13 @@ import { Game, Room } from "@/types";
 import { quickMatchApi } from "@/services/v2Social";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { buildPlayerStorageUserKey, getQuickMatchPlayerId, setQuickMatchPlayerId, setRoomPlayerId } from "@/utils/playerStorage";
 
 const RoomList = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
-  const { displayName } = useAuth();
+  const { displayName, user } = useAuth();
+  const storageUserKey = buildPlayerStorageUserKey(user?.id, displayName);
   const { data: game } = useQuery<Game | undefined>({
     queryKey: ["game", gameId],
     queryFn: () => gameId ? gameApi.detail(gameId) : Promise.resolve(undefined as any),
@@ -59,12 +61,11 @@ const RoomList = () => {
   const quickStart = async () => {
     if (!gameId) return;
     try {
-      const cacheKey = `quick_match_player_${gameId}`;
-      const savedPlayerId = localStorage.getItem(cacheKey);
+      const savedPlayerId = getQuickMatchPlayerId(gameId, storageUserKey);
       const result = await quickMatchApi.start(gameId, displayName, savedPlayerId);
       if (result.playerId) {
-        localStorage.setItem(cacheKey, result.playerId);
-        localStorage.setItem(`room_player_${result.roomId}`, result.playerId);
+        setQuickMatchPlayerId(gameId, storageUserKey, result.playerId);
+        setRoomPlayerId(result.roomId, storageUserKey, result.playerId);
       }
       navigate(`/room/${gameId}/${result.roomId}`);
     } catch (error: any) {

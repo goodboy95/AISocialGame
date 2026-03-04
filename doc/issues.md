@@ -73,6 +73,26 @@
   - `sudo ./build.sh` 完整重部署通过；
   - subagent Playwright 复测 AI 对话通过。
 
+### 8. 满房重连时已在房用户被误判为“房间已满”
+
+- 现象：三真人局中，房间补满后页面重连，出现“轮到当前真人发言但无输入框”，无法继续闭环。
+- 根因：`RoomService.joinRoom` 先判断满房再判断“该用户是否已在房间”，导致重连时拿不到 `myPlayerId/mySeatNumber`。
+- 修复：
+  - 调整 `joinRoom` 判断顺序：先匹配已在房间的用户/玩家，再执行满房拦截；
+  - 新增回归测试：`RoomServiceTest.joinRoomShouldAllowExistingAuthenticatedPlayerWhenRoomIsFull`。
+- 验证：
+  - 后端回归测试通过；
+  - 修复后 “谁是卧底 3用户+AI” 可从开局推进至结算并产出完整报告。
+
+### 9. 构建迁移阶段 JWT scope 字段不兼容
+
+- 现象：`sudo ./build.sh` 执行到 `migrate-all` 报 `Missing scope: billing.read`，迁移失败。
+- 根因：pay-service gRPC 鉴权读取 JWT `scopes` claim；错误使用了 `scope` 字段。
+- 修复：
+  - 重新签发 JWT，使用 `scopes: [\"billing.read\",\"billing.write\"]`。
+- 验证：
+  - `sudo ./build.sh` 成功完成，`migrate-all` 返回 `failed=0`。
+
 ## 观察项（非阻塞）
 
 - 前端构建存在 chunk 体积告警（`index-*.js > 500kB`），不影响当前功能，可后续做按路由拆包优化。

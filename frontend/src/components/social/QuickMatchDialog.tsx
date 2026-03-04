@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { buildPlayerStorageUserKey, getQuickMatchPlayerId, setQuickMatchPlayerId, setRoomPlayerId } from "@/utils/playerStorage";
 
 interface QuickMatchDialogProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface QuickMatchDialogProps {
 
 export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatchDialogProps) => {
   const navigate = useNavigate();
+  const storageUserKey = buildPlayerStorageUserKey(null, displayName);
   const { data: games = [] } = useQuery<Game[]>({ queryKey: ["games"], queryFn: gameApi.list });
   const activeGames = games.filter((g) => String(g.status).toLowerCase() === "active");
   const [gameId, setGameId] = useState<string>("");
@@ -29,11 +31,11 @@ export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatch
     }
     setMatching(true);
     try {
-      const currentPlayerId = localStorage.getItem("aisocial_quick_match_player");
+      const currentPlayerId = getQuickMatchPlayerId(gameId, storageUserKey);
       const result = await quickMatchApi.start(gameId, displayName, currentPlayerId);
       if (result.playerId) {
-        localStorage.setItem("aisocial_quick_match_player", result.playerId);
-        localStorage.setItem(`room_player_${result.roomId}`, result.playerId);
+        setQuickMatchPlayerId(gameId, storageUserKey, result.playerId);
+        setRoomPlayerId(result.roomId, storageUserKey, result.playerId);
       }
       toast.success(result.autoStarted ? "匹配成功，已自动开局" : "匹配成功，已进入房间");
       onOpenChange(false);

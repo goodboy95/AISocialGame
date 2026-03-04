@@ -61,6 +61,29 @@ class RoomServiceTest {
         Assertions.assertEquals(6, werewolfRoom.getMaxPlayers());
     }
 
+    @Test
+    void joinRoomShouldAllowExistingAuthenticatedPlayerWhenRoomIsFull() {
+        var host = createLocalUser("full-room-host@example.com", "满房房主");
+        Room room = roomService.createRoom(
+                "undercover",
+                "满房重连测试",
+                false,
+                null,
+                "text",
+                Map.of("playerCount", 4),
+                host
+        );
+
+        roomService.joinRoom(room.getId(), "游客A", null, null);
+        roomService.joinRoom(room.getId(), "游客B", null, null);
+        roomService.joinRoom(room.getId(), "游客C", null, null);
+        Assertions.assertEquals(4, roomService.getRoom(room.getId()).getSeats().size());
+
+        var rejoinResult = roomService.joinRoom(room.getId(), host.getNickname(), host, null);
+        Assertions.assertEquals(host.getId(), rejoinResult.getSeat().getPlayerId());
+        Assertions.assertEquals(4, roomService.getRoom(room.getId()).getSeats().size());
+    }
+
     private User createLocalUser(String email, String nickname) {
         User user = new User();
         user.setId(UUID.randomUUID().toString());

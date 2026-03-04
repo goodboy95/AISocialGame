@@ -21,14 +21,14 @@ import { toast } from "sonner";
 import { SettlementPanel } from "@/components/game/SettlementPanel";
 import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
 import { achievementApi, replayApi } from "@/services/v2Social";
-
-const playerKey = (roomId?: string) => (roomId ? `room_player_${roomId}` : "room_player");
+import { buildPlayerStorageUserKey, getRoomPlayerId, setRoomPlayerId } from "@/utils/playerStorage";
 
 const WerewolfRoom = () => {
   const { roomId, gameId } = useParams();
   const { user, displayName, token, loading } = useAuth();
   const queryClient = useQueryClient();
-  const [playerId, setPlayerId] = useState<string | null>(() => (roomId ? localStorage.getItem(playerKey(roomId)) : null));
+  const storageUserKey = buildPlayerStorageUserKey(user?.id, displayName);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [speakContent, setSpeakContent] = useState("");
   const [selectedVote, setSelectedVote] = useState<string | null>(null);
   const [nightTarget, setNightTarget] = useState<string | null>(null);
@@ -43,8 +43,8 @@ const WerewolfRoom = () => {
     if (!roomId) {
       return;
     }
-    setPlayerId(localStorage.getItem(playerKey(roomId)));
-  }, [roomId]);
+    setPlayerId(getRoomPlayerId(roomId, storageUserKey));
+  }, [roomId, storageUserKey]);
 
   const { data: personas = [] } = useQuery({ queryKey: ["personas"], queryFn: personaApi.list });
   const { data: room } = useQuery({ queryKey: ["room", roomId], queryFn: () => roomApi.detail(gameId || "", roomId || ""), enabled: !!roomId && !!gameId });
@@ -82,6 +82,27 @@ const WerewolfRoom = () => {
   }, [playerId]);
 
   useEffect(() => {
+    if (stateQuery.data?.phase !== "DAY_VOTE") {
+      setSelectedVote(null);
+    }
+  }, [stateQuery.data?.phase]);
+
+  const resolveApiMessage = (error: any, fallback: string) => error?.response?.data?.message || fallback;
+  const handleActionError = (error: any, fallback: string) => {
+    const message = resolveApiMessage(error, fallback);
+    const recoverable = ["已完成投票", "当前不需要你发言", "房间已满", "当前阶段不支持该操作", "你已出局，无法行动"].some((item) =>
+      message.includes(item)
+    );
+    if (recoverable) {
+      toast.info(message);
+    } else {
+      toast.error(message);
+    }
+    queryClient.invalidateQueries({ queryKey: ["game-state", roomId] });
+    queryClient.invalidateQueries({ queryKey: ["room", roomId] });
+  };
+
+  useEffect(() => {
     if (!stateQuery.data?.phase) {
       return;
     }
@@ -99,7 +120,7 @@ const WerewolfRoom = () => {
       const pid = (data as any).selfPlayerId;
       if (pid && roomId) {
         setPlayerId(pid);
-        localStorage.setItem(playerKey(roomId), pid);
+        setRoomPlayerId(roomId, storageUserKey, pid);
         queryClient.invalidateQueries({ queryKey: ["game-state", roomId] });
       }
     },
@@ -131,19 +152,19 @@ const WerewolfRoom = () => {
       setSpeakContent("");
       queryClient.invalidateQueries({ queryKey: ["game-state", roomId] });
     },
-    onError: () => toast.error("发言失败"),
+    onError: (error: any) => handleActionError(error, "发言失败"),
   });
 
   const voteMutation = useMutation({
     mutationFn: () => gameplayApi.vote(gameId || "werewolf", roomId || "", selectedVote || "", false, playerId || undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["game-state", roomId] }),
-    onError: () => toast.error("投票失败"),
+    onError: (error: any) => handleActionError(error, "投票失败"),
   });
 
   const nightMutation = useMutation({
     mutationFn: (payload: { action: string; targetPlayerId?: string; useHeal?: boolean }) => gameplayApi.nightAction(gameId || "werewolf", roomId || "", payload, playerId || undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["game-state", roomId] }),
-    onError: () => toast.error("夜晚行动失败"),
+    onError: (error: any) => handleActionError(error, "夜晚行动失败"),
   });
 
   const addAiMutation = useMutation({
@@ -153,7 +174,7 @@ const WerewolfRoom = () => {
       queryClient.invalidateQueries({ queryKey: ["room", roomId] });
       queryClient.invalidateQueries({ queryKey: ["game-state", roomId] });
     },
-    onError: () => toast.error("添加 AI 失败"),
+    onError: (error: any) => handleActionError(error, "添加 AI 失败"),
   });
 
   const state = stateQuery.data;
@@ -164,6 +185,8 @@ const WerewolfRoom = () => {
   const myRole = state?.myRole;
   const pending = state?.pendingAction;
   const canSpeak = phase === "DAY_DISCUSS" && state?.mySeatNumber === state?.currentSeat;
+  const hasVoted = !!(state?.myPlayerId && state?.votes?.[state.myPlayerId]);
+  const canAddAi = !!selectedAiId && (room?.seats?.length ?? 0) < (room?.maxPlayers ?? Number.MAX_SAFE_INTEGER);
 
   useEffect(() => {
     if (!roomId || !state || phase !== "SETTLEMENT") {
@@ -229,10 +252,6 @@ const WerewolfRoom = () => {
                     } ${phase === "DAY_VOTE" && p.playerId !== state?.myPlayerId ? "cursor-pointer hover:bg-amber-50" : ""}`}
                     onClick={() => {
                       if (phase !== "DAY_VOTE" || p.playerId === state?.myPlayerId || !p.alive) return;
-                      if (selectedVote === p.playerId && !voteMutation.isPending) {
-                        voteMutation.mutate();
-                        return;
-                      }
                       setSelectedVote(p.playerId);
                     }}
                   >
@@ -336,8 +355,8 @@ const WerewolfRoom = () => {
                   )}
                   {phase === "DAY_VOTE" && (
                     <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">点击玩家头像投票，重复点击同一目标可直接确认。</div>
-                      <Button data-testid="game-vote-submit-btn" className="w-full" disabled={!selectedVote || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
+                      <div className="text-xs text-muted-foreground">点击玩家头像选择目标后，点击按钮提交投票。</div>
+                      <Button data-testid="game-vote-submit-btn" className="w-full" disabled={!selectedVote || hasVoted || voteMutation.isPending} onClick={() => voteMutation.mutate()}>
                         <CheckSquare className="mr-2 h-4 w-4" /> 投票
                       </Button>
                     </div>
@@ -364,7 +383,7 @@ const WerewolfRoom = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button data-testid="game-add-ai-btn" variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!selectedAiId}>
+                  <Button data-testid="game-add-ai-btn" variant="secondary" onClick={() => addAiMutation.mutate(selectedAiId)} disabled={!canAddAi}>
                     <Bot className="mr-2 h-4 w-4" /> 添加 AI
                   </Button>
                 </Card>

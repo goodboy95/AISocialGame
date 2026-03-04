@@ -15,10 +15,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { personaApi, roomApi } from "@/services/api";
 import { RoomSeat } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
+import { buildPlayerStorageUserKey, getRoomPlayerId, setRoomPlayerId } from "@/utils/playerStorage";
 
 const Lobby = () => {
   const { roomId, gameId } = useParams();
-  const { displayName } = useAuth();
+  const { displayName, user } = useAuth();
+  const storageUserKey = buildPlayerStorageUserKey(user?.id, displayName);
 
   const { data: personas = [] } = useQuery({
     queryKey: ["personas"],
@@ -32,7 +34,6 @@ const Lobby = () => {
   });
 
   const hasJoinedRef = useRef(false);
-  const storedPlayerIdRef = useRef<string | null>(roomId ? localStorage.getItem(`room_player_${roomId}`) : null);
 
   const gameRoomComponents: Record<string, ComponentType> = {
     undercover: UndercoverRoom,
@@ -49,12 +50,11 @@ const Lobby = () => {
   const [seats, setSeats] = useState<RoomSeat[]>([]);
 
   const joinMutation = useMutation({
-    mutationFn: (name: string) => roomApi.join(gameId || "", roomId || "", name, storedPlayerIdRef.current || undefined),
+    mutationFn: (name: string) => roomApi.join(gameId || "", roomId || "", name, roomId ? getRoomPlayerId(roomId, storageUserKey) || undefined : undefined),
     onSuccess: (data) => {
       setSeats(data.seats || []);
       if ((data as any).selfPlayerId && roomId) {
-        storedPlayerIdRef.current = (data as any).selfPlayerId;
-        localStorage.setItem(`room_player_${roomId}`, (data as any).selfPlayerId);
+        setRoomPlayerId(roomId, storageUserKey, (data as any).selfPlayerId);
       }
       refetch();
     },

@@ -69,9 +69,6 @@ public class RoomService {
 
     public synchronized JoinRoomResult joinRoom(String roomId, String displayName, User user, String preferredPlayerId) {
         Room room = getRoom(roomId);
-        if (room.getSeats().size() >= room.getMaxPlayers()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "房间已满");
-        }
 
         // Already joined
         String userId = user != null ? user.getId() : null;
@@ -87,6 +84,10 @@ public class RoomService {
             if (seat != null) {
                 return new JoinRoomResult(room, seat);
             }
+        }
+
+        if (room.getSeats().size() >= room.getMaxPlayers()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "房间已满");
         }
 
         int seatNumber = room.getSeats().size();

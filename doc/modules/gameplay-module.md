@@ -22,6 +22,22 @@
 3. 玩家连接状态由 STOMP 连接 + 活跃打点共同维护，断线后进入 `DISCONNECTED`，超时后进入 `AI_TAKEOVER`。
 4. 阶段超时或操作完备时自动推进，结算后记录统计并回写房间状态。
 
+## 本轮新增修复（2026-03-04）
+
+1. 断线判定阈值改为可配置：
+   - 配置项：`connection.disconnect-threshold-seconds`
+   - 默认值：`60`
+   - 变更目标：降低短时抖动导致的误判离线。
+
+2. 狼人杀夜晚自动补行动策略优化：
+   - 当存在在线真人夜晚角色（狼人/预言家/女巫）时，不再提前由系统自动补齐该角色夜晚动作；
+   - 仅对“无在线真人参与”的角色执行自动补动作；
+   - 变更目标：避免真人夜晚还在场时被系统越权代操作。
+
+3. 满房重连玩家识别修复：
+   - `RoomService.joinRoom` 调整为“先匹配已在房间玩家，再检查满房”；
+   - 变更目标：确保已在房玩家重连后仍能拿到 `myPlayerId/mySeatNumber`，避免出现“轮到发言但无输入框”。
+
 ## 相关文件
 
 - `backend/src/main/java/com/aisocialgame/dto/GamePlayerView.java`：响应新增 `connectionStatus`。

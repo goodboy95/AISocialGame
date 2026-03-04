@@ -22,6 +22,7 @@ import com.aisocialgame.repository.GameStateRepository;
 import com.aisocialgame.repository.UndercoverWordRepository;
 import com.aisocialgame.websocket.GamePushService;
 import com.aisocialgame.websocket.PlayerConnectionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,7 @@ public class GamePlayService {
     private final AiGameSpeechService aiGameSpeechService;
     private final GamePushService gamePushService;
     private final PlayerConnectionService playerConnectionService;
+    private final Duration disconnectThreshold;
 
     public GamePlayService(RoomService roomService,
                            GameStateRepository gameStateRepository,
@@ -63,7 +65,8 @@ public class GamePlayService {
                            PromptProperties promptProperties,
                            AiGameSpeechService aiGameSpeechService,
                            GamePushService gamePushService,
-                           PlayerConnectionService playerConnectionService) {
+                           PlayerConnectionService playerConnectionService,
+                           @Value("${connection.disconnect-threshold-seconds:60}") long disconnectThresholdSeconds) {
         this.roomService = roomService;
         this.gameStateRepository = gameStateRepository;
         this.undercoverWordRepository = undercoverWordRepository;
@@ -72,6 +75,7 @@ public class GamePlayService {
         this.aiGameSpeechService = aiGameSpeechService;
         this.gamePushService = gamePushService;
         this.playerConnectionService = playerConnectionService;
+        this.disconnectThreshold = Duration.ofSeconds(Math.max(5, disconnectThresholdSeconds));
     }
 
     @Transactional
@@ -763,6 +767,16 @@ public class GamePlayService {
         return STATUS_DISCONNECTED.equals(player.getConnectionStatus()) || STATUS_AI_TAKEOVER.equals(player.getConnectionStatus());
     }
 
+    private boolean hasConnectedHumanRole(GameState state, String role) {
+        return state.getPlayers().stream()
+                .anyMatch(p -> p.isAlive() && !p.isAi() && role.equals(p.getRole()) && !isPlayerDisconnected(p));
+    }
+
+    private boolean hasConnectedHumanWolf(GameState state) {
+        return state.getPlayers().stream()
+                .anyMatch(p -> p.isAlive() && !p.isAi() && p.getRole() != null && p.getRole().startsWith("WEREWOLF") && !isPlayerDisconnected(p));
+    }
+
     private boolean isPhaseTimeout(LocalDateTime phaseEndsAt) {
         return phaseEndsAt != null && LocalDateTime.now().isAfter(phaseEndsAt);
     }
@@ -821,16 +835,15 @@ public class GamePlayService {
 
     private boolean nightActionsPending(GameState state) {
         Map<String, Object> data = state.getData();
-        boolean hasWolf = state.getPlayers().stream().anyMatch(p -> p.isAlive() && p.getRole().startsWith("WEREWOLF") && !p.isAi());
-        boolean hasSeer = state.getPlayers().stream().anyMatch(p -> p.isAlive() && "SEER".equals(p.getRole()) && !p.isAi());
-        boolean hasWitch = state.getPlayers().stream().anyMatch(p -> p.isAlive() && "WITCH".equals(p.getRole()) && !p.isAi());
-        boolean wolfDone = data.get("wolfTarget") != null || !state.getPlayers().stream().anyMatch(p -> p.isAlive() && p.getRole().startsWith("WEREWOLF"));
-        boolean seerDone = data.get("seerTarget") != null || !state.getPlayers().stream().anyMatch(p -> p.isAlive() && "SEER".equals(p.getRole()));
+        boolean hasWolf = hasConnectedHumanWolf(state);
+        boolean hasSeer = hasConnectedHumanRole(state, "SEER");
+        boolean hasWitch = hasConnectedHumanRole(state, "WITCH");
+        boolean wolfDone = data.get("wolfTarget") != null;
+        boolean seerDone = data.get("seerTarget") != null;
         boolean witchDone = Boolean.TRUE.equals(data.getOrDefault("witchAntidoteUsed", false))
                 || data.get("witchSaveTarget") != null
                 || Boolean.TRUE.equals(data.getOrDefault("witchPoisonUsed", false))
-                || data.get("witchPoisonTarget") != null
-                || !state.getPlayers().stream().anyMatch(p -> p.isAlive() && "WITCH".equals(p.getRole()));
+                || data.get("witchPoisonTarget") != null;
 
         if (hasWolf && !wolfDone) return true;
         if (hasSeer && !seerDone) return true;
@@ -841,7 +854,7 @@ public class GamePlayService {
     private void autoFillNightActions(GameState state, Room room) {
         Map<String, Object> data = state.getData();
         Random random = new Random();
-        if (data.get("wolfTarget") == null) {
+        if (data.get("wolfTarget") == null && !hasConnectedHumanWolf(state)) {
             List<GamePlayerState> wolves = state.getPlayers().stream().filter(p -> p.isAlive() && p.isAi() && p.getRole().startsWith("WEREWOLF")).toList();
             if (!wolves.isEmpty()) {
                 List<GamePlayerState> targets = state.getPlayers().stream().filter(p -> p.isAlive() && !p.getRole().startsWith("WEREWOLF")).toList();
@@ -850,7 +863,7 @@ public class GamePlayService {
                 }
             }
         }
-        if (data.get("seerTarget") == null) {
+        if (data.get("seerTarget") == null && !hasConnectedHumanRole(state, "SEER")) {
             state.getPlayers().stream().filter(p -> p.isAlive() && p.isAi() && "SEER".equals(p.getRole())).findFirst().ifPresent(seer -> {
                 List<GamePlayerState> targets = state.getPlayers().stream().filter(p -> p.isAlive() && !p.getPlayerId().equals(seer.getPlayerId())).toList();
                 if (!targets.isEmpty()) {
@@ -862,20 +875,22 @@ public class GamePlayService {
                 }
             });
         }
-        state.getPlayers().stream().filter(p -> p.isAlive() && p.isAi() && "WITCH".equals(p.getRole())).findFirst().ifPresent(witch -> {
-            if (!Boolean.TRUE.equals(data.getOrDefault("witchAntidoteUsed", false)) && data.get("wolfTarget") != null && random.nextBoolean()) {
-                data.put("witchSaveTarget", data.get("wolfTarget"));
-                data.put("witchAntidoteUsed", true);
-            }
-            if (data.get("witchPoisonTarget") == null && !Boolean.TRUE.equals(data.getOrDefault("witchPoisonUsed", false)) && random.nextInt(100) < 30) {
-                List<GamePlayerState> targets = state.getPlayers().stream().filter(p -> p.isAlive() && !p.getPlayerId().equals(witch.getPlayerId())).toList();
-                if (!targets.isEmpty()) {
-                    GamePlayerState target = targets.get(random.nextInt(targets.size()));
-                    data.put("witchPoisonTarget", target.getPlayerId());
-                    data.put("witchPoisonUsed", true);
+        if (!hasConnectedHumanRole(state, "WITCH")) {
+            state.getPlayers().stream().filter(p -> p.isAlive() && p.isAi() && "WITCH".equals(p.getRole())).findFirst().ifPresent(witch -> {
+                if (!Boolean.TRUE.equals(data.getOrDefault("witchAntidoteUsed", false)) && data.get("wolfTarget") != null && random.nextBoolean()) {
+                    data.put("witchSaveTarget", data.get("wolfTarget"));
+                    data.put("witchAntidoteUsed", true);
                 }
-            }
-        });
+                if (data.get("witchPoisonTarget") == null && !Boolean.TRUE.equals(data.getOrDefault("witchPoisonUsed", false)) && random.nextInt(100) < 30) {
+                    List<GamePlayerState> targets = state.getPlayers().stream().filter(p -> p.isAlive() && !p.getPlayerId().equals(witch.getPlayerId())).toList();
+                    if (!targets.isEmpty()) {
+                        GamePlayerState target = targets.get(random.nextInt(targets.size()));
+                        data.put("witchPoisonTarget", target.getPlayerId());
+                        data.put("witchPoisonUsed", true);
+                    }
+                }
+            });
+        }
     }
 
     private void finishGame(GameState state, Room room, Set<String> winnerIds) {
@@ -983,7 +998,7 @@ public class GamePlayService {
                 changed = true;
                 continue;
             }
-            if (player.getLastActiveAt() != null && Duration.between(player.getLastActiveAt(), LocalDateTime.now()).toSeconds() < 20) {
+            if (player.getLastActiveAt() != null && Duration.between(player.getLastActiveAt(), LocalDateTime.now()).compareTo(disconnectThreshold) < 0) {
                 continue;
             }
             if (!STATUS_AI_TAKEOVER.equals(player.getConnectionStatus()) && !STATUS_DISCONNECTED.equals(player.getConnectionStatus())) {

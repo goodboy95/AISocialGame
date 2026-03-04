@@ -9,6 +9,7 @@ import { Game } from "@/types";
 import { quickMatchApi } from "@/services/v2Social";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { buildPlayerStorageUserKey, getQuickMatchPlayerId, setQuickMatchPlayerId, setRoomPlayerId } from "@/utils/playerStorage";
 
 // Helper to render dynamic icons based on string name
 const IconMap: Record<string, any> = {
@@ -19,7 +20,8 @@ const IconMap: Record<string, any> = {
 
 const Index = () => {
   const navigate = useNavigate();
-  const { displayName } = useAuth();
+  const { displayName, user } = useAuth();
+  const storageUserKey = buildPlayerStorageUserKey(user?.id, displayName);
   const { data: games = [], isLoading } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: gameApi.list,
@@ -27,12 +29,11 @@ const Index = () => {
 
   const quickStart = async (gameId: string) => {
     try {
-      const cacheKey = `quick_match_player_${gameId}`;
-      const savedPlayerId = localStorage.getItem(cacheKey);
+      const savedPlayerId = getQuickMatchPlayerId(gameId, storageUserKey);
       const result = await quickMatchApi.start(gameId, displayName, savedPlayerId);
       if (result.playerId) {
-        localStorage.setItem(cacheKey, result.playerId);
-        localStorage.setItem(`room_player_${result.roomId}`, result.playerId);
+        setQuickMatchPlayerId(gameId, storageUserKey, result.playerId);
+        setRoomPlayerId(result.roomId, storageUserKey, result.playerId);
       }
       navigate(`/room/${gameId}/${result.roomId}`);
     } catch (error: any) {
