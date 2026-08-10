@@ -21,6 +21,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.lang.reflect.Method;
+import java.net.URI;
 import java.time.Instant;
 
 @SpringBootTest(classes = AiSocialGameApplication.class)
@@ -120,5 +122,20 @@ class AuthServiceTest {
 
         Assertions.assertTrue(loginRedirectUrl.startsWith("https://userservice.test.local/custom-login"));
         Assertions.assertTrue(registerRedirectUrl.startsWith("https://userservice.test.local/custom/register"));
+    }
+
+    @Test
+    void localTesthutSsoEndpointShouldUseTheLocalTlsFallbackOnlyForKnownLocalDomains() throws Exception {
+        Method method = AuthService.class.getDeclaredMethod("allowsLocalInsecureTls", URI.class);
+        method.setAccessible(true);
+
+        Assertions.assertTrue((Boolean) method.invoke(authService,
+                URI.create("https://localuserservice.testhut.top/sso/token")));
+        Assertions.assertTrue((Boolean) method.invoke(authService,
+                URI.create("https://userservice.localhut.com/sso/token")));
+        Assertions.assertFalse((Boolean) method.invoke(authService,
+                URI.create("https://userservice.example.com/sso/token")));
+        Assertions.assertFalse((Boolean) method.invoke(authService,
+                URI.create("http://localuserservice.testhut.top/sso/token")));
     }
 }

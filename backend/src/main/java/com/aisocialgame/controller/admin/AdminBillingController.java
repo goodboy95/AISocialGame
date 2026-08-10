@@ -84,7 +84,8 @@ public class AdminBillingController {
                         request.getMaxRedemptions(),
                         request.getValidFrom(),
                         request.getValidUntil(),
-                        request.getActive()
+                        request.getActive(),
+                        operator
                 )
         ));
     }

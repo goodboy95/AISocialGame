@@ -5,6 +5,7 @@ import com.aisocialgame.config.PromptProperties;
 import com.aisocialgame.integration.grpc.client.AiGrpcClient;
 import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
 import com.aisocialgame.integration.grpc.dto.AiChatResult;
+import com.aisocialgame.logging.SafeLogThrowable;
 import com.aisocialgame.model.AiDecisionTrace;
 import com.aisocialgame.model.GameLogEntry;
 import com.aisocialgame.model.GamePlayerState;
@@ -14,6 +15,8 @@ import com.aisocialgame.repository.PersonaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -27,6 +30,7 @@ import java.util.Optional;
 
 @Service
 public class AiDecisionService {
+    private static final Logger log = LoggerFactory.getLogger(AiDecisionService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -155,8 +159,16 @@ public class AiDecisionService {
                     inputSummary(input.context())
             );
             aiReflectionService.updatePersonaMemory(state, actor, enriched, reflection, qualityFlags);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
             // AI quality logging must never block a live game action.
+            log.error("AI decision trace/persona memory persistence failed gameId={} roomId={} actorPlayerId={} personaId={} action={} errorType={}",
+                    state.getGameId(), state.getRoomId(), actor.getPlayerId(), actor.getPersonaId(), action,
+                    ex.getClass().getSimpleName(), SafeLogThrowable.stackOnly(ex));
+        }
+        if (enriched.fallback()) {
+            log.warn("AI decision used fallback gameId={} roomId={} actorPlayerId={} personaId={} action={} qualityFlagCount={}",
+                    state.getGameId(), state.getRoomId(), actor.getPlayerId(), actor.getPersonaId(), action,
+                    qualityFlags.size());
         }
         Map<String, Object> metadata = trace != null
                 ? aiDecisionTraceService.safeLogMetadata(trace, enriched.evidence(), reflection)
@@ -198,8 +210,12 @@ public class AiDecisionService {
             Optional<Map<String, Object>> parsed = parseJsonObject(content);
             rawOutput = parsed.<Map<String, Object>>map(HashMap::new).orElseGet(HashMap::new);
             return new CallResult(parsed, rawOutput, response, elapsedMs(startedAt));
-        } catch (Exception ignored) {
-            return new CallResult(Optional.empty(), rawOutput, response, elapsedMs(startedAt));
+        } catch (Exception ex) {
+            long latencyMs = elapsedMs(startedAt);
+            log.warn("AI decision call failed; using fallback gameId={} actorPlayerId={} action={} latencyMs={} errorType={}",
+                    context.gameId(), context.self().playerId(), context.action(), latencyMs,
+                    ex.getClass().getSimpleName(), SafeLogThrowable.stackOnly(ex));
+            return new CallResult(Optional.empty(), rawOutput, response, latencyMs);
         }
     }
 

@@ -4,7 +4,7 @@
 
 ## 依赖清单
 
-当前项目依赖以下外部组件（默认统一对接 `192.168.5.208` 标准端口）：
+当前项目依赖以下外部组件（默认统一对接 `testservice.testhut.top` 标准端口）：
 
 - MySQL
 - Redis
@@ -17,20 +17,20 @@
   - `env.txt`
   - `build.sh`
 - 默认连接：
-  - MySQL：`base.seekerhut.com:3306`
-  - Redis：`base.seekerhut.com:6379`
-  - Qdrant：`http://base.seekerhut.com:6333`
+  - MySQL：`testservice.testhut.top:3306`
+  - Redis：`testservice.testhut.top:6379`
+  - Qdrant：`http://testservice.testhut.top:6333`
 
 ## 服务发现与域名策略
 
 - 三服务 gRPC 默认走静态域名：
-  - `static://userservice.seekerhut.com:443`
-  - `static://payservice.seekerhut.com:443`
-  - `static://aiservice.seekerhut.com:443`
+  - `static://testuserservice.testhut.top:443`
+  - `static://testpayservice.testhut.top:443`
+  - `static://testaiservice.testhut.top:443`
 - SSO/HTTP 对外地址默认使用域名：
-  - `userservice.seekerhut.com`
-  - `payservice.seekerhut.com`
-  - `aiservice.seekerhut.com`
+  - `testuserservice.testhut.top`
+  - `testpayservice.testhut.top`
+  - `testaiservice.testhut.top`
 
 ## 部署脚本行为
 

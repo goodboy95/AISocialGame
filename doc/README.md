@@ -23,6 +23,7 @@
 - AI 安全治理与 Admin 应急运营模块：[modules/ai-safety-admin-ops-module.md](modules/ai-safety-admin-ops-module.md)
 - 安全加固模块：[modules/security-hardening-module.md](modules/security-hardening-module.md)
 - 性能与稳定性加固模块：[modules/performance-stability-module.md](modules/performance-stability-module.md)
+- 日志与可观测性模块：[modules/logging-observability-module.md](modules/logging-observability-module.md)
 - v1.0 可维护性整改记录：[versions/v1.0/audit/maintainability-remediation.md](versions/v1.0/audit/maintainability-remediation.md)
 - API 文档：[api/](api/)
 - 测试与验收：[test/](test/)

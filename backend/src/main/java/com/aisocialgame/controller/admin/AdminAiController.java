@@ -69,7 +69,7 @@ public class AdminAiController {
     @PostMapping("/persona-memories/{id}/reset")
     public ResponseEntity<Void> resetPersonaMemory(@CurrentAdmin String operator,
                                                    @PathVariable Long id) {
-        adminOpsService.resetPersonaMemory(id);
+        adminOpsService.resetPersonaMemory(id, operator);
         return ResponseEntity.noContent().build();
     }
 }
