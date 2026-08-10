@@ -5,7 +5,7 @@ repo_root="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
 export CI=${CI:-true}
-APP_DOMAIN_DEFAULT="${APP_DOMAIN_DEFAULT:-aisocialgame.localhut.com}"
+APP_DOMAIN_DEFAULT="${APP_DOMAIN_DEFAULT:-localsocialgame.testhut.top}"
 APP_DOMAIN="${APP_DOMAIN:-$APP_DOMAIN_DEFAULT}"
 
 step() {
@@ -56,64 +56,76 @@ load_env_file() {
   done < "$env_file"
 }
 
-load_env_file "$repo_root/env.txt"
-load_env_file "$repo_root/env.local"
+env_file="$repo_root/env.local"
+if [[ ! -f "$env_file" || -L "$env_file" ]]; then
+  echo "Missing regular env.local file; copy env.example to env.local and populate it before deployment" >&2
+  exit 1
+fi
+env_mode="$(stat -c '%a' "$env_file")"
+if [[ "$env_mode" != "600" ]]; then
+  echo "env.local must have mode 0600 (current mode: $env_mode)" >&2
+  exit 1
+fi
+load_env_file "$env_file"
 
-export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:mysql://service.localhut.com:23306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
+export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:mysql://localbase.testhut.top:23306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
 export SPRING_DATASOURCE_USERNAME="${SPRING_DATASOURCE_USERNAME:-aisocialgame}"
-export SPRING_DATA_REDIS_HOST="${SPRING_DATA_REDIS_HOST:-service.localhut.com}"
+export SPRING_DATA_REDIS_HOST="${SPRING_DATA_REDIS_HOST:-localbase.testhut.top}"
 export SPRING_DATA_REDIS_PORT="${SPRING_DATA_REDIS_PORT:-26379}"
-export USER_GRPC_ADDR="${USER_GRPC_ADDR:-static://userservice.localhut.com:443}"
-export BILLING_GRPC_ADDR="${BILLING_GRPC_ADDR:-static://payservice.localhut.com:443}"
-export AI_GRPC_ADDR="${AI_GRPC_ADDR:-static://aiservice.localhut.com:443}"
+export USER_GRPC_ADDR="${USER_GRPC_ADDR:-static://localuserservice.testhut.top:443}"
+export BILLING_GRPC_ADDR="${BILLING_GRPC_ADDR:-static://localpayservice.testhut.top:443}"
+export AI_GRPC_ADDR="${AI_GRPC_ADDR:-static://localaiservice.testhut.top:443}"
 export USER_GRPC_NEGOTIATION_TYPE="${USER_GRPC_NEGOTIATION_TYPE:-TLS}"
 export BILLING_GRPC_NEGOTIATION_TYPE="${BILLING_GRPC_NEGOTIATION_TYPE:-TLS}"
 export AI_GRPC_NEGOTIATION_TYPE="${AI_GRPC_NEGOTIATION_TYPE:-TLS}"
-export QDRANT_HOST="${QDRANT_HOST:-http://service.localhut.com}"
+export QDRANT_HOST="${QDRANT_HOST:-http://localbase.testhut.top}"
 export QDRANT_PORT="${QDRANT_PORT:-26333}"
 export QDRANT_ENABLED="${QDRANT_ENABLED:-true}"
-export SSO_USER_SERVICE_BASE_URL="${SSO_USER_SERVICE_BASE_URL:-https://userservice.localhut.com}"
+export SSO_USER_SERVICE_BASE_URL="${SSO_USER_SERVICE_BASE_URL:-https://localuserservice.testhut.top}"
 export SSO_CALLBACK_URL="${SSO_CALLBACK_URL:-https://${APP_DOMAIN}/sso/callback}"
 export SSO_LOGIN_PATH="${SSO_LOGIN_PATH:-/sso/login}"
 export SSO_REGISTER_PATH="${SSO_REGISTER_PATH:-/register}"
-export USER_SERVICE_BASE_URL="${USER_SERVICE_BASE_URL:-https://userservice.localhut.com}"
-export PAY_SERVICE_BASE_URL="${PAY_SERVICE_BASE_URL:-https://payservice.localhut.com}"
-export AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-https://aiservice.localhut.com}"
+export USER_SERVICE_BASE_URL="${USER_SERVICE_BASE_URL:-https://localuserservice.testhut.top}"
+export PAY_SERVICE_BASE_URL="${PAY_SERVICE_BASE_URL:-https://localpayservice.testhut.top}"
+export AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-https://localaiservice.testhut.top}"
 export APP_EXTERNAL_GRPC_AUTH_REQUIRED="${APP_EXTERNAL_GRPC_AUTH_REQUIRED:-true}"
 export APP_SECURITY_ALLOW_WEAK_RUNTIME_DEFAULTS="${APP_SECURITY_ALLOW_WEAK_RUNTIME_DEFAULTS:-false}"
 export APP_SECURITY_ALLOW_PLAINTEXT_GRPC="${APP_SECURITY_ALLOW_PLAINTEXT_GRPC:-false}"
 
 if [[ "$SPRING_DATASOURCE_URL" == jdbc:mysql://base.seekerhut.com:3306/* ]]; then
-  export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL/base.seekerhut.com/service.localhut.com}"
+  export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL/base.seekerhut.com/localbase.testhut.top}"
   export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL/:3306/:23306}"
-  echo "Rewrote SPRING_DATASOURCE_URL to use service.localhut.com:23306 for Docker deployment"
+  echo "Rewrote SPRING_DATASOURCE_URL to use localbase.testhut.top:23306 for local deployment"
 fi
 
 if [[ "$SPRING_DATASOURCE_URL" == jdbc:mysql://service.localhut.com:3306/* ]]; then
+  export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL/service.localhut.com/localbase.testhut.top}"
   export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL/:3306/:23306}"
-  echo "Rewrote SPRING_DATASOURCE_URL to use service.localhut.com:23306 for Docker deployment"
+  echo "Rewrote legacy SPRING_DATASOURCE_URL to use localbase.testhut.top:23306"
 fi
 
 if [[ "${SPRING_DATA_REDIS_HOST}" == "base.seekerhut.com" && "${SPRING_DATA_REDIS_PORT}" == "6379" ]]; then
-  export SPRING_DATA_REDIS_HOST="service.localhut.com"
+  export SPRING_DATA_REDIS_HOST="localbase.testhut.top"
   export SPRING_DATA_REDIS_PORT="26379"
-  echo "Rewrote SPRING_DATA_REDIS_HOST/PORT to use service.localhut.com:26379 for Docker deployment"
+  echo "Rewrote SPRING_DATA_REDIS_HOST/PORT to use localbase.testhut.top:26379 for local deployment"
 fi
 
 if [[ "${SPRING_DATA_REDIS_HOST}" == "service.localhut.com" && "${SPRING_DATA_REDIS_PORT}" == "6379" ]]; then
+  export SPRING_DATA_REDIS_HOST="localbase.testhut.top"
   export SPRING_DATA_REDIS_PORT="26379"
-  echo "Rewrote SPRING_DATA_REDIS_PORT to use service.localhut.com:26379 for Docker deployment"
+  echo "Rewrote legacy SPRING_DATA_REDIS_HOST/PORT to use localbase.testhut.top:26379"
 fi
 
 if [[ "${QDRANT_HOST}" == "http://base.seekerhut.com" && "${QDRANT_PORT}" == "6333" ]]; then
-  export QDRANT_HOST="http://service.localhut.com"
+  export QDRANT_HOST="http://localbase.testhut.top"
   export QDRANT_PORT="26333"
-  echo "Rewrote QDRANT_HOST/PORT to use http://service.localhut.com:26333 for Docker deployment"
+  echo "Rewrote QDRANT_HOST/PORT to use http://localbase.testhut.top:26333 for local deployment"
 fi
 
 if [[ "${QDRANT_HOST}" == "http://service.localhut.com" && "${QDRANT_PORT}" == "6333" ]]; then
+  export QDRANT_HOST="http://localbase.testhut.top"
   export QDRANT_PORT="26333"
-  echo "Rewrote QDRANT_PORT to use http://service.localhut.com:26333 for Docker deployment"
+  echo "Rewrote legacy QDRANT_HOST/PORT to use http://localbase.testhut.top:26333"
 fi
 
 require_env_vars() {
@@ -137,11 +149,32 @@ if [[ "$APP_EXTERNAL_GRPC_AUTH_REQUIRED" == "true" ]]; then
     APP_EXTERNAL_AISERVICE_HMAC_SECRET
 fi
 
-require_env_vars SPRING_DATASOURCE_PASSWORD APP_ADMIN_PASSWORD
+require_env_vars SPRING_DATASOURCE_PASSWORD ENV AUTH_MODE APP_ADMIN_PASSWORD_HASH
+
+case "${ENV}:${AUTH_MODE}" in
+  local:password|local:totp|test:totp|production:totp) ;;
+  *)
+    echo "ENV/AUTH_MODE must be exactly one of local/password, local/totp, test/totp, production/totp" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$AUTH_MODE" == "totp" ]]; then
+  require_env_vars ADMIN_TOTP_ENCRYPTION_KEYS ADMIN_TOTP_ACTIVE_KEY_VERSION
+fi
+
+case "${APP_ADMIN_COOKIE_SECURE:-true}" in
+  true|false) ;;
+  *) echo "APP_ADMIN_COOKIE_SECURE must be exactly true or false" >&2; exit 1 ;;
+esac
+if [[ "$ENV" != "local" && "${APP_ADMIN_COOKIE_SECURE:-true}" != "true" ]]; then
+  echo "APP_ADMIN_COOKIE_SECURE must be true outside ENV=local" >&2
+  exit 1
+fi
 
 if [[ "$APP_SECURITY_ALLOW_WEAK_RUNTIME_DEFAULTS" != "true" ]]; then
-  if [[ "$SPRING_DATASOURCE_PASSWORD" == "aisocialgame""_pwd" || "${APP_ADMIN_PASSWORD:-}" == "admin""123" ]]; then
-    echo "Refusing to deploy with default database or admin passwords" >&2
+  if [[ "$SPRING_DATASOURCE_PASSWORD" == "aisocialgame""_pwd" ]]; then
+    echo "Refusing to deploy with the default database password" >&2
     exit 1
   fi
   insecure_ssl_param="use""SSL" insecure_ssl_value="false"
@@ -181,42 +214,6 @@ wait_for_http() {
   return 1
 }
 
-run_migration() {
-  if [[ "${RUN_FULL_MIGRATION:-true}" != "true" ]]; then
-    echo "Skip full migration (RUN_FULL_MIGRATION=${RUN_FULL_MIGRATION:-false})"
-    return 0
-  fi
-
-  step "Run full credit migration"
-  local backend_url="http://127.0.0.1:${BACKEND_PORT:-11031}"
-  local admin_username="${APP_ADMIN_USERNAME:-admin}"
-  local admin_password="${APP_ADMIN_PASSWORD}"
-  local login_response token migrate_response failed_count
-
-  login_response="$(curl -fsS -X POST "${backend_url}/api/admin/auth/login" \
-    -H 'Content-Type: application/json' \
-    -d "{\"username\":\"${admin_username}\",\"password\":\"${admin_password}\"}")"
-
-  token="$(echo "$login_response" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-  if [[ -z "$token" ]]; then
-    echo "Unable to acquire admin token for migration" >&2
-    echo "$login_response" >&2
-    return 1
-  fi
-
-  migrate_response="$(curl -fsS -X POST "${backend_url}/api/admin/billing/migrate-all" \
-    -H 'Content-Type: application/json' \
-    -H "X-Admin-Token: ${token}" \
-    -d "{\"batchSize\":${MIGRATION_BATCH_SIZE:-100}}")"
-  echo "$migrate_response"
-
-  failed_count="$(echo "$migrate_response" | sed -n 's/.*"failed"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
-  if [[ -n "$failed_count" && "$failed_count" != "0" ]]; then
-    echo "Migration reported failures: ${failed_count}" >&2
-    return 1
-  fi
-}
-
 step "Backend: test & package"
 (
   cd backend
@@ -252,7 +249,5 @@ export FRONTEND_PORT="${FRONTEND_PORT:-11030}"
 export BACKEND_PORT="${BACKEND_PORT:-11031}"
 wait_for_http "http://127.0.0.1:${FRONTEND_PORT}" 60
 wait_for_http "http://127.0.0.1:${BACKEND_PORT}/actuator/health" 60
-
-run_migration
 
 echo "All done. Frontend: https://${APP_DOMAIN}  Backend API: https://${APP_DOMAIN}/api"

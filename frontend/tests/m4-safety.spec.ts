@@ -18,7 +18,6 @@ const event = {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    window.sessionStorage.setItem("aisocialgame_admin_token", "admin-token");
     window.sessionStorage.setItem("aisocialgame_token", "user-token");
   });
   await page.route("**/api/admin/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(admin) }));

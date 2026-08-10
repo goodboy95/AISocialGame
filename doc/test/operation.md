@@ -2,30 +2,31 @@
 
 ## 0. 入口与端口
 
-1. 本地域名入口：`https://aisocialgame.localhut.com`
+1. 本地域名入口：`https://localsocialgame.testhut.top`
 2. 前端直连入口：`http://127.0.0.1:11030`
 3. 后端直连入口：`http://127.0.0.1:11031/api`
 4. 健康检查：`http://127.0.0.1:11031/actuator/health`
-5. WebSocket：`wss://aisocialgame.localhut.com/ws`
+5. WebSocket：`wss://localsocialgame.testhut.top/ws`
 
 ## 1. 部署执行
 
-1. 注入三服务 gRPC 鉴权环境变量（四项必须）。
+1. 确认 `env.local` 存在、权限为 `0600`，并已注入数据库、管理员 BCrypt 哈希、TOTP keyring 与三服务 gRPC 鉴权变量。
 2. 确认 `APP_EXTERNAL_PAYSERVICE_JWT` 未过期（推荐每次部署前重新生成）。
-3. 执行 `sudo ./build.sh`。
-4. 期望输出包含：
+3. 启动前先幂等执行并核验 `backend/sql/20260810_admin_totp_auth.sql`；既有环境还应确认更早的日期迁移均已应用。
+4. 执行 `sudo ./build.sh`。
+5. 期望输出包含：
    - 后端测试通过
    - 前端构建完成
    - 容器重建完成
-   - `Run full credit migration` 且 `failed=0`
-5. `build.sh` 结束后仅代表部署完成，测试需执行第 7 节真人验收流程。
+   - 前后端健康检查通过
+6. `build.sh` 不登录管理员，也不执行任何特权迁移；结束后仅代表部署完成，测试需执行第 7 节真人验收流程。
 
 ## 1.1 VS Code F5 调试（工作区根：`backend/`）
 
 1. 在 VS Code 中打开 `backend/` 目录。
 2. 运行调试配置 `Backend: Launch AiSocialGameApplication`。
 3. 调试前会自动执行 `backend: compile`，确保 protobuf/gRPC 生成代码齐备。
-4. 调试配置读取 `../env.txt`，因此默认会连接共享 MySQL、Redis、Qdrant 与三服务静态地址。
+4. 调试配置读取权限为 `0600` 且未入库的 `../env.local`，因此会使用与部署一致的外部依赖配置。
 5. 启动成功后访问 `http://127.0.0.1:11031/actuator/health`，确认返回健康状态。
 
 ## 2. SSO 登录/注册跳转
@@ -33,14 +34,14 @@
 1. 首页点击“登录”。
 2. 期望请求 `GET /api/auth/sso/login?state=<一次性状态>` 并返回 `302`。
 3. 期望 `Location` 指向 user-service，且包含：
-   - `redirect=https://aisocialgame.localhut.com/sso/callback`
+   - `redirect=https://localsocialgame.testhut.top/sso/callback`
    - `state=<原始状态值>`
 4. 注册同理，通过 `GET /api/auth/sso/register?state=...`。
 5. `state` 非法时返回 `400`。
 
 ## 3. SSO 回调安全校验
 
-1. 打开 `https://aisocialgame.localhut.com/sso/callback?code=fake&state=bad` 并伪造 `state`。
+1. 打开 `https://localsocialgame.testhut.top/sso/callback?code=fake&state=bad` 并伪造 `state`。
 2. 期望前端提示 `SSO 状态校验失败，请重新登录`。
 3. 期望不会调用 `/api/auth/sso-callback` 换 token，回到首页且不会建立本地登录态。
 
@@ -60,7 +61,8 @@
 
 ## 5. 管理后台
 
-1. 管理员登录：使用 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 中配置的受控账号。
+1. 管理员登录：使用受控账号和密码；TOTP 模式完成第二阶段验证，浏览器只接收 HttpOnly cookie。
+   - 首次登录必须先按页面或 `scripts/admin-billing-migrate-all.sh` 提示完成 enrollment，并将一次性恢复码保存到 owner-only 位置。
 2. 进入积分管理页执行：
    - `migrate-user`
    - `migrate-all`
@@ -68,6 +70,7 @@
    - `reversal`
    - `redeem-codes`
 3. 期望 `migrate-all` 返回 `scanned/success/failed` 与失败详情。
+4. 批量迁移只由授权运维人员显式运行 `scripts/admin-billing-migrate-all.sh`；脚本会 logout，且 `failed>0` 返回非零状态。
 
 ## 6. AI 消耗记录
 
@@ -97,9 +100,11 @@
    - 用 pay-service 的 `JWT_SECRET` 重新签发服务 JWT（`iss=aienie-services`，`aud=aienie-payservice-grpc`，`role=SERVICE`，`scopes=[billing.balance.read,billing.balance.convert,billing.onboarding.write,billing.checkin.read,billing.checkin.write,billing.redeem.write,billing.ledger.read]`）。
    - 重新执行 `sudo ./build.sh` 部署。
 
-4. 现象：`sudo ./build.sh` 的 `migrate-all` 报错 `Missing scope: billing.balance.read` 或其他细粒度 scope。
+4. 现象：显式运行 `scripts/admin-billing-migrate-all.sh` 时，迁移接口报错
+   `Missing scope: billing.balance.read` 或其他细粒度 scope。
 5. 根因：签发 JWT 时误用 `scope` claim；pay-service 鉴权读取 `scopes`。
-6. 处理：改为 `scopes` 数组并重新部署，确认 `migrate-all` 返回 `failed=0`。
+6. 处理：改为 `scopes` 数组并重新部署，再通过管理员登录和 TOTP 操作确认执行脚本，
+   确认 `migrate-all` 返回 `failed=0`。
 
 7. 现象：房间补满后刷新或重连，页面提示“等待当前玩家发言”，但当前真人看不到输入框。
 8. 根因：后端 `RoomService.joinRoom` 在“已在房间重连”路径上先执行满房校验，导致 `myPlayerId/mySeatNumber` 绑定失败。

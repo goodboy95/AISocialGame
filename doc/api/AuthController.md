@@ -11,10 +11,10 @@
 
 ## 地址解析与回调策略
 
-- SSO 登录页基地址取 `app.sso.user-service-base-url`（默认 `https://testuserservice.testhut.top`）。
+- SSO 登录页基地址取 `app.sso.user-service-base-url`（本地默认 `https://localuserservice.testhut.top`）。
 - 当前版本不使用 Consul 服务发现；如果该配置缺失，后端会返回用户服务地址未配置。
 - 回调地址由 `app.sso.callback-url` 控制，本地环境默认：
-  - `https://aisocialgame.localhut.com/sso/callback`
+  - `https://localsocialgame.testhut.top/sso/callback`
 
 ## 接口列表
 
@@ -33,11 +33,11 @@
   - `state` (String, required, 16~128 位，`[A-Za-z0-9_-]`)
 - 返回
   - `302 Found`
-  - `Location: https://testuserservice.testhut.top/sso/login?redirect=<callback>&state=<state>`
+  - `Location: https://localuserservice.testhut.top/sso/login?redirect=<callback>&state=<state>`
 - 示例
 
 ```bash
-curl -k -i "https://aisocialgame.localhut.com/api/auth/sso/login?state=1234567890abcdef1234567890abcdef"
+curl -k -i "https://localsocialgame.testhut.top/api/auth/sso/login?state=1234567890abcdef1234567890abcdef"
 ```
 
 ### GET `/api/auth/sso/register`
@@ -46,11 +46,11 @@ curl -k -i "https://aisocialgame.localhut.com/api/auth/sso/login?state=123456789
   - `state` (String, required)
 - 返回
   - `302 Found`
-  - `Location: https://testuserservice.testhut.top/register?redirect=<callback>&state=<state>`
+  - `Location: https://localuserservice.testhut.top/register?redirect=<callback>&state=<state>`
 - 示例
 
 ```bash
-curl -k -i "https://aisocialgame.localhut.com/api/auth/sso/register?state=1234567890abcdef1234567890abcdef"
+curl -k -i "https://localsocialgame.testhut.top/api/auth/sso/register?state=1234567890abcdef1234567890abcdef"
 ```
 
 ### POST `/api/auth/sso-callback`
@@ -68,11 +68,11 @@ curl -k -i "https://aisocialgame.localhut.com/api/auth/sso/register?state=123456
 - 示例
 
 ```bash
-curl -k -X POST "https://aisocialgame.localhut.com/api/auth/sso-callback" \
+curl -k -X POST "https://localsocialgame.testhut.top/api/auth/sso-callback" \
   -H "Content-Type: application/json" \
   -d '{
     "code": "userservice-code",
-    "redirect": "https://aisocialgame.localhut.com/sso/callback"
+    "redirect": "https://localsocialgame.testhut.top/sso/callback"
   }'
 ```
 
@@ -85,7 +85,7 @@ curl -k -X POST "https://aisocialgame.localhut.com/api/auth/sso-callback" \
 - 示例
 
 ```bash
-curl -k "https://aisocialgame.localhut.com/api/auth/me" \
+curl -k "https://localsocialgame.testhut.top/api/auth/me" \
   -H "X-Auth-Token: <token>"
 ```
 

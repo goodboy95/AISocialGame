@@ -23,11 +23,11 @@
 ## 当前配置策略
 
 - 地址：
-  - `USER_GRPC_ADDR=static://testuserservice.testhut.top:443`
-  - `BILLING_GRPC_ADDR=static://testpayservice.testhut.top:443`
-  - `AI_GRPC_ADDR=static://testaiservice.testhut.top:443`
+  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
+  - `BILLING_GRPC_ADDR=static://localpayservice.testhut.top:443`
+  - `AI_GRPC_ADDR=static://localaiservice.testhut.top:443`
 - SSO HTTP 入口：
-  - `SSO_USER_SERVICE_BASE_URL=https://testuserservice.testhut.top`
+  - `SSO_USER_SERVICE_BASE_URL=https://localuserservice.testhut.top`
 - 传输：
   - 默认 `USER_GRPC_NEGOTIATION_TYPE=TLS`
   - 默认 `BILLING_GRPC_NEGOTIATION_TYPE=TLS`

@@ -29,12 +29,14 @@
 
 ### 3. 部署入口曾经分散且迁移执行不稳定
 
-- 现象：历史部署入口分散，迁移需人工触发。
+- 现象：历史部署入口分散，且构建过程曾隐式触发高权限迁移。
 - 修复：
   - 统一收敛到单 `build.sh`
   - 环境差异改为通过 `APP_DOMAIN` 与环境变量覆盖
-  - 部署后自动执行 `migrate-all`
-- 验证：脚本结构已统一并可自动迁移。
+  - `build.sh` 只负责构建部署
+  - 迁移改由授权运维人员显式运行 `scripts/admin-billing-migrate-all.sh`，
+    并完成管理员登录、TOTP 操作确认和审计
+- 验证：脚本结构已统一，构建不再隐式执行高权限操作。
 
 ### 4. pay-service 服务 JWT 过期导致 SSO 回调 401
 
@@ -86,14 +88,16 @@
   - 后端回归测试通过；
   - 修复后 “谁是卧底 3用户+AI” 可从开局推进至结算并产出完整报告。
 
-### 9. 构建迁移阶段 JWT scope 字段不兼容
+### 9. 显式迁移阶段 JWT scope 字段不兼容
 
-- 现象：`sudo ./build.sh` 执行到 `migrate-all` 报 `Missing scope: billing.balance.read` 或其他细粒度 scope，迁移失败。
+- 现象：运行 `scripts/admin-billing-migrate-all.sh` 时，`migrate-all` 报
+  `Missing scope: billing.balance.read` 或其他细粒度 scope，迁移失败。
 - 根因：pay-service gRPC 鉴权读取 JWT `scopes` claim；错误使用了 `scope` 字段。
 - 修复：
   - 重新签发 JWT，使用 `scopes: ["billing.balance.read","billing.balance.convert","billing.onboarding.write","billing.checkin.read","billing.checkin.write","billing.redeem.write","billing.ledger.read"]`。
 - 验证：
-  - `sudo ./build.sh` 成功完成，`migrate-all` 返回 `failed=0`。
+  - 构建部署成功后，经管理员登录和 TOTP 操作确认运行迁移脚本，
+    `migrate-all` 返回 `failed=0`。
 
 ## 观察项（非阻塞）
 

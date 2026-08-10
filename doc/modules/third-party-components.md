@@ -4,7 +4,7 @@
 
 ## 依赖清单
 
-当前项目依赖以下外部组件（默认统一对接 `testservice.testhut.top` 标准端口）：
+当前项目依赖以下外部组件（本地环境默认统一对接 `localbase.testhut.top`）：
 
 - MySQL
 - Redis
@@ -14,23 +14,23 @@
 
 - 默认配置已统一到：
   - `backend/src/main/resources/application.yml`
-  - `env.txt`
+  - `env.example`
   - `build.sh`
 - 默认连接：
-  - MySQL：`testservice.testhut.top:3306`
-  - Redis：`testservice.testhut.top:6379`
-  - Qdrant：`http://testservice.testhut.top:6333`
+  - MySQL：`localbase.testhut.top:23306`
+  - Redis：`localbase.testhut.top:26379`
+  - Qdrant：`http://localbase.testhut.top:26333`
 
 ## 服务发现与域名策略
 
 - 三服务 gRPC 默认走静态域名：
-  - `static://testuserservice.testhut.top:443`
-  - `static://testpayservice.testhut.top:443`
-  - `static://testaiservice.testhut.top:443`
+  - `static://localuserservice.testhut.top:443`
+  - `static://localpayservice.testhut.top:443`
+  - `static://localaiservice.testhut.top:443`
 - SSO/HTTP 对外地址默认使用域名：
-  - `testuserservice.testhut.top`
-  - `testpayservice.testhut.top`
-  - `testaiservice.testhut.top`
+  - `localuserservice.testhut.top`
+  - `localpayservice.testhut.top`
+  - `localaiservice.testhut.top`
 
 ## 部署脚本行为
 
@@ -44,3 +44,4 @@
   - `backend/sql/schema.sql`
   - 对应日期迁移脚本
 - v1.0 性能整改迁移脚本：`backend/sql/20260519_performance_stability.sql`。
+- 管理员 TOTP 认证迁移：启动前幂等执行并核验 `backend/sql/20260810_admin_totp_auth.sql`。

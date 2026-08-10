@@ -7,10 +7,10 @@ import org.junit.jupiter.api.Test;
 class AppPropertiesTest {
 
     @Test
-    void defaultsShouldUseLocalhutUserServiceBaseUrl() {
+    void defaultsShouldUseAuthoritativeLocalDomains() {
         AppProperties properties = new AppProperties();
 
-        assertEquals("https://userservice.localhut.com", properties.getSso().getUserServiceBaseUrl());
-        assertEquals("https://aisocialgame.localhut.com/sso/callback", properties.getSso().getCallbackUrl());
+        assertEquals("https://localuserservice.testhut.top", properties.getSso().getUserServiceBaseUrl());
+        assertEquals("https://localsocialgame.testhut.top/sso/callback", properties.getSso().getCallbackUrl());
     }
 }

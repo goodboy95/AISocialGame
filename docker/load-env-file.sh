@@ -48,7 +48,7 @@ load_one_env_file() {
 }
 
 if [ "$#" -eq 0 ]; then
-  set -- /app/env.txt
+  set -- /app/env.local
 fi
 
 for env_file in "$@"; do

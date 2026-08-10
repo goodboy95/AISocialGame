@@ -15,7 +15,7 @@
 
 | 等级 | 风险 | 证据 | 影响 |
 | --- | --- | --- | --- |
-| 严重 | 仓库配置包含外部服务 token/JWT | `env.txt:20-21` | 泄露后可伪造服务间调用或触发跨服务账务/用户接口访问 |
+| 严重 | 仓库配置曾包含外部服务 token/JWT | 旧版受版本控制部署文件（现已删除） | 泄露后可伪造服务间调用或触发跨服务账务/用户接口访问 |
 | 高 | 默认管理员密码与数据库密码可直接落入运行配置 | `backend/src/main/resources/application.yml:7-9`、`backend/src/main/resources/application.yml:48`、`docker-compose.yml:8`、`docker-compose.yml:19` | 环境变量缺失时暴露管理后台、数据库或测试环境 |
 | 高 | 数据库和 gRPC 默认使用明文或弱传输 | `backend/src/main/resources/application.yml:7`、`backend/src/main/resources/application.yml:72-78` | 网络路径被监听或中间人攻击时，凭据、session、账务请求可被窃取或篡改 |
 | 高 | WebSocket endpoint 允许任意 origin | `backend/src/main/java/com/aisocialgame/config/WebSocketConfig.java:29-30` | 任意站点可发起跨站 WebSocket 连接，配合 token/localStorage 风险扩大攻击面 |
@@ -32,12 +32,12 @@
 
 ### 1. 服务凭据进入仓库
 
-`env.txt` 中包含 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 和 `APP_EXTERNAL_PAYSERVICE_JWT`。即使当前 JWT 已过期，也应按泄露处理，因为它暴露了签发格式、issuer/audience/scope 等服务间鉴权结构。
+旧版受版本控制部署文件曾包含 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 和 `APP_EXTERNAL_PAYSERVICE_JWT`。即使当时的 JWT 已过期，也应按泄露处理，因为它暴露了签发格式、issuer/audience/scope 等服务间鉴权结构。
 
 建议：
 
 - 立即轮换 user-service 内部 token、pay-service JWT、ai-service HMAC secret。
-- 将 `env.txt` 改为无敏感值模板，真实值放入部署机受控 secret 文件或 CI/CD secret。
+- 删除受版本控制的部署文件；`env.example` 仅保留占位符，真实值放入权限为 `0600` 且未入库的 `env.local`。
 - 增加 secret 扫描规则，至少覆盖 JWT、`APP_EXTERNAL_*TOKEN`、`APP_EXTERNAL_*SECRET`、数据库密码。
 
 验证：
@@ -52,7 +52,7 @@ rg -n "APP_EXTERNAL_.*(TOKEN|JWT|SECRET)|eyJhbGci|admin123|aisocialgame_pwd" .
 
 建议：
 
-- 启动时校验生产/测试域名部署不得使用默认 `APP_ADMIN_PASSWORD`、`SPRING_DATASOURCE_PASSWORD`。
+- 启动时校验生产/测试部署必须使用 BCrypt 管理员摘要，并禁止默认数据库口令。
 - 对 MySQL 开启 TLS，去除 `allowPublicKeyRetrieval=true` 默认值。
 - gRPC 按服务能力迁移到 TLS 或内网 mTLS；短期至少要求走可信内网并记录网络隔离前提。
 

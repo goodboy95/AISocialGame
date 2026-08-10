@@ -32,10 +32,10 @@
 
 - `backend mvn clean test`：通过，57 个测试执行，0 failure，0 error，1 skipped。
 - `frontend pnpm build`：通过，仅保留既有 chunk size / Browserslist 警告。
-- `sudo ./build.sh`：通过；部署后自动迁移结果为 `scanned=28, success=28, failed=0`。
-- 健康检查：`http://127.0.0.1:11031/actuator/health` 与 `https://aisocialgame.localhut.com/actuator/health` 均返回 `UP`。
-- 海龟汤专项真实验收：使用真实 SSO token 访问 `aisocialgame.localhut.com`，完成创建房间、AI 入座、开局、提问、线索解锁、正确解答、结算、回放事件校验，并用系统 Chromium 打开房间页确认 `SETTLEMENT` 与“汤底揭示”可见。
-- 全量真实验收脚本：`REAL_ACCEPTANCE=1 PLAYWRIGHT_BASE_URL=https://aisocialgame.localhut.com pnpm test:acceptance` 通过，覆盖首页、社区、排行榜、谁是卧底两场、狼人杀两场、海龟汤一场、回放 UI 与 Admin AI 质检；实测耗时 10.3 分钟。
+- `sudo ./build.sh`：通过；部署后由授权运维单独执行迁移，结果为 `scanned=28, success=28, failed=0`。
+- 健康检查：`http://127.0.0.1:11031/actuator/health` 与 `https://localsocialgame.testhut.top/actuator/health` 均返回 `UP`。
+- 海龟汤专项真实验收：使用真实 SSO token 访问 `localsocialgame.testhut.top`，完成创建房间、AI 入座、开局、提问、线索解锁、正确解答、结算、回放事件校验，并用系统 Chromium 打开房间页确认 `SETTLEMENT` 与“汤底揭示”可见。
+- 全量真实验收脚本：`REAL_ACCEPTANCE=1 PLAYWRIGHT_BASE_URL=https://localsocialgame.testhut.top pnpm test:acceptance` 通过，覆盖首页、社区、排行榜、谁是卧底两场、狼人杀两场、海龟汤一场、回放 UI 与 Admin AI 质检；实测耗时 10.3 分钟。
 
 ## 后续影响
 

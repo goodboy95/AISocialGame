@@ -3,6 +3,9 @@ export { getApiErrorMessage } from "./apiError";
 export type { ApiErrorResponse } from "./apiError";
 import {
   AdminAuthResponse,
+  AdminAuthPolicy,
+  AdminLoginResult,
+  AdminEnrollmentStart,
   AdminAiDecisionTrace,
   AdminAiPersonaMemory,
   AdminIntegrationStatus,
@@ -44,6 +47,7 @@ const api = axios.create({
   // Default to nginx proxy prefix; callers should use relative paths (no leading /api)
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 8000,
+  withCredentials: true,
 });
 
 export const setAuthToken = (token?: string) => {
@@ -298,23 +302,69 @@ export const serverReplayApi = {
 const adminApiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 8000,
+  withCredentials: true,
 });
 
-export const setAdminToken = (token?: string) => {
-  if (token) {
-    adminApiClient.defaults.headers.common["X-Admin-Token"] = token;
-  } else {
-    delete adminApiClient.defaults.headers.common["X-Admin-Token"];
+type ProofRetryConfig = import("axios").InternalAxiosRequestConfig & { __adminProofRetried?: boolean };
+
+adminApiClient.interceptors.response.use(undefined, async (error) => {
+  const response = error?.response;
+  const config = error?.config as ProofRetryConfig | undefined;
+  if (response?.status !== 428 || response?.data?.code !== "ADMIN_OPERATION_PROOF_REQUIRED"
+      || !response?.data?.challengeId || !config || config.__adminProofRetried) {
+    throw error;
   }
-};
+  const code = window.prompt("该操作需要动态验证码二次确认。请输入 6 位 TOTP：");
+  if (!code) {
+    throw error;
+  }
+  const proofResponse = await adminApiClient.post("/admin/auth/operation/verify", {
+    challengeId: response.data.challengeId,
+    code,
+  });
+  config.__adminProofRetried = true;
+  config.headers.set("X-Admin-Operation-Proof", proofResponse.data.proofToken);
+  return adminApiClient.request(config);
+});
 
 export const adminApi = {
-  async login(username: string, password: string): Promise<AdminAuthResponse> {
+  async policy(): Promise<AdminAuthPolicy> {
+    const res = await adminApiClient.get("/admin/auth/policy");
+    return res.data;
+  },
+  async login(username: string, password: string): Promise<AdminLoginResult> {
     const res = await adminApiClient.post("/admin/auth/login", { username, password });
     return res.data;
   },
   async me(): Promise<AdminAuthResponse> {
     const res = await adminApiClient.get("/admin/auth/me");
+    return res.data;
+  },
+  async logout(): Promise<void> {
+    await adminApiClient.post("/admin/auth/logout");
+  },
+  async startEnrollment(challengeId: string): Promise<AdminEnrollmentStart> {
+    const res = await adminApiClient.post("/admin/auth/enrollment/start", { challengeId });
+    return res.data;
+  },
+  async confirmEnrollment(challengeId: string, code: string): Promise<AdminLoginResult> {
+    const res = await adminApiClient.post("/admin/auth/enrollment/confirm", { challengeId, code });
+    return res.data;
+  },
+  async verifyTotp(challengeId: string, code: string): Promise<AdminLoginResult> {
+    const res = await adminApiClient.post("/admin/auth/totp/verify", { challengeId, code });
+    return res.data;
+  },
+  async verifyRecovery(challengeId: string, recoveryCode: string): Promise<AdminLoginResult> {
+    const res = await adminApiClient.post("/admin/auth/recovery/verify", { challengeId, recoveryCode });
+    return res.data;
+  },
+  async startRebind(): Promise<AdminEnrollmentStart> {
+    const res = await adminApiClient.post("/admin/auth/rebind/start");
+    return res.data;
+  },
+  async confirmRebind(challengeId: string, code: string): Promise<AdminLoginResult> {
+    const res = await adminApiClient.post("/admin/auth/rebind/confirm", { challengeId, code });
     return res.data;
   },
   async dashboardSummary(): Promise<{

@@ -16,7 +16,7 @@
 | 高 | `ProjectCreditService` 过大，混合账户、兑换码、消费、迁移、管理员调整、远程账务 | `ProjectCreditService.java` 约 906 行 | 账务逻辑修改牵一发而动全身，审计和幂等验证成本高 |
 | 高 | 狼人杀/谁是卧底房间页重复 | `frontend/src/pages/games/UndercoverRoom.tsx` 约 372 行、`WerewolfRoom.tsx` 约 423 行 | UI 状态、WebSocket、错误处理、入座流程需双份维护 |
 | 中 | 前端 API 客户端集中且类型边界较松 | `frontend/src/services/api.ts` 约 430 行、`Record<string, any>` 与 `error: any` | API 增长后难以定位调用方，错误结构缺少统一类型 |
-| 中 | 控制器重复手写鉴权 | 多个 controller 直接读取 `X-Auth-Token` / `X-Admin-Token` | 权限策略分散，新增接口容易漏校验 |
+| 中 | 控制器重复手写鉴权 | 多个 controller 曾分别处理用户 header 与管理员凭据 | 权限策略分散，新增接口容易漏校验 |
 | 中 | DTO 校验不均衡 | `AiChatRequest.java:40-45`、`CreateRoomRequest.java:18-25`、`AiOcrRequest.java` | 长度、枚举、URL、数量限制靠服务内部或缺失 |
 | 中 | 历史文档存在 Consul 旧引用 | `doc/api/external/*-grpc.md` | 新成员容易误判当前服务发现方式 |
 | 中 | 安全边界测试不足 | 现有测试覆盖服务逻辑较多，但未覆盖私密房、非房主加 AI、WebSocket 伪造身份 | 权限回归难以及时发现 |
@@ -80,4 +80,3 @@
 - 前端：`pnpm lint` 应逐步收敛 `any` 和重复逻辑；房间页抽象后跑 `pnpm test:e2e`。
 - 文档：每次玩法或外部服务接入变更后，同步更新 `doc/modules` 和 `doc/api`，避免设计文档与运行配置漂移。
 - 代码指标：将单文件超过 500 行、服务类超过 8 个 public 方法、页面重复 mutation 流程作为重构触发信号。
-

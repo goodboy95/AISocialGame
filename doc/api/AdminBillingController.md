@@ -1,7 +1,7 @@
 # AdminBillingController 接口说明
 
 基址：`/api/admin/billing`  
-鉴权：全部接口要求 `X-Admin-Token`
+鉴权：全部接口要求 HttpOnly 管理员会话 cookie
 
 ## GET `/balance`
 

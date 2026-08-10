@@ -1,109 +1,75 @@
 package com.aisocialgame;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import com.aisocialgame.adminauth.AdminAuthCrypto;
+import com.aisocialgame.adminauth.AdminAuthPolicy;
+import com.aisocialgame.adminauth.AdminAuthStore;
+import com.aisocialgame.adminauth.AdminRateLimiter;
 import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.exception.ApiException;
-import com.aisocialgame.logging.SafeLogValue;
 import com.aisocialgame.service.AdminAuthService;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+import java.time.Duration;
+import java.util.Base64;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AdminAuthServiceTest {
 
     @Test
-    void loginAndValidateToken() {
-        AppProperties properties = new AppProperties();
-        properties.getAdmin().setUsername("admin");
-        properties.getAdmin().setPassword("test-admin-password");
-        properties.getAdmin().setTokenTtlHours(1);
-        AdminAuthService adminAuthService = new AdminAuthService(properties);
-        ListAppender<ILoggingEvent> appender = attachAppender();
+    void localPasswordModeIssuesServerSideSessionWithoutTotpChallenge() {
+        Fixture fixture = fixture(new AdminAuthPolicy("local", "password"), false);
 
-        try {
-            String token = adminAuthService.login("admin", "test-admin-password");
-            Assertions.assertNotNull(token);
-            Assertions.assertEquals("admin", adminAuthService.requireAdmin(token));
+        AdminAuthService.LoginResult result = fixture.service.login("admin", "correct-password", "127.0.0.1");
 
-            String logged = appender.list.stream()
-                    .map(ILoggingEvent::getFormattedMessage)
-                    .filter(message -> message.contains("Admin login succeeded"))
-                    .findFirst()
-                    .orElseThrow();
-            Assertions.assertTrue(logged.contains("actorFingerprint=" + SafeLogValue.fingerprint("admin")));
-            Assertions.assertFalse(logged.contains("actor=admin"));
-            Assertions.assertFalse(logged.contains("test-admin-password"));
-            Assertions.assertFalse(logged.contains(token));
-        } finally {
-            detachAppender(appender);
-        }
+        assertEquals("AUTHENTICATED", result.state());
+        assertNotNull(result.sessionToken());
+        verify(fixture.store).insertSession(any(), any(), any(), any(), any(), any(), any(),
+                anyLong(), any(), any(), any(), any());
     }
 
     @Test
-    void wrongPasswordShouldThrow() {
-        AppProperties properties = new AppProperties();
-        properties.getAdmin().setUsername("admin");
-        properties.getAdmin().setPassword("test-admin-password");
-        AdminAuthService adminAuthService = new AdminAuthService(properties);
-        ListAppender<ILoggingEvent> appender = attachAppender();
+    void totpModeRequiresPasswordFirstAndCreatesTotpChallenge() {
+        Fixture fixture = fixture(new AdminAuthPolicy("local", "totp"), true);
 
-        try {
-            Assertions.assertThrows(ApiException.class, () -> adminAuthService.login("admin", "bad"));
+        AdminAuthService.LoginResult result = fixture.service.login("admin", "correct-password", "127.0.0.1");
 
-            String logged = appender.list.stream()
-                    .map(ILoggingEvent::getFormattedMessage)
-                    .filter(message -> message.contains("Admin login rejected"))
-                    .findFirst()
-                    .orElseThrow();
-            Assertions.assertTrue(logged.contains("actorFingerprint=" + SafeLogValue.fingerprint("admin")));
-            Assertions.assertFalse(logged.contains("actor=admin"));
-            Assertions.assertTrue(logged.contains("reason=INVALID_CREDENTIALS"));
-            Assertions.assertFalse(logged.contains("test-admin-password"));
-            Assertions.assertFalse(logged.contains("bad"));
-        } finally {
-            detachAppender(appender);
-        }
+        assertEquals("TOTP_REQUIRED", result.state());
+        assertNotNull(result.challengeId());
+        verify(fixture.store).insertChallenge(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void missingAndUnknownSessionsShouldLogReasonWithoutToken() {
+    void wrongPasswordNeverCreatesSession() {
+        Fixture fixture = fixture(new AdminAuthPolicy("local", "password"), false);
+        assertThrows(ApiException.class,
+                () -> fixture.service.login("admin", "wrong-password", "127.0.0.1"));
+    }
+
+    private Fixture fixture(AdminAuthPolicy policy, boolean enrolled) {
         AppProperties properties = new AppProperties();
-        AdminAuthService adminAuthService = new AdminAuthService(properties);
-        ListAppender<ILoggingEvent> appender = attachAppender();
-        String unknownToken = "unknown-admin-session-secret";
-
-        try {
-            Assertions.assertThrows(ApiException.class, () -> adminAuthService.requireAdmin(null));
-            Assertions.assertThrows(ApiException.class, () -> adminAuthService.requireAdmin(unknownToken));
-
-            String logged = appender.list.stream()
-                    .map(ILoggingEvent::getFormattedMessage)
-                    .filter(message -> message.contains("Admin session rejected"))
-                    .reduce("", (left, right) -> left + "\n" + right);
-            Assertions.assertTrue(logged.contains("reasonCode=MISSING_TOKEN"));
-            Assertions.assertTrue(logged.contains("reasonCode=EXPIRED_OR_UNKNOWN_SESSION"));
-            Assertions.assertTrue(logged.contains("sessionStore=memory"));
-            Assertions.assertFalse(logged.contains(unknownToken));
-        } finally {
-            detachAppender(appender);
-        }
+        properties.getAdmin().setUsername("admin");
+        properties.getAdmin().setPasswordHash(new BCryptPasswordEncoder(4).encode("correct-password"));
+        properties.getAdmin().setTotpEncryptionKeys("v1:" + Base64.getEncoder().encodeToString(new byte[32]));
+        properties.getAdmin().setTotpActiveKeyVersion("v1");
+        AdminAuthStore store = mock(AdminAuthStore.class);
+        when(store.credentialExists(any())).thenReturn(enrolled);
+        AdminRateLimiter limiter = mock(AdminRateLimiter.class);
+        when(limiter.allow(any(), anyInt(), any(Duration.class))).thenReturn(true);
+        AdminAuthService service = new AdminAuthService(properties, policy, store,
+                new AdminAuthCrypto(properties), limiter);
+        return new Fixture(service, store);
     }
 
-    private ListAppender<ILoggingEvent> attachAppender() {
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger().addAppender(appender);
-        return appender;
-    }
-
-    private void detachAppender(ListAppender<ILoggingEvent> appender) {
-        logger().detachAppender(appender);
-        appender.stop();
-    }
-
-    private Logger logger() {
-        return (Logger) LoggerFactory.getLogger(AdminAuthService.class);
+    private record Fixture(AdminAuthService service, AdminAuthStore store) {
     }
 }

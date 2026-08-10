@@ -175,9 +175,7 @@ public class AuthService {
         return "https".equalsIgnoreCase(scheme)
                 && host != null
                 && ("localhost".equalsIgnoreCase(host)
-                || "127.0.0.1".equals(host)
-                || host.endsWith(".localhut.com")
-                || host.endsWith(".testhut.top"));
+                || "127.0.0.1".equals(host));
     }
 
     private HttpClient buildLocalInsecureHttpClient() {

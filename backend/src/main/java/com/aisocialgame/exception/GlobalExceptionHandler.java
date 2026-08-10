@@ -26,6 +26,10 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new HashMap<>();
         body.put("message", ex.getMessage());
         body.put("status", ex.getStatus().value());
+        if (ex.getCode() != null) {
+            body.put("code", ex.getCode());
+        }
+        body.putAll(ex.getDetails());
         addRequestId(body);
         return ResponseEntity.status(ex.getStatus()).body(body);
     }

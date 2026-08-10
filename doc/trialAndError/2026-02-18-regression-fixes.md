@@ -66,7 +66,7 @@
   - Playwright 在 `http://127.0.0.1:10030/community` 页面填写并点击“发布”后，帖子未创建。
   - 控制台出现 `POST /api/community/posts` 返回 `403 (Forbidden)`。
 - 已尝试：
-  - 清理本地 `aisocialgame_admin_token`。
+  - 清理当时遗留的管理员客户端凭据。
   - 清理本地 `aisocialgame_token` 并刷新页面，按未登录访客再次发帖。
   - 结果仍为 `403`。
 - 当前判断：

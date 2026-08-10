@@ -9,12 +9,19 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.aisocialgame.adminauth.AdminAuthCrypto;
+import com.aisocialgame.adminauth.AdminAuthPolicy;
 
 @Component
 @Profile("!test")
 public class RuntimeSecurityValidator {
-    private static final String DEFAULT_ADMIN_PASSWORD = "admin" + "123";
     private static final String DEFAULT_DB_PASSWORD = "aisocialgame" + "_pwd";
+    private static final Pattern BCRYPT = Pattern.compile(
+            "^\\$2[aby]\\$([0-3][0-9])\\$[./A-Za-z0-9]{53}$"
+    );
 
     private final AppProperties appProperties;
     private final String datasourceUrl;
@@ -24,6 +31,8 @@ public class RuntimeSecurityValidator {
     private final String aiGrpcNegotiationType;
     private final boolean allowWeakRuntimeDefaults;
     private final boolean allowPlaintextGrpc;
+    private final AdminAuthPolicy adminAuthPolicy;
+    private final AdminAuthCrypto adminAuthCrypto;
 
     public RuntimeSecurityValidator(AppProperties appProperties,
                                     @Value("${spring.datasource.url:}") String datasourceUrl,
@@ -32,7 +41,9 @@ public class RuntimeSecurityValidator {
                                     @Value("${grpc.client.billing.negotiationType:}") String billingGrpcNegotiationType,
                                     @Value("${grpc.client.ai.negotiationType:}") String aiGrpcNegotiationType,
                                     @Value("${app.security.allow-weak-runtime-defaults:false}") boolean allowWeakRuntimeDefaults,
-                                    @Value("${app.security.allow-plaintext-grpc:false}") boolean allowPlaintextGrpc) {
+                                    @Value("${app.security.allow-plaintext-grpc:false}") boolean allowPlaintextGrpc,
+                                    AdminAuthPolicy adminAuthPolicy,
+                                    AdminAuthCrypto adminAuthCrypto) {
         this.appProperties = appProperties;
         this.datasourceUrl = datasourceUrl;
         this.datasourcePassword = datasourcePassword;
@@ -41,6 +52,8 @@ public class RuntimeSecurityValidator {
         this.aiGrpcNegotiationType = aiGrpcNegotiationType;
         this.allowWeakRuntimeDefaults = allowWeakRuntimeDefaults;
         this.allowPlaintextGrpc = allowPlaintextGrpc;
+        this.adminAuthPolicy = adminAuthPolicy;
+        this.adminAuthCrypto = adminAuthCrypto;
     }
 
     @PostConstruct
@@ -55,15 +68,20 @@ public class RuntimeSecurityValidator {
     }
 
     private void validateSecrets(List<String> violations) {
-        String adminPassword = appProperties.getAdmin() != null ? appProperties.getAdmin().getPassword() : "";
-        if (!StringUtils.hasText(adminPassword)) {
-            violations.add("APP_ADMIN_PASSWORD is required");
+        String passwordHash = appProperties.getAdmin() != null ? appProperties.getAdmin().getPasswordHash() : "";
+        Matcher bcrypt = BCRYPT.matcher(passwordHash == null ? "" : passwordHash);
+        if (!bcrypt.matches() || Integer.parseInt(bcrypt.group(1)) < 10) {
+            violations.add("APP_ADMIN_PASSWORD_HASH must be a BCrypt hash with cost >= 10");
         }
-        if (!allowWeakRuntimeDefaults && DEFAULT_ADMIN_PASSWORD.equals(adminPassword)) {
-            violations.add("APP_ADMIN_PASSWORD must not use the default value");
+        if (adminAuthPolicy.totpRequired() && !adminAuthCrypto.hasUsableActiveKey()) {
+            violations.add("ADMIN_TOTP_ENCRYPTION_KEYS must include ADMIN_TOTP_ACTIVE_KEY_VERSION");
         }
         if (!StringUtils.hasText(datasourcePassword)) {
             violations.add("SPRING_DATASOURCE_PASSWORD is required");
+        }
+        if (!AdminAuthPolicy.ENV_LOCAL.equals(adminAuthPolicy.environment())
+                && !appProperties.getAdmin().isCookieSecure()) {
+            violations.add("APP_ADMIN_COOKIE_SECURE must be true outside ENV=local");
         }
         if (!allowWeakRuntimeDefaults && DEFAULT_DB_PASSWORD.equals(datasourcePassword)) {
             violations.add("SPRING_DATASOURCE_PASSWORD must not use the default value");

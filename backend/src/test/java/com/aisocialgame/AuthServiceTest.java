@@ -125,14 +125,14 @@ class AuthServiceTest {
     }
 
     @Test
-    void localTesthutSsoEndpointShouldUseTheLocalTlsFallbackOnlyForKnownLocalDomains() throws Exception {
+    void insecureTlsFallbackShouldBeRestrictedToLoopback() throws Exception {
         Method method = AuthService.class.getDeclaredMethod("allowsLocalInsecureTls", URI.class);
         method.setAccessible(true);
 
-        Assertions.assertTrue((Boolean) method.invoke(authService,
+        Assertions.assertFalse((Boolean) method.invoke(authService,
                 URI.create("https://localuserservice.testhut.top/sso/token")));
         Assertions.assertTrue((Boolean) method.invoke(authService,
-                URI.create("https://userservice.localhut.com/sso/token")));
+                URI.create("https://localhost/sso/token")));
         Assertions.assertFalse((Boolean) method.invoke(authService,
                 URI.create("https://userservice.example.com/sso/token")));
         Assertions.assertFalse((Boolean) method.invoke(authService,

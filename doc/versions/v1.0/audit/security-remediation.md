@@ -8,7 +8,7 @@
 
 | 审计问题 | 整改结果 |
 |---|---|
-| 仓库配置包含外部服务凭据 | `env.txt` 改为无敏感值模板；真实值改由未入库 `env.local`、系统环境或 CI/CD secret 注入 |
+| 仓库配置包含外部服务凭据 | 删除旧的受版本控制部署文件；`env.example` 仅保留占位符，真实值改由未入库的 `env.local` 注入 |
 | 默认管理员/数据库弱口令 | 移除运行默认弱口令；非 test profile 启动和部署脚本会 fail-fast 校验 |
 | MySQL/gRPC 明文默认 | MySQL 默认启用 TLS 参数；gRPC 默认 TLS；明文 gRPC 必须显式放行 |
 | WebSocket 任意 origin | WS 与 HTTP CORS 共用白名单，不再允许任意 origin |
@@ -16,7 +16,7 @@
 | 添加 AI 缺少权限 | 添加 AI 要求登录房主且房间处于等待中 |
 | 游客身份可冒用 | 对局、观战状态和 WS 均要求登录用户身份，不再信任客户端玩家 ID |
 | 未登录 AI chat 消耗系统身份 | `/api/ai/chat` 统一要求登录 |
-| token 长期 localStorage | 用户 token 与管理员 token 改为 `sessionStorage` |
+| 浏览器长期保存敏感凭据 | 管理员认证改为 HttpOnly、SameSite=Strict 服务端会话 cookie；用户侧会话另行按其边界管理 |
 | 原始异常消息外泄 | 通用异常返回固定文案，内部细节写服务端日志 |
 
 ## 剩余外部动作

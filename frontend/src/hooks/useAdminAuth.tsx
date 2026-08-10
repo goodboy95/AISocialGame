@@ -1,66 +1,63 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { adminApi, setAdminToken } from "@/services/api";
-import { AdminAuthResponse } from "@/types";
+import { createContext, useContext, useEffect, useState } from "react";
+import { adminApi } from "@/services/api";
+import { AdminAuthResponse, AdminEnrollmentStart, AdminLoginResult } from "@/types";
 
 interface AdminAuthContextValue {
   admin: AdminAuthResponse | null;
-  token: string | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<AdminLoginResult>;
+  verifyTotp: (challengeId: string, code: string) => Promise<AdminLoginResult>;
+  startEnrollment: (challengeId: string) => Promise<AdminEnrollmentStart>;
+  confirmEnrollment: (challengeId: string, code: string) => Promise<AdminLoginResult>;
+  verifyRecovery: (challengeId: string, code: string) => Promise<AdminLoginResult>;
+  startRebind: () => Promise<AdminEnrollmentStart>;
+  confirmRebind: (challengeId: string, code: string) => Promise<AdminLoginResult>;
+  logout: () => Promise<void>;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
-const LOCAL_ADMIN_TOKEN_KEY = "aisocialgame_admin_token";
-
 export const AdminAuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [admin, setAdmin] = useState<AdminAuthResponse | null>(null);
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(LOCAL_ADMIN_TOKEN_KEY));
-  const [loading, setLoading] = useState<boolean>(!!token);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) {
-      setAdminToken(undefined);
-      setLoading(false);
-      return;
+    adminApi.me().then(setAdmin).catch(() => setAdmin(null)).finally(() => setLoading(false));
+  }, []);
+
+  const applyAuthenticated = async (result: AdminLoginResult) => {
+    if (result.state === "AUTHENTICATED") {
+      setAdmin(await adminApi.me());
     }
-    setAdminToken(token);
-    adminApi
-      .me()
-      .then((res) => setAdmin(res))
-      .catch(() => {
-        logout();
-      })
-      .finally(() => setLoading(false));
-  }, [token]);
-
-  const login = async (username: string, password: string) => {
-    setLoading(true);
-    const res = await adminApi.login(username, password);
-    sessionStorage.setItem(LOCAL_ADMIN_TOKEN_KEY, res.token);
-    setToken(res.token);
-    setAdmin(res);
-    setLoading(false);
+    return result;
   };
 
-  const logout = () => {
-    sessionStorage.removeItem(LOCAL_ADMIN_TOKEN_KEY);
-    setToken(null);
-    setAdmin(null);
-    setAdminToken(undefined);
+  const login = async (username: string, password: string) => applyAuthenticated(await adminApi.login(username, password));
+  const verifyTotp = async (challengeId: string, code: string) => applyAuthenticated(await adminApi.verifyTotp(challengeId, code));
+  const confirmEnrollment = async (challengeId: string, code: string) => applyAuthenticated(await adminApi.confirmEnrollment(challengeId, code));
+  const verifyRecovery = async (challengeId: string, code: string) => applyAuthenticated(await adminApi.verifyRecovery(challengeId, code));
+  const confirmRebind = async (challengeId: string, code: string) => applyAuthenticated(await adminApi.confirmRebind(challengeId, code));
+
+  const logout = async () => {
+    try {
+      await adminApi.logout();
+    } finally {
+      setAdmin(null);
+    }
   };
 
-  const value = useMemo(
-    () => ({
-      admin,
-      token,
-      loading,
-      login,
-      logout,
-    }),
-    [admin, token, loading]
-  );
+  const value = {
+    admin,
+    loading,
+    login,
+    verifyTotp,
+    startEnrollment: adminApi.startEnrollment,
+    confirmEnrollment,
+    verifyRecovery,
+    startRebind: adminApi.startRebind,
+    confirmRebind,
+    logout,
+  };
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
 };

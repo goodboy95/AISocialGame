@@ -3,7 +3,7 @@
 ## 1. 执行入口
 
 - 部署入口：`sudo ./build.sh`
-- 本地域名：`https://aisocialgame.localhut.com`
+- 本地域名：`https://localsocialgame.testhut.top`
 - 前端端口：`11030`
 - 后端端口：`11031`
 
@@ -17,9 +17,10 @@
 2. 前端 `pnpm install --frozen-lockfile && pnpm build`
 3. Docker Compose 重建前后端
 4. 健康检查（前端首页、后端 `/actuator/health`）
-5. 自动执行全量积分迁移（`/api/admin/billing/migrate-all`）
+5. 构建完成后不自动执行积分迁移；需要迁移时由授权运维人员通过管理登录与一次性操作 proof 显式执行
 
-说明：`build.sh` 不再自动执行 Playwright。
+说明：部署前必须先应用并核验幂等脚本 `backend/sql/20260810_admin_totp_auth.sql`，且
+`env.local` 必须存在、权限为 `0600`。`build.sh` 不执行管理员登录、特权迁移或 Playwright。
 
 ## 3. 真人验收（强制）
 
@@ -40,7 +41,8 @@
 ## 4. 账号与余额策略
 
 - 普通账号从仓库根目录 `testuser.txt` 获取。
-- 管理账号由 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 注入，验收环境不得使用默认弱口令。
+- 管理账号由 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD_HASH` 注入；TOTP 模式还需版本化加密 keyring。
+- 首次 TOTP 登录先完成 enrollment 并安全保存仅显示一次的恢复码；批量迁移脚本结束时必须 logout，且 `failed>0` 视为失败。
 - 余额不足时流程：
   1. 管理员登录
   2. 创建兑换码
@@ -85,7 +87,7 @@
   - `mvn test -Dtest=AiDecisionServiceTest,GamePlayServiceUndercoverTest,GamePlayServiceWerewolfTest`
 - 真实 ai-service 联调：
   - `cd backend`
-  - `set -a && source ../env.txt && set +a`
+  - `set -a && source ../env.local && set +a`
   - `REAL_AI_INTEGRATION=1 mvn test -Dtest=AiDecisionRealIntegrationTest`
 - 验收重点：
   - AI 发言/投票/夜晚行动后生成 `ai_decision_traces`。
@@ -113,9 +115,9 @@
   - `pnpm test:e2e`
 - 真实本地验收：
   - `cd frontend`
-  - `REAL_ACCEPTANCE=1 PLAYWRIGHT_BASE_URL=https://aisocialgame.localhut.com pnpm test:acceptance`
+  - `REAL_ACCEPTANCE=1 PLAYWRIGHT_BASE_URL=https://localsocialgame.testhut.top pnpm test:acceptance`
 - 如果当前机器 DNS 无法解析本地域名，可添加 Chromium host resolver：
-  - `REAL_ACCEPTANCE=1 PLAYWRIGHT_HOST_RESOLVER_RULES="MAP aisocialgame.localhut.com 127.0.0.1" pnpm test:acceptance`
+  - `REAL_ACCEPTANCE=1 PLAYWRIGHT_HOST_RESOLVER_RULES="MAP localsocialgame.testhut.top 127.0.0.1" pnpm test:acceptance`
 - 验收覆盖：
   - 首页、社区、排行榜基础页面。
   - 谁是卧底：`1 真人 + AI`、`3 真人 + AI`。

@@ -32,7 +32,7 @@ AISocialGame/
 ├── design-doc/                               # 设计草案与历史方案文档
 ├── result/                                   # 本地测试产物（默认不入库）
 ├── docker-compose.yml                        # 仅编排本项目前后端容器
-├── env.txt                                   # 无敏感值环境变量模板
+├── env.example                               # 无敏感值环境变量模板
 ├── env.local                                 # 本机真实环境变量（不入库）
 ├── build.sh                                  # 唯一部署入口（Linux）
 ├── README.md
@@ -43,27 +43,27 @@ AISocialGame/
 
 - 前端代码必须位于 `frontend/`。
 - 后端代码与 SQL 必须位于 `backend/`。
-- `frontend/` 与 `backend/` 外仅保留：文档、部署脚本、测试结果、`env.txt` 与项目元信息。
+- `frontend/` 与 `backend/` 外仅保留：文档、部署脚本、测试结果、`env.example` 与项目元信息。
 - `result/` 为运行时产物目录（例如真人对局报告），由 `.gitignore` 忽略，不参与提交。
 - `backend/.vscode/launch.json` 与 `backend/.vscode/tasks.json` 允许入库，用于 Java F5 调试；其他 `.vscode` 内容仍保持忽略。
 
 ## 部署脚本
 
 - 统一入口：`build.sh`
-- 默认域名：`aisocialgame.localhut.com`
+- 默认本地域名：`localsocialgame.testhut.top`
 - 如需切换域名，直接通过 `APP_DOMAIN=... ./build.sh` 覆盖
 
 ## 关键配置约束
 
 - gRPC 地址默认走静态域名：
-  - `USER_GRPC_ADDR=static://testuserservice.testhut.top:443`
-  - `BILLING_GRPC_ADDR=static://testpayservice.testhut.top:443`
-  - `AI_GRPC_ADDR=static://testaiservice.testhut.top:443`
+  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
+  - `BILLING_GRPC_ADDR=static://localpayservice.testhut.top:443`
+  - `AI_GRPC_ADDR=static://localaiservice.testhut.top:443`
   - `USER_GRPC_NEGOTIATION_TYPE=TLS`、`BILLING_GRPC_NEGOTIATION_TYPE=TLS`、`AI_GRPC_NEGOTIATION_TYPE=TLS`
 - SSO HTTP 入口通过 `SSO_USER_SERVICE_BASE_URL` 配置。
-- 三服务 gRPC 鉴权变量通过未入库 `env.local`、系统环境或 CI/CD secret 注入，`env.txt` 只保留模板。
+- 三服务 gRPC 鉴权变量通过权限为 `0600` 且未入库的 `env.local` 注入，`env.example` 只保留占位符清单。
 - 非 test profile 会校验弱口令、MySQL TLS 和 gRPC 明文配置，详见 `doc/modules/security-hardening-module.md`。
-- `build.sh` 当前职责是构建、部署、依赖检查与迁移，不自动执行 Playwright。
+- `build.sh` 当前职责是构建、部署、依赖检查与健康检查，不登录管理员、不执行特权迁移，也不自动执行 Playwright。
 - M1 AI 拟人质量闭环新增 `ai_decision_traces` 与 `ai_persona_memories`，用于服务端质检、回放准备和 Persona 记忆沉淀。
 - 本地开箱即用数据由 `DemoSeedService` 管理，只有显式设置 `APP_DEMO_SEED_ENABLED=true` 时才会开启；真实浏览器验收脚本位于 `frontend/tests/acceptance-real.spec.ts`。
 - M2 结构化事件与回放新增 `game_events` 与 `game_archives`，`GameState.logs` 继续服务房间页，服务端回放 API 位于 `ReplayController`。

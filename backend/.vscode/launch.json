@@ -8,7 +8,7 @@
       "mainClass": "com.aisocialgame.AiSocialGameApplication",
       "projectName": "ai-social-game",
       "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/../env.txt",
+      "envFile": "${workspaceFolder}/../env.local",
       "preLaunchTask": "backend: compile",
       "console": "integratedTerminal"
     }

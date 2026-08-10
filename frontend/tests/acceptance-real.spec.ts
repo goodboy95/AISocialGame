@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 const RUN_ID = `e2e-${Date.now().toString(36)}`;
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
+const ADMIN_TOTP_CODE = process.env.E2E_ADMIN_TOTP_CODE;
 const USER_TOKENS = (process.env.E2E_AUTH_TOKENS || process.env.E2E_AUTH_TOKEN || "")
   .split(",")
   .map((token) => token.trim())
@@ -54,7 +55,7 @@ test.describe("真实验收：数据、AI 对局和管理端质检", () => {
     }
 
     await verifyReplayUi(page, archiveIds[0]);
-    await verifyAdminAiQuality(page, request);
+    await verifyAdminAiQuality(page);
   });
 });
 
@@ -359,22 +360,24 @@ async function verifyRoomUi(page: Page, gameId: string, roomId: string, token: s
   await expect(page.getByTestId("game-logs-panel")).toBeVisible();
 }
 
-async function verifyAdminAiQuality(page: Page, request: APIRequestContext) {
-  const loginResponse = await request.post("/api/admin/auth/login", {
-    data: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD },
-  });
-  expect(loginResponse.ok()).toBeTruthy();
-  const login = await loginResponse.json();
+async function verifyAdminAiQuality(page: Page) {
+  await page.goto("/admin/login");
+  await page.getByLabel("账号").fill(ADMIN_USERNAME);
+  await page.getByLabel("密码").fill(ADMIN_PASSWORD || "");
+  await page.getByRole("button", { name: "继续" }).click();
+  const totpInput = page.getByLabel("6 位动态验证码");
+  if (await totpInput.isVisible().catch(() => false)) {
+    if (!ADMIN_TOTP_CODE) throw new Error("Set E2E_ADMIN_TOTP_CODE for TOTP admin acceptance.");
+    await totpInput.fill(ADMIN_TOTP_CODE);
+    await page.getByRole("button", { name: "验证", exact: true }).click();
+  }
+  await expect(page).toHaveURL(/\/admin(?:\/ai)?$/, { timeout: 30_000 });
 
-  const tracesResponse = await request.get("/api/admin/ai/decision-traces", {
-    headers: { "X-Admin-Token": login.token },
-    params: { size: 5 },
-  });
+  const tracesResponse = await page.context().request.get("/api/admin/ai/decision-traces", { params: { size: 5 } });
   expect(tracesResponse.ok()).toBeTruthy();
   const traces = await tracesResponse.json();
   expect(traces.total).toBeGreaterThan(0);
 
-  await page.addInitScript((token) => window.sessionStorage.setItem("aisocialgame_admin_token", token), login.token);
   await page.goto("/admin/ai");
   await expect(page.getByText("AI 运营与质检")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("tab", { name: "决策 Trace" })).toBeVisible();

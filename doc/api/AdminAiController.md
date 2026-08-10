@@ -4,12 +4,12 @@
 
 ## GET /models
 - 用途：管理端查看 AI 模型列表。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - 响应 200：`AiModelView[]`
 
 ## POST /test-chat
 - 用途：管理端发起 AI 测试调用。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - 请求体：
   - `userId` (long, optional)
   - `sessionId` (string, optional)
@@ -19,7 +19,7 @@
 
 ## GET /decision-traces
 - 用途：管理端分页查看 AI 决策质检记录。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - Query：
   - `roomId` (string, optional)
   - `gameId` (string, optional)
@@ -33,12 +33,12 @@
 
 ## GET /persona-memories
 - 用途：查看跨局 Persona 记忆。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - Query：
   - `personaId` (string, optional)
 - 响应 200：`AdminAiPersonaMemoryView[]`
 
 ## POST /persona-memories/{id}/reset
 - 用途：清空单条 Persona 记忆，保留记录行与作用域。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - 响应 204：无响应体

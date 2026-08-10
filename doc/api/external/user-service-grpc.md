@@ -4,7 +4,7 @@
 
 ## 服务地址与服务名
 
-- 当前地址：`USER_GRPC_ADDR=static://testuserservice.testhut.top:443`
+- 本地默认地址：`USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
 - 默认传输：`USER_GRPC_NEGOTIATION_TYPE=TLS`
 - 当前发现方式：静态域名/端口，不使用 Consul。
 - gRPC 服务：

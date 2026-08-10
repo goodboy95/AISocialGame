@@ -1,6 +1,8 @@
 package com.aisocialgame.controller;
 
 import com.aisocialgame.exception.GlobalExceptionHandler;
+import com.aisocialgame.adminauth.AdminAuthPolicy;
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.service.AdminAuthService;
 import com.aisocialgame.service.AuthService;
 import com.aisocialgame.service.WalletService;
@@ -44,6 +46,16 @@ class WalletControllerTest {
 
     @TestConfiguration
     static class ArgumentResolverConfig {
+        @Bean
+        AdminAuthPolicy testAdminAuthPolicy() {
+            return new AdminAuthPolicy("local", "password");
+        }
+
+        @Bean
+        AppProperties testAppProperties() {
+            return new AppProperties();
+        }
+
         @Bean
         WebMvcConfigurer testArgumentResolvers(CurrentUserArgumentResolver currentUserArgumentResolver,
                                                CurrentAdminArgumentResolver currentAdminArgumentResolver) {

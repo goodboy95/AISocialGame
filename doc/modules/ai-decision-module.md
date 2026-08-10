@@ -62,6 +62,6 @@ mvn test -Dtest=AiDecisionServiceTest,GamePlayServiceUndercoverTest,GamePlayServ
 真实 ai-service 联调：
 
 ```bash
-set -a && source ../env.txt && set +a
+set -a && source ../env.local && set +a
 REAL_AI_INTEGRATION=1 mvn test -Dtest=AiDecisionRealIntegrationTest
 ```
