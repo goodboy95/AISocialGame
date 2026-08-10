@@ -12,10 +12,10 @@ const navItems = [
 ];
 
 const AdminLayout = () => {
-  const { admin, token, logout, loading } = useAdminAuth();
+  const { admin, logout, loading } = useAdminAuth();
   const location = useLocation();
 
-  if (!loading && !token) {
+  if (!loading && !admin) {
     return <Navigate to="/admin/login" replace />;
   }
 
@@ -27,7 +27,7 @@ const AdminLayout = () => {
             <h1 className="text-xl font-semibold">AISocialGame 管理台</h1>
             <p className="text-sm text-slate-500">{admin?.displayName ?? "管理员"}</p>
           </div>
-          <Button variant="outline" onClick={logout}>退出管理台</Button>
+          <Button variant="outline" onClick={() => void logout()}>退出管理台</Button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">

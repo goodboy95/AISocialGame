@@ -10,7 +10,6 @@ services:
       - ./backend/target/ai-social-game-0.0.1-SNAPSHOT.jar:/app/app.jar:ro
       - ./backend/src/main/resources/application.yml:/app/config/application.yml:ro
       - ./backend/src/main/resources/prompt.yml:/app/config/prompt.yml:ro
-      - ./env.txt:/app/env.txt:ro
       - ./env.local:/app/env.local:ro
       - ./docker/load-env-file.sh:/app/bin/load-env-file.sh:ro
       - /home/duwei/aienie-runtime/observability/data/aisocialgame/logs:/app/logs
@@ -25,4 +24,3 @@ services:
       - backend
     ports:
       - "11030:11030"
-

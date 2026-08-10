@@ -2,7 +2,7 @@
 
 基础路径：`/api/admin/safety`
 
-所有接口需要 `X-Admin-Token`。
+所有接口需要 HttpOnly 管理员会话 cookie。
 
 ## GET /summary
 

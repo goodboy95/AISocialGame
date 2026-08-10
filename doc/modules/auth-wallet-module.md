@@ -61,11 +61,14 @@ user-service 回跳 `/sso/callback?code=...&state=...` 后，前端调用 `POST 
 - 本项目不提供本地账号密码注册/登录页面。
 - 用户所有注册登录流程均在 user-service SSO 页面完成。
 - 对局、观战状态、WebSocket 和 AI 调用均要求登录用户身份。
-- 前端用户 token 与管理员 token 使用 `sessionStorage`，降低跨会话持久化暴露风险。
+- 前端用户 token 仍使用 `sessionStorage`；管理员认证使用 HttpOnly、Secure、
+  SameSite=Strict 的服务端会话 cookie，前端不读取或保存管理员 token。
 - 业务控制器通过 `@CurrentUser` 参数解析器获取登录用户，避免新增接口漏掉登录校验。
 
 ## 管理员 session
 
-- 非 test 环境使用 Redis TTL 存储管理员 session，key 前缀为 `<projectKey>:admin:session:`。
-- test/无 Redis 构造路径使用内存 Map，并由定时任务清理过期 token。
-- 管理端业务控制器通过 `@CurrentAdmin` 参数解析器获取操作者用户名，用于调账、冲正、迁移等审计字段。
+- 管理员 session 保存在数据库并绑定认证策略、凭据版本、密码哈希指纹和认证时间；
+  Redis 用于登录、验证码等多维限流，任一依赖异常均拒绝认证。
+- 管理端业务控制器通过 `@CurrentAdmin` 参数解析器读取服务端认证后的 principal，
+  获取操作者用户名，用于调账、冲正、迁移等审计字段。
+- TOTP 模式下，所有管理端写操作还必须消费 60 秒有效、单次使用且绑定操作路径的证明。

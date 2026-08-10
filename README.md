@@ -91,8 +91,10 @@ APP_DOMAIN=aisocialgame.aienie.com ./build.sh
 ```
 
 持续或可重复执行：
-- `build.sh` 每次部署后会默认调用 `/api/admin/billing/migrate-all` 执行全量积分迁移；如需临时跳过，可设置 `RUN_FULL_MIGRATION=false`。
-- 如果服务已经正常启动，但历史账本迁移返回 `Invalid token`，这属于业务数据迁移问题，不影响容器存活；可先用 `RUN_FULL_MIGRATION=false ./build.sh` 完成运行态部署，再单独处理迁移数据。
+- `build.sh` 只负责构建和部署，不登录管理员，也不自动执行余额迁移。
+- 历史账本需要全量迁移时，由授权运维人员在部署完成后显式运行
+  `scripts/admin-billing-migrate-all.sh`。脚本交互完成管理员登录和 TOTP
+  操作确认，服务端会记录审计；迁移失败不会改变构建结果。
 
 ### Linux
 

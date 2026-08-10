@@ -60,7 +60,7 @@
 
 ## 5. 管理后台
 
-1. 管理员登录：使用 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 中配置的受控账号。
+1. 管理员登录：使用受控账号和密码；TOTP 模式完成第二阶段验证，浏览器只接收 HttpOnly cookie。
 2. 进入积分管理页执行：
    - `migrate-user`
    - `migrate-all`
@@ -97,9 +97,11 @@
    - 用 pay-service 的 `JWT_SECRET` 重新签发服务 JWT（`iss=aienie-services`，`aud=aienie-payservice-grpc`，`role=SERVICE`，`scopes=[billing.balance.read,billing.balance.convert,billing.onboarding.write,billing.checkin.read,billing.checkin.write,billing.redeem.write,billing.ledger.read]`）。
    - 重新执行 `sudo ./build.sh` 部署。
 
-4. 现象：`sudo ./build.sh` 的 `migrate-all` 报错 `Missing scope: billing.balance.read` 或其他细粒度 scope。
+4. 现象：显式运行 `scripts/admin-billing-migrate-all.sh` 时，迁移接口报错
+   `Missing scope: billing.balance.read` 或其他细粒度 scope。
 5. 根因：签发 JWT 时误用 `scope` claim；pay-service 鉴权读取 `scopes`。
-6. 处理：改为 `scopes` 数组并重新部署，确认 `migrate-all` 返回 `failed=0`。
+6. 处理：改为 `scopes` 数组并重新部署，再通过管理员登录和 TOTP 操作确认执行脚本，
+   确认 `migrate-all` 返回 `failed=0`。
 
 7. 现象：房间补满后刷新或重连，页面提示“等待当前玩家发言”，但当前真人看不到输入框。
 8. 根因：后端 `RoomService.joinRoom` 在“已在房间重连”路径上先执行满房校验，导致 `myPlayerId/mySeatNumber` 绑定失败。

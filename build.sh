@@ -5,7 +5,7 @@ repo_root="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
 export CI=${CI:-true}
-APP_DOMAIN_DEFAULT="${APP_DOMAIN_DEFAULT:-aisocialgame.localhut.com}"
+APP_DOMAIN_DEFAULT="${APP_DOMAIN_DEFAULT:-localsocialgame.testhut.top}"
 APP_DOMAIN="${APP_DOMAIN:-$APP_DOMAIN_DEFAULT}"
 
 step() {
@@ -56,7 +56,6 @@ load_env_file() {
   done < "$env_file"
 }
 
-load_env_file "$repo_root/env.txt"
 load_env_file "$repo_root/env.local"
 
 export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:mysql://service.localhut.com:23306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
@@ -137,11 +136,32 @@ if [[ "$APP_EXTERNAL_GRPC_AUTH_REQUIRED" == "true" ]]; then
     APP_EXTERNAL_AISERVICE_HMAC_SECRET
 fi
 
-require_env_vars SPRING_DATASOURCE_PASSWORD APP_ADMIN_PASSWORD
+require_env_vars SPRING_DATASOURCE_PASSWORD ENV AUTH_MODE APP_ADMIN_PASSWORD_HASH
+
+case "${ENV}:${AUTH_MODE}" in
+  local:password|local:totp|test:totp|production:totp) ;;
+  *)
+    echo "ENV/AUTH_MODE must be exactly one of local/password, local/totp, test/totp, production/totp" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$AUTH_MODE" == "totp" ]]; then
+  require_env_vars ADMIN_TOTP_ENCRYPTION_KEYS ADMIN_TOTP_ACTIVE_KEY_VERSION
+fi
+
+case "${APP_ADMIN_COOKIE_SECURE:-true}" in
+  true|false) ;;
+  *) echo "APP_ADMIN_COOKIE_SECURE must be exactly true or false" >&2; exit 1 ;;
+esac
+if [[ "$ENV" != "local" && "${APP_ADMIN_COOKIE_SECURE:-true}" != "true" ]]; then
+  echo "APP_ADMIN_COOKIE_SECURE must be true outside ENV=local" >&2
+  exit 1
+fi
 
 if [[ "$APP_SECURITY_ALLOW_WEAK_RUNTIME_DEFAULTS" != "true" ]]; then
-  if [[ "$SPRING_DATASOURCE_PASSWORD" == "aisocialgame""_pwd" || "${APP_ADMIN_PASSWORD:-}" == "admin""123" ]]; then
-    echo "Refusing to deploy with default database or admin passwords" >&2
+  if [[ "$SPRING_DATASOURCE_PASSWORD" == "aisocialgame""_pwd" ]]; then
+    echo "Refusing to deploy with the default database password" >&2
     exit 1
   fi
   insecure_ssl_param="use""SSL" insecure_ssl_value="false"
@@ -181,42 +201,6 @@ wait_for_http() {
   return 1
 }
 
-run_migration() {
-  if [[ "${RUN_FULL_MIGRATION:-true}" != "true" ]]; then
-    echo "Skip full migration (RUN_FULL_MIGRATION=${RUN_FULL_MIGRATION:-false})"
-    return 0
-  fi
-
-  step "Run full credit migration"
-  local backend_url="http://127.0.0.1:${BACKEND_PORT:-11031}"
-  local admin_username="${APP_ADMIN_USERNAME:-admin}"
-  local admin_password="${APP_ADMIN_PASSWORD}"
-  local login_response token migrate_response failed_count
-
-  login_response="$(curl -fsS -X POST "${backend_url}/api/admin/auth/login" \
-    -H 'Content-Type: application/json' \
-    -d "{\"username\":\"${admin_username}\",\"password\":\"${admin_password}\"}")"
-
-  token="$(echo "$login_response" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-  if [[ -z "$token" ]]; then
-    echo "Unable to acquire admin token for migration" >&2
-    echo "$login_response" >&2
-    return 1
-  fi
-
-  migrate_response="$(curl -fsS -X POST "${backend_url}/api/admin/billing/migrate-all" \
-    -H 'Content-Type: application/json' \
-    -H "X-Admin-Token: ${token}" \
-    -d "{\"batchSize\":${MIGRATION_BATCH_SIZE:-100}}")"
-  echo "$migrate_response"
-
-  failed_count="$(echo "$migrate_response" | sed -n 's/.*"failed"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
-  if [[ -n "$failed_count" && "$failed_count" != "0" ]]; then
-    echo "Migration reported failures: ${failed_count}" >&2
-    return 1
-  fi
-}
-
 step "Backend: test & package"
 (
   cd backend
@@ -252,7 +236,5 @@ export FRONTEND_PORT="${FRONTEND_PORT:-11030}"
 export BACKEND_PORT="${BACKEND_PORT:-11031}"
 wait_for_http "http://127.0.0.1:${FRONTEND_PORT}" 60
 wait_for_http "http://127.0.0.1:${BACKEND_PORT}/actuator/health" 60
-
-run_migration
 
 echo "All done. Frontend: https://${APP_DOMAIN}  Backend API: https://${APP_DOMAIN}/api"

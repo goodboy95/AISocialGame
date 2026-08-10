@@ -138,9 +138,37 @@ export interface AiModel {
 }
 
 export interface AdminAuthResponse {
-  token: string;
   username: string;
   displayName: string;
+  sessionScope: "FULL" | "RECOVERY_REBIND_ONLY";
+  authMode: "password" | "totp";
+  recoveryCodesRemaining?: number;
+  expiresAt: string;
+}
+
+export interface AdminAuthPolicy {
+  env: "local" | "test" | "production";
+  authMode: "password" | "totp";
+  totpRequired: boolean;
+  enrollmentStatus: "ENROLLED" | "NOT_ENROLLED" | "NOT_APPLICABLE";
+}
+
+export interface AdminLoginResult {
+  state: "AUTHENTICATED" | "TOTP_REQUIRED" | "ENROLLMENT_REQUIRED";
+  challengeId?: string;
+  challengeExpiresAt?: string;
+  username?: string;
+  displayName?: string;
+  sessionScope?: "FULL" | "RECOVERY_REBIND_ONLY";
+  expiresAt?: string;
+  recoveryCodes?: string[];
+}
+
+export interface AdminEnrollmentStart {
+  challengeId: string;
+  otpauthUri: string;
+  manualKey: string;
+  expiresAt: string;
 }
 
 export interface AdminIntegrationStatus {

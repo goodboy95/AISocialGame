@@ -103,8 +103,8 @@ public class AppProperties {
     }
 
     public static class Sso {
-        private String userServiceBaseUrl = "https://userservice.localhut.com";
-        private String callbackUrl = "https://aisocialgame.localhut.com/sso/callback";
+        private String userServiceBaseUrl = "https://localuserservice.testhut.top";
+        private String callbackUrl = "https://localsocialgame.testhut.top/sso/callback";
         private String loginPath = "/sso/login";
         private String registerPath = "/register";
 
@@ -143,9 +143,15 @@ public class AppProperties {
 
     public static class Admin {
         private String username = "admin";
-        private String password = "";
+        private String passwordHash = "";
         private String displayName = "系统管理员";
-        private long tokenTtlHours = 8;
+        private String totpEncryptionKeys = "";
+        private String totpActiveKeyVersion = "v1";
+        private int sessionMinutes = 120;
+        private int sessionIdleMinutes = 30;
+        private int recoverySessionMinutes = 15;
+        private int recoverySessionIdleMinutes = 10;
+        private boolean cookieSecure = true;
 
         public String getUsername() {
             return username;
@@ -155,12 +161,12 @@ public class AppProperties {
             this.username = username;
         }
 
-        public String getPassword() {
-            return password;
+        public String getPasswordHash() {
+            return passwordHash;
         }
 
-        public void setPassword(String password) {
-            this.password = password;
+        public void setPasswordHash(String passwordHash) {
+            this.passwordHash = passwordHash;
         }
 
         public String getDisplayName() {
@@ -171,12 +177,60 @@ public class AppProperties {
             this.displayName = displayName;
         }
 
-        public long getTokenTtlHours() {
-            return tokenTtlHours;
+        public String getTotpEncryptionKeys() {
+            return totpEncryptionKeys;
         }
 
-        public void setTokenTtlHours(long tokenTtlHours) {
-            this.tokenTtlHours = tokenTtlHours;
+        public void setTotpEncryptionKeys(String totpEncryptionKeys) {
+            this.totpEncryptionKeys = totpEncryptionKeys;
+        }
+
+        public String getTotpActiveKeyVersion() {
+            return totpActiveKeyVersion;
+        }
+
+        public void setTotpActiveKeyVersion(String totpActiveKeyVersion) {
+            this.totpActiveKeyVersion = totpActiveKeyVersion;
+        }
+
+        public int getSessionMinutes() {
+            return sessionMinutes;
+        }
+
+        public void setSessionMinutes(int sessionMinutes) {
+            this.sessionMinutes = sessionMinutes;
+        }
+
+        public int getSessionIdleMinutes() {
+            return sessionIdleMinutes;
+        }
+
+        public void setSessionIdleMinutes(int sessionIdleMinutes) {
+            this.sessionIdleMinutes = sessionIdleMinutes;
+        }
+
+        public int getRecoverySessionMinutes() {
+            return recoverySessionMinutes;
+        }
+
+        public void setRecoverySessionMinutes(int recoverySessionMinutes) {
+            this.recoverySessionMinutes = recoverySessionMinutes;
+        }
+
+        public int getRecoverySessionIdleMinutes() {
+            return recoverySessionIdleMinutes;
+        }
+
+        public void setRecoverySessionIdleMinutes(int recoverySessionIdleMinutes) {
+            this.recoverySessionIdleMinutes = recoverySessionIdleMinutes;
+        }
+
+        public boolean isCookieSecure() {
+            return cookieSecure;
+        }
+
+        public void setCookieSecure(boolean cookieSecure) {
+            this.cookieSecure = cookieSecure;
         }
     }
 
@@ -277,12 +331,8 @@ public class AppProperties {
                 "http://127.0.0.1:11030",
                 "http://localhost",
                 "https://localhost",
-                "http://aisocialgame.localhut.com",
-                "http://aisocialgame.localhut.com:11030",
-                "https://aisocialgame.localhut.com",
-                "http://aisocialgame.aienie.com",
-                "http://aisocialgame.aienie.com:11030",
-                "https://aisocialgame.aienie.com"
+                "https://localsocialgame.testhut.top",
+                "https://socialgame.testhut.top"
         );
 
         public List<String> getAllowedOrigins() {

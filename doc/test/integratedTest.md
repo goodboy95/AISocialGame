@@ -17,7 +17,7 @@
 2. 前端 `pnpm install --frozen-lockfile && pnpm build`
 3. Docker Compose 重建前后端
 4. 健康检查（前端首页、后端 `/actuator/health`）
-5. 自动执行全量积分迁移（`/api/admin/billing/migrate-all`）
+5. 构建完成后不自动执行积分迁移；需要迁移时由授权运维人员通过管理登录与一次性操作 proof 显式执行
 
 说明：`build.sh` 不再自动执行 Playwright。
 
@@ -40,7 +40,7 @@
 ## 4. 账号与余额策略
 
 - 普通账号从仓库根目录 `testuser.txt` 获取。
-- 管理账号由 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 注入，验收环境不得使用默认弱口令。
+- 管理账号由 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD_HASH` 注入；TOTP 模式还需版本化加密 keyring。
 - 余额不足时流程：
   1. 管理员登录
   2. 创建兑换码

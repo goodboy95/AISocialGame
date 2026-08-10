@@ -22,7 +22,7 @@
 
 - STOMP CONNECT 只接受 `Authorization: Bearer <token>`，认证成功后 Principal 绑定为登录用户 ID。
 - WebSocket origin 与 HTTP CORS 共用 `app.cors.allowed-origins` 白名单，不再允许任意 origin。
-- HTTP CORS 只允许 `Content-Type`、`Authorization`、`X-Auth-Token`、`X-Admin-Token` 等必要 header。
+- HTTP CORS 只允许精确来源及必要 header；管理员仅额外允许一次性 `X-Admin-Operation-Proof`。
 
 ## AI 接口保护
 
@@ -34,7 +34,8 @@
 
 - `env.txt` 是无敏感值模板，真实部署值应放在未入库的 `env.local` 或进程环境变量中。
 - 非 test profile 启动时会 fail-fast 校验：
-  - `APP_ADMIN_PASSWORD` 和 `SPRING_DATASOURCE_PASSWORD` 必须存在。
+  - `APP_ADMIN_PASSWORD_HASH` 必须为 BCrypt 摘要，`SPRING_DATASOURCE_PASSWORD` 必须存在。
+  - 管理认证只接受严格 OS `ENV`/`AUTH_MODE` 四种组合；TOTP 模式必须配置有效 32 字节版本化 keyring。
   - 不允许默认弱口令。
   - 不允许 MySQL URL 禁用 TLS 或启用 public key retrieval。
   - 不允许 gRPC `PLAINTEXT`，除非显式设置 `APP_SECURITY_ALLOW_PLAINTEXT_GRPC=true`。

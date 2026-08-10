@@ -4,7 +4,7 @@
 
 ## GET /services
 - 用途：检查 `user-service`、`pay-service`、`ai-service` 联通状态。
-- 请求头：`X-Admin-Token` (required)
+- 请求头：HttpOnly 管理员会话 cookie (required)
 - 响应 200：
 ```json
 {

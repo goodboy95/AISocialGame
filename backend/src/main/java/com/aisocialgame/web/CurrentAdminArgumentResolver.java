@@ -10,14 +10,6 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 @Component
 public class CurrentAdminArgumentResolver implements HandlerMethodArgumentResolver {
-    private static final String ADMIN_HEADER = "X-Admin-Token";
-
-    private final AdminAuthService adminAuthService;
-
-    public CurrentAdminArgumentResolver(AdminAuthService adminAuthService) {
-        this.adminAuthService = adminAuthService;
-    }
-
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
         return parameter.hasParameterAnnotation(CurrentAdmin.class)
@@ -25,10 +17,14 @@ public class CurrentAdminArgumentResolver implements HandlerMethodArgumentResolv
     }
 
     @Override
-    public Object resolveArgument(MethodParameter parameter,
-                                  ModelAndViewContainer mavContainer,
-                                  NativeWebRequest webRequest,
-                                  WebDataBinderFactory binderFactory) {
-        return adminAuthService.requireAdmin(webRequest.getHeader(ADMIN_HEADER));
+    public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+                                  NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+        Object value = webRequest.getAttribute(AdminAuthService.PRINCIPAL_ATTRIBUTE, NativeWebRequest.SCOPE_REQUEST);
+        if (value instanceof AdminAuthService.AdminPrincipal principal
+                && AdminAuthService.AUTHORITY.equals(principal.authority())) {
+            return principal.username();
+        }
+        throw new com.aisocialgame.exception.ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED,
+                "管理员登录已过期");
     }
 }
