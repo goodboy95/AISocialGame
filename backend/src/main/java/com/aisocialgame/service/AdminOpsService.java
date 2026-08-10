@@ -18,6 +18,7 @@ import com.aisocialgame.integration.grpc.client.BillingGrpcClient;
 import com.aisocialgame.integration.grpc.client.UserGrpcClient;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
 import com.aisocialgame.integration.grpc.dto.ExternalUserProfile;
+import com.aisocialgame.logging.SafeLogValue;
 import com.aisocialgame.model.credit.CreditRedeemCode;
 import com.aisocialgame.repository.AiPersonaMemoryRepository;
 import com.aisocialgame.repository.CommunityPostRepository;
@@ -28,6 +29,8 @@ import com.aisocialgame.service.ai.AiDecisionTraceService;
 import com.aisocialgame.service.ai.AiReflectionService;
 import com.aisocialgame.service.safety.AiSafetyContext;
 import com.aisocialgame.service.safety.AiSafetyService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +42,12 @@ import java.util.List;
 
 @Service
 public class AdminOpsService {
+    private static final Logger log = LoggerFactory.getLogger(AdminOpsService.class);
+    private static final String ACTION_USER_BAN = "admin.user.ban";
+    private static final String ACTION_USER_UNBAN = "admin.user.unban";
+    private static final String ACTION_REDEEM_CODE_CREATE = "admin.redeem-code.create";
+    private static final String ACTION_PERSONA_MEMORY_RESET = "admin.persona-memory.reset";
+
     private final UserGrpcClient userGrpcClient;
     private final BillingGrpcClient billingGrpcClient;
     private final BalanceService balanceService;
@@ -53,6 +62,7 @@ public class AdminOpsService {
     private final AiPersonaMemoryRepository aiPersonaMemoryRepository;
     private final AiReflectionService aiReflectionService;
     private final AiSafetyService aiSafetyService;
+    private final long operatorUserId;
 
     public AdminOpsService(UserGrpcClient userGrpcClient,
                            BillingGrpcClient billingGrpcClient,
@@ -82,6 +92,10 @@ public class AdminOpsService {
         this.aiPersonaMemoryRepository = aiPersonaMemoryRepository;
         this.aiReflectionService = aiReflectionService;
         this.aiSafetyService = aiSafetyService;
+        this.operatorUserId = appProperties.getAdmin().getOperatorUserId();
+        if (operatorUserId <= 0) {
+            throw new IllegalArgumentException("app.admin.operator-user-id must be positive");
+        }
     }
 
     public AdminDashboardSummaryResponse dashboardSummary() {
@@ -129,14 +143,28 @@ public class AdminOpsService {
         return new AdminUserView(profile, banStatus, balance);
     }
 
-    public AdminUserView banUser(long userId, String reason, boolean permanent, Instant expiresAt) {
-        userGrpcClient.banUser(userId, reason, permanent, expiresAt, 0);
-        return getUser(userId);
+    public AdminUserView banUser(long userId, String reason, boolean permanent, Instant expiresAt, String actor) {
+        try {
+            userGrpcClient.banUser(userId, reason, permanent, expiresAt, operatorUserId);
+            AdminUserView result = getUser(userId);
+            auditSuccess(actor, ACTION_USER_BAN, userId);
+            return result;
+        } catch (RuntimeException ex) {
+            auditFailure(actor, ACTION_USER_BAN, userId, ex);
+            throw ex;
+        }
     }
 
-    public AdminUserView unbanUser(long userId, String reason) {
-        userGrpcClient.unbanUser(userId, reason, 0);
-        return getUser(userId);
+    public AdminUserView unbanUser(long userId, String reason, String actor) {
+        try {
+            userGrpcClient.unbanUser(userId, reason, operatorUserId);
+            AdminUserView result = getUser(userId);
+            auditSuccess(actor, ACTION_USER_UNBAN, userId);
+            return result;
+        } catch (RuntimeException ex) {
+            auditFailure(actor, ACTION_USER_UNBAN, userId, ex);
+            throw ex;
+        }
     }
 
     public BalanceSnapshot getBalance(long userId) {
@@ -231,16 +259,25 @@ public class AdminOpsService {
                                              Integer maxRedemptions,
                                              Instant validFrom,
                                              Instant validUntil,
-                                             Boolean active) {
-        return projectCreditService.createRedeemCode(
-                code,
-                tokens,
-                creditType,
-                maxRedemptions,
-                validFrom,
-                validUntil,
-                active
-        );
+                                             Boolean active,
+                                             String actor) {
+        try {
+            CreditRedeemCode created = projectCreditService.createRedeemCode(
+                    code,
+                    tokens,
+                    creditType,
+                    maxRedemptions,
+                    validFrom,
+                    validUntil,
+                    active
+            );
+            auditSuccess(actor, ACTION_REDEEM_CODE_CREATE,
+                    created.getId() == null ? "unassigned" : created.getId());
+            return created;
+        } catch (RuntimeException ex) {
+            auditFailure(actor, ACTION_REDEEM_CODE_CREATE, "unassigned", ex);
+            throw ex;
+        }
     }
 
     public List<AiModelView> listModels() {
@@ -286,8 +323,28 @@ public class AdminOpsService {
                 .toList();
     }
 
-    public void resetPersonaMemory(Long id) {
-        aiReflectionService.resetMemory(id);
+    public void resetPersonaMemory(Long id, String actor) {
+        try {
+            aiReflectionService.resetMemory(id);
+            auditSuccess(actor, ACTION_PERSONA_MEMORY_RESET, id);
+        } catch (RuntimeException ex) {
+            auditFailure(actor, ACTION_PERSONA_MEMORY_RESET, id, ex);
+            throw ex;
+        }
+    }
+
+    private void auditSuccess(String actor, String action, Object targetId) {
+        log.info("Admin operation actorFingerprint={} operatorUserId={} action={} targetId={} result=SUCCESS",
+                auditActorFingerprint(actor), operatorUserId, action, targetId);
+    }
+
+    private void auditFailure(String actor, String action, Object targetId, RuntimeException ex) {
+        log.error("Admin operation actorFingerprint={} operatorUserId={} action={} targetId={} result=FAILURE errorType={}",
+                auditActorFingerprint(actor), operatorUserId, action, targetId, ex.getClass().getSimpleName());
+    }
+
+    private String auditActorFingerprint(String actor) {
+        return SafeLogValue.fingerprint(actor == null || actor.isBlank() ? null : actor.trim());
     }
 
     private AdminIntegrationStatusResponse.ServiceStatus probe(String service, Probe probe) {

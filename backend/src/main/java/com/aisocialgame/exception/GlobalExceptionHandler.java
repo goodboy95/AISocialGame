@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.aisocialgame.config.RequestIdFilter;
+import com.aisocialgame.logging.SafeLogThrowable;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -63,7 +64,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
-        log.error("Unhandled API exception requestId={}", MDC.get(RequestIdFilter.MDC_KEY), ex);
+        log.error("Unhandled API exception errorType={}",
+                ex.getClass().getSimpleName(), SafeLogThrowable.stackOnly(ex));
         Map<String, Object> body = new HashMap<>();
         body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
         body.put("message", "服务器内部错误");

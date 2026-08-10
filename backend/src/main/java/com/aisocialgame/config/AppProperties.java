@@ -146,6 +146,7 @@ public class AppProperties {
         private String password = "";
         private String displayName = "系统管理员";
         private long tokenTtlHours = 8;
+        private long operatorUserId = 1;
 
         public String getUsername() {
             return username;
@@ -177,6 +178,14 @@ public class AppProperties {
 
         public void setTokenTtlHours(long tokenTtlHours) {
             this.tokenTtlHours = tokenTtlHours;
+        }
+
+        public long getOperatorUserId() {
+            return operatorUserId;
+        }
+
+        public void setOperatorUserId(long operatorUserId) {
+            this.operatorUserId = operatorUserId;
         }
     }
 

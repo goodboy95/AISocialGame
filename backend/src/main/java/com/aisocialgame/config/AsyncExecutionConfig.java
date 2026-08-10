@@ -1,5 +1,6 @@
 package com.aisocialgame.config;
 
+import com.aisocialgame.logging.MdcTaskDecorator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,12 +17,14 @@ public class AsyncExecutionConfig {
     @Bean(name = "aiStreamTaskExecutor")
     public TaskExecutor aiStreamTaskExecutor(@Value("${app.ai.stream.core-pool-size:4}") int corePoolSize,
                                              @Value("${app.ai.stream.max-pool-size:16}") int maxPoolSize,
-                                             @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
+                                             @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity,
+                                             MdcTaskDecorator mdcTaskDecorator) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(Math.max(1, corePoolSize));
         executor.setMaxPoolSize(Math.max(Math.max(1, corePoolSize), maxPoolSize));
         executor.setQueueCapacity(Math.max(0, queueCapacity));
         executor.setThreadNamePrefix("ai-stream-");
+        executor.setTaskDecorator(mdcTaskDecorator);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.initialize();
         return executor;

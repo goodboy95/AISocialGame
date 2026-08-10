@@ -33,13 +33,14 @@ public class AdminUserController {
     public ResponseEntity<AdminUserView> ban(@PathVariable long userId,
                                              @Valid @RequestBody AdminBanRequest request,
                                              @CurrentAdmin String operator) {
-        return ResponseEntity.ok(adminOpsService.banUser(userId, request.getReason(), request.isPermanent(), request.getExpiresAt()));
+        return ResponseEntity.ok(adminOpsService.banUser(
+                userId, request.getReason(), request.isPermanent(), request.getExpiresAt(), operator));
     }
 
     @PostMapping("/{userId}/unban")
     public ResponseEntity<AdminUserView> unban(@PathVariable long userId,
                                                @Valid @RequestBody AdminUnbanRequest request,
                                                @CurrentAdmin String operator) {
-        return ResponseEntity.ok(adminOpsService.unbanUser(userId, request.getReason()));
+        return ResponseEntity.ok(adminOpsService.unbanUser(userId, request.getReason(), operator));
     }
 }

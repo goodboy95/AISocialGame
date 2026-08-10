@@ -27,6 +27,17 @@ server:
 logging:
   file:
     name: ${LOGGING_FILE_NAME:${APP_LOG_DIR:./logs}/aisocialgame.log}
+  structured:
+    format:
+      file: ecs
+  pattern:
+    level: "requestId=%X{requestId:-none} %5p"
+  logback:
+    rollingpolicy:
+      max-file-size: ${LOGGING_MAX_FILE_SIZE:10MB}
+      max-history: ${LOGGING_MAX_HISTORY:14}
+      total-size-cap: ${LOGGING_TOTAL_SIZE_CAP:1GB}
+      clean-history-on-start: ${LOGGING_CLEAN_HISTORY_ON_START:true}
   level:
     root: ${LOGGING_LEVEL_ROOT:INFO}
     com.aisocialgame: ${LOGGING_LEVEL_APP:INFO}
@@ -59,6 +70,7 @@ app:
     password: ${APP_ADMIN_PASSWORD:}
     display-name: ${APP_ADMIN_DISPLAY_NAME:系统管理员}
     token-ttl-hours: ${APP_ADMIN_TOKEN_TTL_HOURS:8}
+    operator-user-id: ${APP_ADMIN_OPERATOR_USER_ID:1}
   security:
     allow-weak-runtime-defaults: ${APP_SECURITY_ALLOW_WEAK_RUNTIME_DEFAULTS:false}
     allow-plaintext-grpc: ${APP_SECURITY_ALLOW_PLAINTEXT_GRPC:false}

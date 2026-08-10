@@ -170,7 +170,7 @@ graph TD
 #### `config` (配置)
 - **AppProperties.java**: 定义应用程序级别的配置属性。
 - **JwtProperties.java**: 专门用于配置 JWT（JSON Web Token）相关的属性，如密钥、过期时间等。
-- **RequestLoggingFilter.java**: 一个过滤器，用于记录传入的 HTTP 请求，方便调试。
+- **RequestIdFilter.java**: 校验或生成受限的 `X-Request-Id`，写入响应头和 MDC，并在请求结束时清理。
 - **SecurityConfig.java**: Spring Security 的核心配置文件，定义了安全策略，如认证、授权、CORS 等。
 
 #### `controller` (控制器)
@@ -234,8 +234,7 @@ graph TD
 - **AiPromptService.java**: 核心提示词服务，按游戏/角色/阶段检索数据库模板并注入 AI 性格等上下文，提供内置兜底模板。
 
 ### `src/main/resources`
-- **application.yml**: Spring Boot 应用的默认配置，包括数据库、JWT、房间编号等参数。
-- **logback-spring.xml**: 日志输出与级别配置。
+- **application.yml**: Spring Boot 应用的默认配置，包括数据库、日志文件、请求 ID 格式、日志级别和有界轮转策略等参数。
 - **migration/**: 存放 MySQL DDL 迁移脚本（如 `20251025_manage_module.sql`、`20251026_ai_prompts.sql`），用于在启动时同步 `is_admin` 字段、AI 管理配置以及提示词模板表。
 
 ## Frontend (前端)
@@ -321,4 +320,3 @@ graph TD
   - `index.ts`: Pinia 实例。
 - **src/i18n/**: 继承主站的多语言配置以复用现有字典。
 - **src/styles/global.scss**: 管理后台的全局样式调整。
-
