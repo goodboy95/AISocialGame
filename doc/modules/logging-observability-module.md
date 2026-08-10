@@ -19,7 +19,7 @@ Spring Boot 的日志配置集中在 `backend/src/main/resources/application.yml
 
 ## 安全与关键路径
 
-- 管理员登录成功、凭据拒绝、会话缺失/过期、会话存储异常及内存过期清理均记录固定事件、受限 actor、reasonCode、存储类型或 removedCount；禁止记录密码、会话 token 和 Redis key。当前没有管理员 logout 接口，会话失效依赖 Redis TTL 或内存过期清理。
+- 管理员 challenge、数据库 session、恢复码、操作 proof 与认证审计由 `AdminAuthStore` 持久化；Redis 只承担认证限流。登录、验证、重绑和 logout 写入固定审计事件，logout 会显式撤销数据库 session；任何日志与审计均禁止记录密码、TOTP、会话 cookie、challenge、proof 原文或 Redis key。
 - ban/unban、兑换码创建和 persona memory reset 使用真实 `@CurrentAdmin` username 作为受限 actor，并统一记录配置化的 numeric `operatorUserId`、action、非敏感 targetId、结果和 errorType；禁止记录 reason、兑换码、token 或原始内容。失败日志不附带可能包含业务值的异常消息，异常仍会原样向上抛出。
 - UserService 的 ban/unban gRPC 合同要求 numeric `operatorUserId`。AISocialGame 通过 `app.admin.operator-user-id` / `APP_ADMIN_OPERATOR_USER_ID` 统一提供，默认值为 `1` 且必须为正数；该值代表跨服务审计身份，不将 username 猜测或转换为 UserService 用户 ID。若未来启用多管理员，应由统一身份目录分配稳定 numeric ID，而不是继续共享默认值。
 - AI 决策调用异常、规则兜底和 trace/persona memory 持久化异常记录 game、room、player、persona、action 等实体标识；诊断 throwable 只保留原异常类型标识和 stack trace，不保留可能含远端响应的 message、cause 或 suppressed，且禁止记录 prompt、模型原始输出或完整业务上下文。
@@ -35,7 +35,7 @@ Spring Boot 的日志配置集中在 `backend/src/main/resources/application.yml
 ## 聚焦测试
 
 - `RequestIdFilterTest` 覆盖合法 ID 透传、不合法 ID 重生成、异常请求后的 MDC 清理。
-- `AdminAuthServiceTest` 覆盖登录成功/失败日志中不出现密码或会话 token。
+- `AdminAuthServiceTest` 覆盖本地密码模式签发数据库会话、TOTP 模式密码后 challenge，以及错误密码不创建会话；认证敏感值不写日志的约束由实现审计与专项安全检查共同验证。
 - `AdminOpsServiceLoggingTest` 覆盖 ban/unban 使用统一 numeric operator ID，以及兑换码创建成功/失败日志只使用数据库 ID 或固定占位符，且不记录 bearer code 或异常消息。
 - `SafeLogThrowableTest` 覆盖安全诊断异常只保留类型标识和 stack trace。
 - `MdcTaskDecoratorTest` 覆盖异步任务的 MDC 传播，以及正常和异常结束时的 worker 上下文恢复。

@@ -32,10 +32,10 @@
 - `GET /api/games/{gameId}/rooms` 支持分页和状态过滤，默认只返回等待中房间第一页。
 - `GameService` 使用 `sumSeatCountByGameId` 聚合在线人数，避免按游戏反序列化全部房间座位。
 
-### 运行时内存状态
+### 运行时状态
 
-- 管理员 session 在非 test 环境使用 Redis TTL 存储，支持多实例共享和自动过期。
-- test/无 Redis 构造路径仍可使用内存 Map，并通过定时任务清理过期 token。
+- 管理员 session 统一存入数据库 `admin_sessions`，绑定认证策略、凭据版本、绝对过期与空闲过期时间，支持多实例共享和显式撤销。
+- Redis 只承担管理员登录、TOTP、enrollment、恢复和操作 proof 的多维限流；Redis 或数据库不可用时认证 fail closed。
 - `ChatRateLimiter` 定期清理长时间未发言玩家。
 - `PlayerConnectionService` 定期清理无 session 且长期未活跃的连接状态。
 
@@ -62,7 +62,7 @@
 | `app.ai.stream.max-concurrent-per-user` | 2 | 单用户 SSE 并发上限 |
 | `app.websocket.rate-limit-cleanup-interval-ms` | 300000 | 聊天限流清理周期 |
 | `app.websocket.connection-cleanup-interval-ms` | 300000 | 连接状态清理周期 |
-| `app.admin.session-cleanup-interval-ms` | 300000 | 内存管理员 session 清理周期 |
+| `app.admin.auth-cleanup-interval-ms` | 3600000 | 数据库中过期 challenge、session 与 proof 等认证状态的清理周期 |
 
 ## 验证命令
 

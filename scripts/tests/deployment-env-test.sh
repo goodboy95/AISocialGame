@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+repo_root="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/deployment-env.sh
+source "$repo_root/scripts/lib/deployment-env.sh"
+
+fixture_dir="$(mktemp -d)"
+trap 'rm -rf -- "$fixture_dir"' EXIT
+missing_file="$fixture_dir/missing.env"
+complete_file="$fixture_dir/complete.env"
+
+write_common_fixture() {
+  local target="$1"
+  {
+    printf '%s\n' \
+      'ENV=local' \
+      'AUTH_MODE=totp' \
+      'SPRING_DATASOURCE_PASSWORD=file-database-value' \
+      'SSO_CALLBACK_URL=https://localsocialgame.testhut.top/sso/callback' \
+      'ADMIN_TOTP_ENCRYPTION_KEYS=v1:file-keyring-value' \
+      'ADMIN_TOTP_ACTIVE_KEY_VERSION=v1' \
+      'APP_EXTERNAL_GRPC_AUTH_REQUIRED=true' \
+      'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN=file-user-token' \
+      'APP_EXTERNAL_PAYSERVICE_JWT=file-pay-token' \
+      'APP_EXTERNAL_AISERVICE_HMAC_CALLER=file-caller' \
+      'APP_EXTERNAL_AISERVICE_HMAC_SECRET=file-hmac-value'
+  } > "$target"
+  chmod 600 "$target"
+}
+
+write_common_fixture "$missing_file"
+cp "$missing_file" "$complete_file"
+printf '%s\n' 'APP_ADMIN_PASSWORD_HASH=file-password-hash' >> "$complete_file"
+chmod 600 "$complete_file"
+
+(
+  export ENV=production AUTH_MODE=totp
+  export SPRING_DATASOURCE_PASSWORD=host-database-value
+  export SSO_CALLBACK_URL=https://host.invalid/sso/callback
+  export APP_ADMIN_PASSWORD_HASH=host-password-hash
+  export ADMIN_TOTP_ENCRYPTION_KEYS=v1:host-keyring-value
+  export ADMIN_TOTP_ACTIVE_KEY_VERSION=v1
+  export APP_EXTERNAL_GRPC_AUTH_REQUIRED=true
+  export APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN=host-user-token
+  export APP_EXTERNAL_PAYSERVICE_JWT=host-pay-token
+  export APP_EXTERNAL_AISERVICE_HMAC_CALLER=host-caller
+  export APP_EXTERNAL_AISERVICE_HMAC_SECRET=host-hmac-value
+
+  aisocial_load_runtime_env "$missing_file"
+  if aisocial_require_deployment_env_sources 2>/dev/null; then
+    echo "host-only required value incorrectly satisfied env.local contract" >&2
+    exit 1
+  fi
+  [[ -z "${APP_ADMIN_PASSWORD_HASH+x}" ]]
+)
+
+chmod 644 "$complete_file"
+if aisocial_validate_env_file "$complete_file" 2>/dev/null; then
+  echo "env.local mode check accepted a non-owner-only file" >&2
+  exit 1
+fi
+chmod 600 "$complete_file"
+
+aisocial_load_runtime_env "$complete_file"
+aisocial_require_deployment_env_sources
+[[ "$ENV" == "local" ]]
+[[ "$APP_ADMIN_PASSWORD_HASH" == "file-password-hash" ]]
+
+env -i PATH="$PATH" sh -c '
+  set -eu
+  loader="$1"
+  shift
+  . "$loader"
+  test "$ENV" = local
+  test "$AUTH_MODE" = totp
+  test "$APP_ADMIN_PASSWORD_HASH" = file-password-hash
+  test "$ADMIN_TOTP_ENCRYPTION_KEYS" = v1:file-keyring-value
+  test "$APP_EXTERNAL_AISERVICE_HMAC_SECRET" = file-hmac-value
+' _ "$repo_root/docker/load-env-file.sh" "$complete_file"
+
+echo "deployment env contract tests: PASS"

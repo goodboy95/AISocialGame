@@ -16,57 +16,11 @@ ensure_pnpm() {
   corepack enable >/dev/null 2>&1 || true
 }
 
-load_env_file() {
-  local env_file="$1"
-  if [[ ! -f "$env_file" ]]; then
-    return
-  fi
-
-  step "Load env file: $(basename "$env_file")"
-  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
-    local line="$raw_line"
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
-    if [[ -z "$line" || "$line" == \#* ]]; then
-      continue
-    fi
-
-    if [[ "$line" == export[[:space:]]* ]]; then
-      line="${line#export }"
-      line="${line#"${line%%[![:space:]]*}"}"
-    fi
-
-    if [[ "$line" != *=* ]]; then
-      continue
-    fi
-
-    local name="${line%%=*}"
-    local value="${line#*=}"
-    name="${name%"${name##*[![:space:]]}"}"
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%"${value##*[![:space:]]}"}"
-
-    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      continue
-    fi
-    if [[ ( "$value" == \"*\" && "$value" == *\" ) || ( "$value" == \'*\' && "$value" == *\' ) ]]; then
-      value="${value:1:${#value}-2}"
-    fi
-    export "$name=$value"
-  done < "$env_file"
-}
-
 env_file="$repo_root/env.local"
-if [[ ! -f "$env_file" || -L "$env_file" ]]; then
-  echo "Missing regular env.local file; copy env.example to env.local and populate it before deployment" >&2
-  exit 1
-fi
-env_mode="$(stat -c '%a' "$env_file")"
-if [[ "$env_mode" != "600" ]]; then
-  echo "env.local must have mode 0600 (current mode: $env_mode)" >&2
-  exit 1
-fi
-load_env_file "$env_file"
+# shellcheck source=scripts/lib/deployment-env.sh
+source "$repo_root/scripts/lib/deployment-env.sh"
+step "Load env file: $(basename "$env_file")"
+aisocial_load_runtime_env "$env_file"
 
 export SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:mysql://localbase.testhut.top:23306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
 export SPRING_DATASOURCE_USERNAME="${SPRING_DATASOURCE_USERNAME:-aisocialgame}"
@@ -128,28 +82,7 @@ if [[ "${QDRANT_HOST}" == "http://service.localhut.com" && "${QDRANT_PORT}" == "
   echo "Rewrote legacy QDRANT_HOST/PORT to use http://localbase.testhut.top:26333"
 fi
 
-require_env_vars() {
-  local missing=()
-  for var_name in "$@"; do
-    if [[ -z "${!var_name:-}" ]]; then
-      missing+=("$var_name")
-    fi
-  done
-  if (( ${#missing[@]} > 0 )); then
-    echo "Missing required environment variables: ${missing[*]}" >&2
-    exit 1
-  fi
-}
-
-if [[ "$APP_EXTERNAL_GRPC_AUTH_REQUIRED" == "true" ]]; then
-  require_env_vars \
-    APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN \
-    APP_EXTERNAL_PAYSERVICE_JWT \
-    APP_EXTERNAL_AISERVICE_HMAC_CALLER \
-    APP_EXTERNAL_AISERVICE_HMAC_SECRET
-fi
-
-require_env_vars SPRING_DATASOURCE_PASSWORD ENV AUTH_MODE APP_ADMIN_PASSWORD_HASH
+aisocial_require_deployment_env_sources
 
 case "${ENV}:${AUTH_MODE}" in
   local:password|local:totp|test:totp|production:totp) ;;
@@ -158,10 +91,6 @@ case "${ENV}:${AUTH_MODE}" in
     exit 1
     ;;
 esac
-
-if [[ "$AUTH_MODE" == "totp" ]]; then
-  require_env_vars ADMIN_TOTP_ENCRYPTION_KEYS ADMIN_TOTP_ACTIVE_KEY_VERSION
-fi
 
 case "${APP_ADMIN_COOKIE_SECURE:-true}" in
   true|false) ;;
