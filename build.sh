@@ -146,14 +146,7 @@ wait_for_http() {
 step "Backend: test & package"
 (
   cd backend
-  env -u SPRING_DATASOURCE_URL \
-      -u SPRING_DATASOURCE_USERNAME \
-      -u SPRING_DATASOURCE_PASSWORD \
-      -u SPRING_DATASOURCE_DRIVER_CLASS_NAME \
-      -u SPRING_CONFIG_ADDITIONAL_LOCATION \
-      -u SPRING_CONFIG_IMPORT \
-      -u SPRING_CONFIG_LOCATION \
-      mvn clean test package
+  aisocial_run_backend_test_command mvn clean test package
 )
 
 step "Frontend: install & build"

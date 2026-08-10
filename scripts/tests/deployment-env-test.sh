@@ -18,6 +18,8 @@ write_common_fixture() {
       'ENV=local' \
       'AUTH_MODE=totp' \
       'SPRING_DATASOURCE_PASSWORD=file-database-value' \
+      'SPRING_JPA_HIBERNATE_DDL_AUTO=validate' \
+      'SPRING_PROFILES_ACTIVE=production' \
       'SSO_CALLBACK_URL=https://localsocialgame.testhut.top/sso/callback' \
       'ADMIN_TOTP_ENCRYPTION_KEYS=v1:file-keyring-value' \
       'ADMIN_TOTP_ACTIVE_KEY_VERSION=v1' \
@@ -25,7 +27,8 @@ write_common_fixture() {
       'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN=file-user-token' \
       'APP_EXTERNAL_PAYSERVICE_JWT=file-pay-token' \
       'APP_EXTERNAL_AISERVICE_HMAC_CALLER=file-caller' \
-      'APP_EXTERNAL_AISERVICE_HMAC_SECRET=file-hmac-value'
+      'APP_EXTERNAL_AISERVICE_HMAC_SECRET=file-hmac-value' \
+      'APP_DEMO_SEED_ENABLED=true'
   } > "$target"
   chmod 600 "$target"
 }
@@ -67,6 +70,16 @@ aisocial_load_runtime_env "$complete_file"
 aisocial_require_deployment_env_sources
 [[ "$ENV" == "local" ]]
 [[ "$APP_ADMIN_PASSWORD_HASH" == "file-password-hash" ]]
+[[ "$SPRING_JPA_HIBERNATE_DDL_AUTO" == "validate" ]]
+
+aisocial_run_backend_test_command bash -c '
+  set -euo pipefail
+  for name in "$@"; do
+    [[ ! -v "$name" ]]
+  done
+' _ "${AISOCIAL_BACKEND_TEST_ENV_NAMES[@]}"
+[[ "$SPRING_JPA_HIBERNATE_DDL_AUTO" == "validate" ]]
+[[ "$APP_ADMIN_PASSWORD_HASH" == "file-password-hash" ]]
 
 env -i PATH="$PATH" sh -c '
   set -eu
@@ -76,6 +89,8 @@ env -i PATH="$PATH" sh -c '
   test "$ENV" = local
   test "$AUTH_MODE" = totp
   test "$APP_ADMIN_PASSWORD_HASH" = file-password-hash
+  test "$SPRING_JPA_HIBERNATE_DDL_AUTO" = validate
+  test "$SPRING_PROFILES_ACTIVE" = production
   test "$ADMIN_TOTP_ENCRYPTION_KEYS" = v1:file-keyring-value
   test "$APP_EXTERNAL_AISERVICE_HMAC_SECRET" = file-hmac-value
 ' _ "$repo_root/docker/load-env-file.sh" "$complete_file"
