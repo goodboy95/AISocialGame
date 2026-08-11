@@ -21,7 +21,6 @@
 | gRPC 集成模块 | 管理 user/pay/ai 静态地址、当前 proto 契约、鉴权拦截器和本地项目钱包边界 | `backend/src/main/java/com/aisocialgame/integration/*`、`doc/modules/grpc-integration-module.md` |
 | 第三方组件对齐模块 | 记录 MySQL/Redis/Qdrant 外部依赖对接与配置策略 | `doc/modules/third-party-components.md`、`backend/src/main/resources/application.yml`、`env.example`、`build.sh` |
 | 安全加固模块 | 记录 v1.0 审计后的登录边界、房间权限、WS/CORS、AI 接口与运行配置加固 | `doc/modules/security-hardening-module.md`、`backend/src/main/java/com/aisocialgame/config/*` |
-| 可维护性整改模块 | 记录 v1.0 审计后的鉴权参数解析、房间页复用、账务账本拆分和 DTO 校验边界 | `doc/versions/v1.0/audit/maintainability-remediation.md`、`backend/src/main/java/com/aisocialgame/web/*` |
 
 ## 后续里程碑
 
