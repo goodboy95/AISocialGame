@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,17 +25,18 @@ export function AiSeatControl({
   canAddAi,
   onAddAi,
 }: AiSeatControlProps) {
+  const { t } = useTranslation();
   return (
     <Card className="space-y-3 p-3">
       <div className="flex items-center justify-between text-sm">
-        <span>添加 AI 补位</span>
+        <span>{t("game.aiSeatTitle")}</span>
         <Badge data-testid="game-ai-seat-count">
           {seatCount}/{maxPlayers}
         </Badge>
       </div>
       <Select value={selectedAiId} onValueChange={onSelectedAiIdChange}>
         <SelectTrigger>
-          <SelectValue placeholder="选择 AI 人设" />
+          <SelectValue placeholder={t("game.aiPlaceholder")} />
         </SelectTrigger>
         <SelectContent>
           {personas.map((ai) => (
@@ -45,7 +47,7 @@ export function AiSeatControl({
         </SelectContent>
       </Select>
       <Button data-testid="game-add-ai-btn" variant="secondary" onClick={onAddAi} disabled={!canAddAi}>
-        <Bot className="mr-2 h-4 w-4" /> 添加 AI
+        <Bot className="mr-2 h-4 w-4" /> {t("game.addAi")}
       </Button>
     </Card>
   );

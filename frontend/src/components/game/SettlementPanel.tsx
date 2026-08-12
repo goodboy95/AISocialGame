@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { FriendItem, GameState } from "@/types";
 import { friendApi } from "@/services/v2Social";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
+import { gameName } from "@/i18n/gameTexts";
 
 interface SettlementPanelProps {
   gameId?: string;
@@ -15,18 +17,22 @@ interface SettlementPanelProps {
 }
 
 export const SettlementPanel = ({ gameId, state, userKey }: SettlementPanelProps) => {
+  const { t } = useTranslation();
   const cards = useMemo(() => state.players || [], [state.players]);
 
   return (
     <Card data-testid="game-settlement-panel" className="space-y-4 border-purple-200 bg-gradient-to-br from-violet-50 via-slate-50 to-amber-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-lg font-semibold">结算揭秘</h3>
+          <h3 className="text-lg font-semibold">{t("settle.title")}</h3>
           <p className="text-sm text-muted-foreground">
-            {gameId} 对局结束，获胜方：{state.winner || "未判定"}
+            {t("settle.summary", {
+              game: gameName(gameId, gameId || ""),
+              winner: state.winner || t("common.undetermined"),
+            })}
           </p>
         </div>
-        <Badge className="bg-purple-600">{state.winner || "结算中"}</Badge>
+        <Badge className="bg-purple-600">{state.winner || t("settle.settling")}</Badge>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -39,9 +45,9 @@ export const SettlementPanel = ({ gameId, state, userKey }: SettlementPanelProps
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{player.displayName}</div>
-                <div className="text-xs text-muted-foreground">座位 {player.seatNumber + 1}</div>
+                <div className="text-xs text-muted-foreground">{t("game.seat", { seat: player.seatNumber + 1 })}</div>
               </div>
-              <Badge variant={player.alive ? "secondary" : "destructive"}>{player.alive ? "存活" : "出局"}</Badge>
+              <Badge variant={player.alive ? "secondary" : "destructive"}>{player.alive ? t("settle.alive") : t("game.out")}</Badge>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
               {player.role && <Badge variant="outline">{player.role}</Badge>}
@@ -60,11 +66,11 @@ export const SettlementPanel = ({ gameId, state, userKey }: SettlementPanelProps
                     online: false,
                   };
                   friendApi.sendFriendRequest(userKey, target);
-                  toast.success(`已向 ${player.displayName} 发送好友请求`);
+                  toast.success(t("settle.friendSent", { name: player.displayName }));
                 }}
               >
                 <UserPlus className="mr-1 h-3 w-3" />
-                加好友
+                {t("settle.addFriend")}
               </Button>
             )}
           </div>

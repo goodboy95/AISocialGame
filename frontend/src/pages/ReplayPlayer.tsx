@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { replayApi } from "@/services/v2Social";
 import { serverReplayApi } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +12,7 @@ import { Pause, Play, Shield, SkipForward } from "lucide-react";
 import { ReplayViewMode } from "@/types";
 
 const ReplayPlayer = () => {
+  const { t } = useTranslation();
   const { archiveId } = useParams();
   const { user, displayName } = useAuth();
   const userKey = useMemo(() => user?.id || `guest:${displayName}`, [user?.id, displayName]);
@@ -31,7 +33,7 @@ const ReplayPlayer = () => {
         gameId: serverArchive.gameId,
         roomId: serverArchive.roomId,
         roomName: serverArchive.roomName,
-        result: serverArchive.winner || "未判定",
+        result: serverArchive.winner || t("common.undetermined"),
         createdAt: serverArchive.finishedAt || serverArchive.createdAt || new Date().toISOString(),
         events: serverEvents.map((event) => ({
           id: String(event.id),
@@ -73,7 +75,7 @@ const ReplayPlayer = () => {
     return (
       <Card className="mx-auto max-w-3xl">
         <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          {serverReplay.isLoading ? "正在读取服务端回放..." : "未找到回放数据，请先在“对局回放”列表中选择存档。"}
+          {serverReplay.isLoading ? t("replays.loading") : t("replay.notFound")}
         </CardContent>
       </Card>
     );
@@ -90,8 +92,8 @@ const ReplayPlayer = () => {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{archive.gameId}</Badge>
-            <Badge variant="outline">结果: {archive.result}</Badge>
-            {usingServer && <Badge variant="outline">服务端回放</Badge>}
+            <Badge variant="outline">{t("replays.result", { result: archive.result })}</Badge>
+            {usingServer && <Badge variant="outline">{t("replays.serverArchive")}</Badge>}
             <Badge variant="outline">
               {index + 1}/{Math.max(archive.events.length, 1)}
             </Badge>
@@ -100,11 +102,11 @@ const ReplayPlayer = () => {
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Shield className="h-4 w-4" />
-                视角
+                {t("replay.view")}
               </span>
               {(["PUBLIC", "PLAYER", "GOD"] as ReplayViewMode[]).map((mode) => (
                 <Button key={mode} size="sm" variant={viewMode === mode ? "default" : "outline"} onClick={() => setViewMode(mode)}>
-                  {mode}
+                  {t(`replay.view.${mode}`)}
                 </Button>
               ))}
             </div>
@@ -116,7 +118,7 @@ const ReplayPlayer = () => {
               {currentEvent?.phase && <Badge variant="secondary">{currentEvent.phase}</Badge>}
               {currentEvent?.type && <Badge variant="outline">{currentEvent.type}</Badge>}
             </div>
-            <div className="text-base font-medium">{currentEvent?.message || "暂无事件"}</div>
+            <div className="text-base font-medium">{currentEvent?.message || t("replay.noEvent")}</div>
             {currentEvent?.data?.aiTraceId && (
               <div className="mt-2 text-xs text-muted-foreground">
                 AI Trace #{currentEvent.data.aiTraceId}
@@ -135,14 +137,14 @@ const ReplayPlayer = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setPlaying((v) => !v)} disabled={archive.events.length === 0}>
               {playing ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-              {playing ? "暂停" : "播放"}
+              {playing ? t("replay.pause") : t("replay.play")}
             </Button>
             <Button variant="outline" onClick={() => setIndex((prev) => Math.min(prev + 1, archive.events.length - 1))}>
               <SkipForward className="mr-2 h-4 w-4" />
-              单步
+              {t("replay.step")}
             </Button>
             <div className="ml-auto flex items-center gap-2 text-sm">
-              <span>速度</span>
+              <span>{t("replay.speed")}</span>
               <Button size="sm" variant={speed === 1 ? "default" : "outline"} onClick={() => setSpeed(1)}>
                 1x
               </Button>
@@ -159,7 +161,7 @@ const ReplayPlayer = () => {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">事件时间线</CardTitle>
+          <CardTitle className="text-base">{t("replay.timeline")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {archive.events.map((event, eventIndex) => (

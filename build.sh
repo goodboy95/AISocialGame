@@ -157,13 +157,16 @@ step "Frontend: install & build"
   pnpm build
 )
 
-step "Docker compose pull & restart"
+step "Docker compose build, pull & restart"
 COMPOSE="$(docker_compose_cmd)"
 echo "Using external services: datasource=${SPRING_DATASOURCE_URL} redis=${SPRING_DATA_REDIS_HOST}:${SPRING_DATA_REDIS_PORT} qdrant=${QDRANT_HOST}:${QDRANT_PORT}"
 echo "External domains: USER=${USER_SERVICE_BASE_URL} PAY=${PAY_SERVICE_BASE_URL} AI=${AI_SERVICE_BASE_URL}"
 echo "gRPC targets: user=${USER_GRPC_ADDR} billing=${BILLING_GRPC_ADDR} ai=${AI_GRPC_ADDR}"
 $COMPOSE down -v || true
 $COMPOSE pull
+# frontend 镜像必须在每次部署时用最新 pnpm build 产物重建，
+# 否则 up -d 会复用旧镜像导致线上仍是过期构建
+$COMPOSE build frontend
 $COMPOSE up -d
 
 step "Wait for services"

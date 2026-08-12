@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { friendApi } from "@/services/v2Social";
 import { FriendItem, FriendRequestItem } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,6 +19,7 @@ interface FriendPanelProps {
 }
 
 export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState("");
   const [friends, setFriends] = useState<FriendItem[]>([]);
@@ -43,17 +45,17 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
         <SheetHeader className="border-b px-4 py-3 text-left">
           <SheetTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            好友
+            {t("friend.title")}
           </SheetTitle>
-          <SheetDescription>管理好友关系、处理好友请求，并可一键邀请或观战。</SheetDescription>
+          <SheetDescription>{t("friend.desc")}</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4 p-4">
           <div className="space-y-2">
-            <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索可添加用户..." />
+            <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={t("friend.searchPlaceholder")} />
             {keyword.trim() && (
               <div className="space-y-2 rounded-lg border bg-slate-50 p-2">
-                {candidates.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">没有可添加结果</div>}
+                {candidates.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">{t("friend.noResults")}</div>}
                 {candidates.map((candidate) => (
                   <div key={candidate.id} className="flex items-center justify-between rounded-md bg-white px-2 py-2">
                     <div className="flex items-center gap-2">
@@ -70,12 +72,12 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                       size="sm"
                       onClick={() => {
                         friendApi.sendFriendRequest(userKey, candidate);
-                        toast.success(`已发送好友请求给 ${candidate.displayName}`);
+                        toast.success(t("friend.requestSent", { name: candidate.displayName }));
                         refresh();
                       }}
                     >
                       <Plus className="mr-1 h-3 w-3" />
-                      添加
+                      {t("friend.add")}
                     </Button>
                   </div>
                 ))}
@@ -85,17 +87,17 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
 
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">好友请求</h3>
+              <h3 className="text-sm font-semibold">{t("friend.requests")}</h3>
               <Badge variant="secondary">{requests.length}</Badge>
             </div>
             <ScrollArea className="h-[140px] rounded-md border p-2">
               <div className="space-y-2">
-                {requests.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">暂无待处理请求</div>}
+                {requests.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">{t("friend.noRequests")}</div>}
                 {requests.map((request) => (
                   <div key={request.id} className="space-y-2 rounded-md border bg-white p-2">
                     <div className="text-sm">
                       <span className="font-medium">{request.fromName}</span>
-                      <span className="text-muted-foreground"> 请求添加你为好友</span>
+                      <span className="text-muted-foreground">{t("friend.requestsYou")}</span>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -103,11 +105,11 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                         className="flex-1"
                         onClick={() => {
                           friendApi.respondRequest(userKey, request.id, true);
-                          toast.success("已通过好友请求");
+                          toast.success(t("friend.accepted"));
                           refresh();
                         }}
                       >
-                        通过
+                        {t("friend.accept")}
                       </Button>
                       <Button
                         size="sm"
@@ -115,11 +117,11 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                         className="flex-1"
                         onClick={() => {
                           friendApi.respondRequest(userKey, request.id, false);
-                          toast("已忽略该请求");
+                          toast(t("friend.ignored"));
                           refresh();
                         }}
                       >
-                        忽略
+                        {t("friend.ignore")}
                       </Button>
                     </div>
                   </div>
@@ -130,12 +132,12 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
 
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">我的好友</h3>
+              <h3 className="text-sm font-semibold">{t("friend.myFriends")}</h3>
               <Badge variant="outline">{friends.length}</Badge>
             </div>
             <ScrollArea className="h-[280px] rounded-md border p-2">
               <div className="space-y-2">
-                {friends.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">尚未添加好友</div>}
+                {friends.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">{t("friend.noFriends")}</div>}
                 {friends.map((friend) => (
                   <div key={friend.id} className="space-y-2 rounded-md border bg-white p-2">
                     <div className="flex items-center justify-between">
@@ -146,19 +148,19 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                         </Avatar>
                         <div>
                           <div className="text-sm font-medium">{friend.displayName}</div>
-                          <div className="text-xs text-muted-foreground">{friend.online ? "在线" : "离线"}</div>
+                          <div className="text-xs text-muted-foreground">{friend.online ? t("friend.online") : t("friend.offline")}</div>
                         </div>
                       </div>
-                      <Badge variant={friend.online ? "default" : "secondary"}>{friend.online ? "在线" : "离线"}</Badge>
+                      <Badge variant={friend.online ? "default" : "secondary"}>{friend.online ? t("friend.online") : t("friend.offline")}</Badge>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
                         className="flex-1"
-                        onClick={() => toast.success(`已向 ${friend.displayName} 发送房间邀请`)}
+                        onClick={() => toast.success(t("friend.invited", { name: friend.displayName }))}
                       >
-                        邀请
+                        {t("friend.invite")}
                       </Button>
                       <Button
                         size="sm"
@@ -172,7 +174,7 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                         }}
                       >
                         <Eye className="mr-1 h-3 w-3" />
-                        观战
+                        {t("friend.spectate")}
                       </Button>
                       <Button
                         size="sm"
@@ -180,7 +182,7 @@ export const FriendPanel = ({ open, onOpenChange, userKey }: FriendPanelProps) =
                         className="px-2"
                         onClick={() => {
                           friendApi.removeFriend(userKey, friend.id);
-                          toast("已删除好友");
+                          toast(t("friend.removed"));
                           refresh();
                         }}
                       >

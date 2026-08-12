@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { LoaderCircle } from "lucide-react";
 import { LOCAL_SSO_STATE_KEY, LOCAL_TOKEN_KEY, useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { localizeErrorMessage } from "@/i18n/errors";
 
 const SsoCallback = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { ssoCallback } = useAuth();
   const processedRef = useRef(false);
@@ -31,13 +34,13 @@ const SsoCallback = () => {
     }
 
     if (!expectedState || !state || expectedState !== state) {
-      toast.error("SSO 状态校验失败，请重新登录");
+      toast.error(t("sso.stateFailed"));
       navigate("/", { replace: true });
       return;
     }
 
     if (!code) {
-      toast.error("SSO 回调参数不完整，请重新登录");
+      toast.error(t("sso.incomplete"));
       navigate("/", { replace: true });
       return;
     }
@@ -55,17 +58,17 @@ const SsoCallback = () => {
         navigate("/", { replace: true });
       })
       .catch((error: any) => {
-        const message = error?.response?.data?.message || "登录失败，请重试";
-        toast.error(message);
+        const raw = error?.response?.data?.message || t("sso.loginFailed");
+        toast.error(localizeErrorMessage(raw, "sso.loginFailed"));
         navigate("/", { replace: true });
       });
-  }, [navigate, ssoCallback]);
+  }, [navigate, ssoCallback, t]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="rounded-xl border bg-white px-8 py-6 shadow-sm flex items-center gap-3 text-slate-700">
         <LoaderCircle className="h-5 w-5 animate-spin" />
-        <span>SSO 登录处理中...</span>
+        <span>{t("sso.processing")}</span>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -8,6 +9,7 @@ interface TutorialOverlayProps {
 }
 
 export const TutorialOverlay = ({ id, steps }: TutorialOverlayProps) => {
+  const { t } = useTranslation();
   const key = useMemo(() => `aisocial_tutorial_${id}`, [id]);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -29,7 +31,7 @@ export const TutorialOverlay = ({ id, steps }: TutorialOverlayProps) => {
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-4 md:items-center">
       <Card className="w-full max-w-lg space-y-4 p-4">
         <div className="text-xs text-muted-foreground">
-          新手引导 {index + 1}/{steps.length}
+          {t("tutorial.title", { current: index + 1, total: steps.length })}
         </div>
         <div className="text-sm">{steps[index]}</div>
         <div className="flex justify-end gap-2">
@@ -40,7 +42,7 @@ export const TutorialOverlay = ({ id, steps }: TutorialOverlayProps) => {
               setOpen(false);
             }}
           >
-            跳过
+            {t("tutorial.skip")}
           </Button>
           <Button
             onClick={() => {
@@ -52,7 +54,7 @@ export const TutorialOverlay = ({ id, steps }: TutorialOverlayProps) => {
               }
             }}
           >
-            {isLast ? "完成" : "下一步"}
+            {isLast ? t("tutorial.done") : t("tutorial.next")}
           </Button>
         </div>
       </Card>

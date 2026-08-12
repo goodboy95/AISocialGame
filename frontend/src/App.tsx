@@ -5,23 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { AdminAuthProvider } from "./hooks/useAdminAuth";
-import MainLayout from "./components/layout/MainLayout";
 import AdminLayout from "./components/layout/AdminLayout";
-import Index from "./pages/Index";
-import CreateRoom from "./pages/CreateRoom";
-import RoomList from "./pages/RoomList";
-import Lobby from "./pages/Lobby";
-import Profile from "./pages/Profile";
-import Community from "./pages/Community";
-import AiChat from "./pages/AiChat";
-import Rankings from "./pages/Rankings";
-import NotFound from "./pages/NotFound";
-import SsoCallback from "./pages/SsoCallback";
-import Achievements from "./pages/Achievements";
-import Replays from "./pages/Replays";
-import ReplayPlayer from "./pages/ReplayPlayer";
-import Guide from "./pages/Guide";
-import SpectatorRoom from "./pages/SpectatorRoom";
+import AdminNotFound from "./pages/admin/AdminNotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import Dashboard from "./pages/admin/Dashboard";
 import UserAdmin from "./pages/admin/UserAdmin";
@@ -30,6 +15,10 @@ import AiAdmin from "./pages/admin/AiAdmin";
 import SafetyAdmin from "./pages/admin/SafetyAdmin";
 import IntegrationAdmin from "./pages/admin/IntegrationAdmin";
 
+/**
+ * Admin 入口（默认导出）：维持原有简中流程，
+ * 不得 import 任何 i18n 模块/locale，由 main.tsx 按路径精确分支加载。
+ */
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -41,26 +30,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              {/* SSO callback */}
-              <Route path="/sso/callback" element={<SsoCallback />} />
               <Route path="/admin/login" element={<AdminLogin />} />
-
-              {/* Main App Routes */}
-              <Route element={<MainLayout />}>
-                <Route path="/" element={<Index />} />
-                <Route path="/game/:gameId" element={<RoomList />} />
-                <Route path="/create/:gameId" element={<CreateRoom />} />
-                <Route path="/room/:gameId/:roomId" element={<Lobby />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/community" element={<Community />} />
-                <Route path="/ai-chat" element={<AiChat />} />
-                <Route path="/rankings" element={<Rankings />} />
-                <Route path="/achievements" element={<Achievements />} />
-                <Route path="/replays" element={<Replays />} />
-                <Route path="/replay/:archiveId" element={<ReplayPlayer />} />
-                <Route path="/guide" element={<Guide />} />
-                <Route path="/spectate/:gameId/:roomId" element={<SpectatorRoom />} />
-              </Route>
 
               {/* Admin Routes */}
               <Route element={<AdminLayout />}>
@@ -72,8 +42,8 @@ const App = () => (
                 <Route path="/admin/integration" element={<IntegrationAdmin />} />
               </Route>
 
-              {/* 404 */}
-              <Route path="*" element={<NotFound />} />
+              {/* 404（admin 专属，不加载 i18n） */}
+              <Route path="*" element={<AdminNotFound />} />
             </Routes>
           </BrowserRouter>
         </TooltipProvider>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { achievementApi } from "@/services/v2Social";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +14,7 @@ const rarityClass: Record<string, string> = {
 };
 
 const Achievements = () => {
+  const { t } = useTranslation();
   const { user, displayName } = useAuth();
   const userKey = useMemo(() => user?.id || `guest:${displayName}`, [user?.id, displayName]);
   const defs = achievementApi.listDefinitions();
@@ -30,8 +32,8 @@ const Achievements = () => {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">成就中心</h1>
-        <p className="text-sm text-muted-foreground">完成对局和关键目标即可解锁徽章并领取金币奖励。</p>
+        <h1 className="text-2xl font-bold">{t("achievements.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("achievements.subtitle")}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -44,7 +46,7 @@ const Achievements = () => {
                   {item.name}
                 </CardTitle>
                 <Badge variant="outline" className={rarityClass[item.rarity]}>
-                  {item.rarity}
+                  {t(`achievements.rarity.${item.rarity}`, { defaultValue: item.rarity })}
                 </Badge>
               </div>
             </CardHeader>
@@ -53,9 +55,9 @@ const Achievements = () => {
               <Progress value={Math.min(100, (item.progress / item.target) * 100)} />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  进度 {item.progress}/{item.target}
+                  {t("achievements.progress", { progress: item.progress, target: item.target })}
                 </span>
-                <span>奖励 {item.rewardCoins} 金币</span>
+                <span>{t("achievements.reward", { count: item.rewardCoins })}</span>
               </div>
             </CardContent>
           </Card>

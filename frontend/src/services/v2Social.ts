@@ -1,4 +1,6 @@
 import { gameplayApi, gameApi, personaApi, roomApi } from "@/services/api";
+import i18n from "@/i18n/config";
+import { gameName } from "@/i18n/gameTexts";
 import {
   AchievementDefinition,
   FriendItem,
@@ -57,12 +59,29 @@ const ensureFriendBucket = (store: FriendStore, userKey: string) => {
   return store[userKey];
 };
 
+/**
+ * 稳定 code → t key 映射：mock 成就展示文案随当前语言渲染（调用时取翻译）。
+ * name/description 为展示文案（用户可见），code 为持久化标识，不翻译。
+ */
+const ACHIEVEMENT_DEF_KEYS: Record<string, { name: string; desc: string }> = {
+  first_game: { name: "v2.achievement.first_game.name", desc: "v2.achievement.first_game.desc" },
+  ten_games: { name: "v2.achievement.ten_games.name", desc: "v2.achievement.ten_games.desc" },
+  first_win: { name: "v2.achievement.first_win.name", desc: "v2.achievement.first_win.desc" },
+  win_streak_3: { name: "v2.achievement.win_streak_3.name", desc: "v2.achievement.win_streak_3.desc" },
+};
+
 const definitions: AchievementDefinition[] = [
   { code: "first_game", name: "初出茅庐", description: "完成 1 局对战", rarity: "COMMON", rewardCoins: 20, target: 1 },
   { code: "ten_games", name: "久经沙场", description: "累计完成 10 局对战", rarity: "RARE", rewardCoins: 80, target: 10 },
   { code: "first_win", name: "首胜", description: "拿下第一场胜利", rarity: "COMMON", rewardCoins: 30, target: 1 },
   { code: "win_streak_3", name: "连胜节奏", description: "达成 3 连胜", rarity: "EPIC", rewardCoins: 120, target: 3 },
 ];
+
+const translateDefinition = (def: AchievementDefinition): AchievementDefinition => {
+  const keys = ACHIEVEMENT_DEF_KEYS[def.code];
+  if (!keys) return def;
+  return { ...def, name: i18n.t(keys.name), description: i18n.t(keys.desc) };
+};
 
 const ensureAchievementBucket = (store: AchievementState, userKey: string) => {
   if (!store[userKey]) {
@@ -165,7 +184,7 @@ export const friendApi = {
 
 export const achievementApi = {
   listDefinitions(): AchievementDefinition[] {
-    return definitions;
+    return definitions.map(translateDefinition);
   },
 
   listMyAchievements(userKey: string): PlayerAchievement[] {
@@ -238,8 +257,8 @@ export const replayApi = {
       id: `archive-${state.roomId}-${state.round || 0}-${(state.logs || []).length}`,
       gameId,
       roomId: state.roomId,
-      roomName: room?.name || `房间 ${state.roomId}`,
-      result: state.winner || "未判定",
+      roomName: room?.name || i18n.t("v2.replay.roomName", { id: state.roomId }),
+      result: state.winner || i18n.t("common.undetermined"),
       perspective: "PLAYER",
       createdAt: new Date().toISOString(),
       events,
@@ -256,7 +275,10 @@ export const quickMatchApi = {
     if (!room) {
       const config = Object.fromEntries((game.configSchema || []).map((field) => [field.id, field.defaultValue]));
       room = await roomApi.create(gameId, {
-        roomName: `[快速匹配] ${game.name} #${Math.floor(Math.random() * 1000)}`,
+        roomName: i18n.t("v2.quickMatch.roomName", {
+          name: gameName(game.id, game.name),
+          seq: Math.floor(Math.random() * 1000),
+        }),
         isPrivate: false,
         commMode: "text",
         config,

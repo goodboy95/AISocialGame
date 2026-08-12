@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BookOpen, HelpCircle, Lightbulb, Play, Send, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ const qaList = (value: unknown): QaItem[] => {
 };
 
 const TurtleSoupRoom = () => {
+  const { t } = useTranslation();
   const runtime = useRoomRuntime({ defaultGameId: "turtle_soup" });
   const {
     gameId,
@@ -72,7 +74,7 @@ const TurtleSoupRoom = () => {
   const questionCount = Number(extra.questionCount || 0);
   const maxQuestions = Number(extra.maxQuestions || 0);
   const surface = typeof extra.surface === "string" ? extra.surface : "";
-  const caseTitle = typeof extra.caseTitle === "string" ? extra.caseTitle : "海龟汤";
+  const caseTitle = typeof extra.caseTitle === "string" ? extra.caseTitle : t("games.turtle_soup.name");
   const hostVerdict = typeof extra.hostVerdict === "string" ? extra.hostVerdict : "";
   const revealedSolution = typeof extra.solution === "string" ? extra.solution : "";
 
@@ -82,7 +84,7 @@ const TurtleSoupRoom = () => {
       setQuestion("");
       invalidateRuntime();
     },
-    onError: (error: unknown) => handleActionError(error, "提问失败"),
+    onError: (error: unknown) => handleActionError(error, "game.askFailed"),
   });
 
   const solutionMutation = useMutation({
@@ -90,10 +92,16 @@ const TurtleSoupRoom = () => {
     onSuccess: () => {
       invalidateRuntime();
     },
-    onError: (error: unknown) => handleActionError(error, "提交解答失败"),
+    onError: (error: unknown) => handleActionError(error, "game.solutionFailed"),
   });
 
-  const phaseText = `阶段：${phase}${state?.round ? ` • 第${state.round}局` : ""}${maxQuestions ? ` • ${questionCount}/${maxQuestions} 问` : ""}`;
+  const phaseText = [
+    t("game.phaseText.prefix", { phase }),
+    state?.round ? t("game.phaseText.game", { round: state.round }) : "",
+    maxQuestions ? t("game.phaseText.questions", { current: questionCount, max: maxQuestions }) : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
   const canAsk = phase === "QUESTIONING" && question.trim().length > 0;
   const canSubmitSolution = phase === "QUESTIONING" && solution.trim().length > 0;
 
@@ -106,8 +114,8 @@ const TurtleSoupRoom = () => {
       phase={phase}
       showTransition={showTransition}
       tutorialId={`room-${gameId}`}
-      tutorialSteps={["阅读汤面后用是/否问题缩小范围。", "AI 玩家会在开启辅助时自动补充追问。", "确认汤底后提交最终解答，结算页会揭示完整真相。"]}
-      title={room?.name || "海龟汤房间"}
+      tutorialSteps={["game.tutorial.turtle_soup.0", "game.tutorial.turtle_soup.1", "game.tutorial.turtle_soup.2"].map((key) => t(key))}
+      title={room?.name || t("game.turtleTitle")}
       phaseText={phaseText}
       phaseEndsAt={state?.phaseEndsAt}
       aliveCount={alivePlayers.length}
@@ -118,7 +126,7 @@ const TurtleSoupRoom = () => {
       onSendChat={(type, content) => {
         const sent = socket.sendChat(type, content);
         if (!sent) {
-          toast.error("聊天发送失败，连接未就绪");
+          toast.error(t("game.chat.sendFailed"));
         }
       }}
     >
@@ -127,20 +135,20 @@ const TurtleSoupRoom = () => {
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-xs text-muted-foreground">本局题目</div>
+                <div className="text-xs text-muted-foreground">{t("game.currentCase")}</div>
                 <h3 className="text-xl font-semibold">{caseTitle}</h3>
               </div>
               <Badge variant={phase === "SETTLEMENT" ? "secondary" : "outline"}>{phase}</Badge>
             </div>
             <p className="mt-3 rounded-md border bg-slate-50 p-3 text-sm leading-6 text-slate-700">
-              {surface || "等待房主开局后展示汤面。"}
+              {surface || t("game.waitSurface")}
             </p>
           </Card>
 
           <Card className="p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Lightbulb className="h-4 w-4 text-amber-500" />
-              已确认线索
+              {t("game.confirmedClues")}
             </div>
             {knownClues.length ? (
               <div className="flex flex-wrap gap-2">
@@ -151,26 +159,26 @@ const TurtleSoupRoom = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground">还没有确认线索，先向 AI 主持提一个是/否问题。</div>
+              <div className="text-sm text-muted-foreground">{t("game.noClues")}</div>
             )}
           </Card>
 
           <Card className="p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <HelpCircle className="h-4 w-4 text-blue-500" />
-              问答历史
+              {t("game.qaHistory")}
             </div>
             <div className="space-y-2">
               {qaHistory.map((item, index) => (
                 <div key={`${index}-${item.question}`} className="rounded-md border bg-white p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={item.aiGenerated ? "secondary" : "outline"}>{item.aiGenerated ? "AI 玩家" : "玩家"}</Badge>
+                    <Badge variant={item.aiGenerated ? "secondary" : "outline"}>{item.aiGenerated ? t("game.aiPlayer") : t("game.player")}</Badge>
                     <span className="font-medium">{item.question}</span>
                   </div>
-                  <div className="mt-2 text-slate-700">主持：{item.answer}</div>
+                  <div className="mt-2 text-slate-700">{t("game.hostReply", { answer: item.answer })}</div>
                 </div>
               ))}
-              {!qaHistory.length && <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">暂无问答。</div>}
+              {!qaHistory.length && <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">{t("game.noQa")}</div>}
             </div>
           </Card>
 
@@ -178,15 +186,15 @@ const TurtleSoupRoom = () => {
             <Card className="space-y-3 p-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Trophy className="h-4 w-4 text-emerald-500" />
-                汤底揭示
+                {t("game.solutionTitle")}
               </div>
-              <p className="rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-900">{revealedSolution || "暂无汤底"}</p>
+              <p className="rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-900">{revealedSolution || t("game.noSolution")}</p>
               {hostVerdict && <p className="text-sm text-muted-foreground">{hostVerdict}</p>}
               <SettlementPanel gameId={gameId} state={state} userKey={userKey} />
             </Card>
           )}
 
-          <GameLogPanel logs={state?.logs} emptyText="暂无日志，等待开局或提问。" />
+          <GameLogPanel logs={state?.logs} emptyText={t("game.logEmpty.turtle")} />
         </div>
 
         <div className="space-y-4">
@@ -204,26 +212,26 @@ const TurtleSoupRoom = () => {
           <Card className="space-y-3 p-4">
             {phase === "WAITING" && (
               <>
-                <p className="text-sm text-muted-foreground">房主开局后 AI 主持会展示汤面。</p>
+                <p className="text-sm text-muted-foreground">{t("game.waitSurfaceHost")}</p>
                 <Button data-testid="game-start-btn" onClick={startGame} disabled={startMutation.isPending} className="w-full">
-                  <Play className="mr-2 h-4 w-4" /> 开始游戏
+                  <Play className="mr-2 h-4 w-4" /> {t("lobby.startGame")}
                 </Button>
               </>
             )}
             {phase === "QUESTIONING" && (
               <>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">向主持提问</div>
-                  <Textarea data-testid="turtle-question-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="例如：她上车前是否已经遇难？" />
+                  <div className="text-sm font-medium">{t("game.askHost")}</div>
+                  <Textarea data-testid="turtle-question-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={t("game.questionPlaceholder")} />
                   <Button data-testid="turtle-question-submit-btn" className="w-full" disabled={!canAsk || askMutation.isPending} onClick={() => askMutation.mutate()}>
-                    <Send className="mr-2 h-4 w-4" /> 提问
+                    <Send className="mr-2 h-4 w-4" /> {t("game.ask")}
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">提交最终解答</div>
-                  <Textarea data-testid="turtle-solution-input" value={solution} onChange={(event) => setSolution(event.target.value)} placeholder="整理你的汤底推理" />
+                  <div className="text-sm font-medium">{t("game.submitSolutionTitle")}</div>
+                  <Textarea data-testid="turtle-solution-input" value={solution} onChange={(event) => setSolution(event.target.value)} placeholder={t("game.solutionPlaceholder")} />
                   <Button data-testid="turtle-solution-submit-btn" variant="secondary" className="w-full" disabled={!canSubmitSolution || solutionMutation.isPending} onClick={() => solutionMutation.mutate()}>
-                    提交解答
+                    {t("game.submitSolution")}
                   </Button>
                 </div>
               </>

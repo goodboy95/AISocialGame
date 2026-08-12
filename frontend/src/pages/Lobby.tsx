@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import { RoomSeat } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
 const Lobby = () => {
+  const { t } = useTranslation();
   const { roomId, gameId } = useParams();
   const { displayName, user, redirectToSsoLogin } = useAuth();
 
@@ -35,7 +37,7 @@ const Lobby = () => {
   const GameRoomComponent = gameId ? gameRoomComponents[gameId] : undefined;
   if (GameRoomComponent) {
     return (
-      <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">正在加载房间...</div>}>
+      <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">{t("lobby.loadingRoom")}</div>}>
         <GameRoomComponent />
       </Suspense>
     );
@@ -47,24 +49,24 @@ const Lobby = () => {
 
   const joinMutation = useMutation({
     mutationFn: (name: string) => {
-      const password = room?.isPrivate ? window.prompt("请输入私密房间密码") || undefined : undefined;
+      const password = room?.isPrivate ? window.prompt(t("lobby.enterPrivatePassword")) || undefined : undefined;
       return roomApi.join(gameId || "", roomId || "", name, password);
     },
     onSuccess: (data) => {
       setSeats(data.seats || []);
       refetch();
     },
-    onError: () => toast.error("加入房间失败"),
+    onError: () => toast.error(t("lobby.joinFailed")),
   });
 
   const aiMutation = useMutation({
     mutationFn: (personaId: string) => roomApi.addAi(gameId || "", roomId || "", personaId),
     onSuccess: (data) => {
       setSeats(data.seats || []);
-      toast.success("AI 已入座");
+      toast.success(t("lobby.aiSeated"));
       refetch();
     },
-    onError: () => toast.error("添加 AI 失败"),
+    onError: () => toast.error(t("lobby.addAiFailed")),
   });
 
   useEffect(() => {
@@ -104,13 +106,13 @@ const Lobby = () => {
             </Avatar>
             {player.ai && (
               <Badge className={`absolute -bottom-2 -right-2 bg-blue-600 hover:bg-blue-700 ${compact ? 'px-1 py-0 text-[10px]' : ''}`}>
-                <Bot className={`${compact ? 'h-2 w-2' : 'h-3 w-3'} mr-1`} /> {compact ? 'AI' : '陪玩'}
+                <Bot className={`${compact ? 'h-2 w-2' : 'h-3 w-3'} mr-1`} /> {compact ? 'AI' : t('lobby.companion')}
               </Badge>
             )}
           </div>
           <div className={`mt-2 text-center ${compact ? 'px-1' : 'mt-4'}`}>
             <div className={`font-bold truncate ${compact ? 'text-xs max-w-[80px]' : 'max-w-[120px]'}`}>{player.displayName}</div>
-            {player.ai && !compact && <div className="text-xs text-muted-foreground">{player.trait || "智能陪玩"}</div>}
+            {player.ai && !compact && <div className="text-xs text-muted-foreground">{player.trait || t("lobby.smartCompanion")}</div>}
           </div>
           {player.ready && (
             <div className="absolute top-2 right-2 h-2 w-2 md:h-3 md:w-3 bg-green-500 rounded-full ring-2 ring-background" />
@@ -123,20 +125,20 @@ const Lobby = () => {
               <div className={`${compact ? 'h-8 w-8' : 'h-12 w-12'} rounded-full bg-muted flex items-center justify-center`}>
                 <Plus className={`${compact ? 'h-4 w-4' : 'h-6 w-6'} text-muted-foreground`} />
               </div>
-              <span className="text-muted-foreground font-medium text-xs md:text-sm">空位</span>
+              <span className="text-muted-foreground font-medium text-xs md:text-sm">{t("lobby.emptySeat")}</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[80vh]">
             <SheetHeader>
-              <SheetTitle>邀请玩家</SheetTitle>
+              <SheetTitle>{t("lobby.invitePlayer")}</SheetTitle>
               <SheetDescription>
-                邀请好友加入，或添加智能陪玩补位。
+                {t("lobby.inviteDesc")}
               </SheetDescription>
             </SheetHeader>
             
             <div className="mt-8 space-y-6">
               <div>
-                <h4 className="text-sm font-medium mb-3">智能陪玩列表</h4>
+                <h4 className="text-sm font-medium mb-3">{t("lobby.aiList")}</h4>
                 <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-3">
                     {personas.map(persona => (
@@ -151,7 +153,7 @@ const Lobby = () => {
                           <div className="text-xs text-muted-foreground">{persona.trait}</div>
                         </div>
                         <Button size="sm" variant="secondary" onClick={() => addAi(persona.id)}>
-                          添加
+                          {t("lobby.add")}
                         </Button>
                       </div>
                     ))}
@@ -171,21 +173,21 @@ const Lobby = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">{room?.name || `房间 #${roomId}`}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">{room?.name || (roomId ? t("lobby.roomNumber", { id: roomId }) : "")}</h1>
             <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">
-              {(room?.status || "WAITING") === "PLAYING" ? "进行中" : "等待中"}
+              {(room?.status || "WAITING") === "PLAYING" ? t("lobby.statusPlaying") : t("lobby.statusWaiting")}
             </Badge>
           </div>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
-            {room ? `${room.gameId} • ${room.seats?.length || 0}/${room.maxPlayers} 人` : "准备进入房间..."}
+            {room ? `${room.gameId} • ${t("lobby.playerCount", { count: room.seats?.length || 0, max: room.maxPlayers })}` : t("lobby.loadingRoom")}
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" className="md:size-default" onClick={() => toast.success("链接已复制！")}>
-            <Share2 className="mr-2 h-4 w-4" /> 邀请
+          <Button variant="outline" size="sm" className="md:size-default" onClick={() => toast.success(t("lobby.linkCopied"))}>
+            <Share2 className="mr-2 h-4 w-4" /> {t("lobby.invite")}
           </Button>
           <Button size="sm" className="md:size-lg" disabled={seats.filter(s => s).length < 6}>
-            开始游戏
+            {t("lobby.startGame")}
           </Button>
         </div>
       </div>
@@ -219,13 +221,13 @@ const Lobby = () => {
       <Card className="flex-1 flex flex-col min-h-0 md:h-64">
         <div className="p-3 border-b text-sm font-medium flex items-center gap-2 bg-slate-50/50">
           <MessageSquare className="h-4 w-4" /> 
-          <span className="md:inline">大厅聊天</span>
+          <span className="md:inline">{t("lobby.chatTitle")}</span>
         </div>
         <ScrollArea className="flex-1 p-4">
-          <div className="text-sm text-slate-500">暂未接入房间聊天，开始游戏后请在玩法页面查看实时日志。</div>
+          <div className="text-sm text-slate-500">{t("lobby.chatPlaceholder")}</div>
         </ScrollArea>
         <div className="p-3 border-t flex gap-2 text-xs text-muted-foreground">
-          房间聊天功能将随游戏内对局日志统一展示。
+          {t("lobby.chatFooter")}
         </div>
       </Card>
     </div>

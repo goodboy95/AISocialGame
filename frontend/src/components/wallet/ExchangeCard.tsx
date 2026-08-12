@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ interface Props {
 }
 
 const ExchangeCard = ({ exchanging, onExchange }: Props) => {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState("");
   const [pendingRequestId, setPendingRequestId] = useState("");
 
@@ -34,11 +36,11 @@ const ExchangeCard = ({ exchanging, onExchange }: Props) => {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">通用积分兑换专属积分</CardTitle>
+        <CardTitle className="text-lg">{t("wallet.exchangeTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <Input
-          placeholder="输入兑换数量（1:1）"
+          placeholder={t("wallet.exchangePlaceholder")}
           value={amount}
           onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
         />
@@ -47,7 +49,7 @@ const ExchangeCard = ({ exchanging, onExchange }: Props) => {
           onClick={() => void submit()}
           className="w-full"
         >
-          {exchanging ? "兑换中..." : "立即兑换"}
+          {exchanging ? t("wallet.exchanging") : t("wallet.exchangeNow")}
         </Button>
       </CardContent>
     </Card>

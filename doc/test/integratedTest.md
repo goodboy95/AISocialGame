@@ -15,7 +15,7 @@
 
 1. 后端 `mvn clean test package`
 2. 前端 `pnpm install --frozen-lockfile && pnpm build`
-3. Docker Compose 重建前后端
+3. Docker Compose 重建 frontend 镜像（`docker compose build frontend`，确保镜像包含第 2 步最新产物）并重启前后端
 4. 健康检查（前端首页、后端 `/actuator/health`）
 5. 构建完成后不自动执行积分迁移；需要迁移时由授权运维人员通过管理登录与一次性操作 proof 显式执行
 

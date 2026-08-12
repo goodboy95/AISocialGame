@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useGameEngine } from "@/hooks/useGameEngine";
 import { useGameSocket } from "@/hooks/useGameSocket";
 import { getApiErrorMessage, personaApi, roomApi } from "@/services/api";
+import { localizeErrorMessage } from "@/i18n/errors";
 import { achievementApi, replayApi } from "@/services/v2Social";
 import { ChatMessage } from "@/types";
 
@@ -17,6 +19,7 @@ interface UseRoomRuntimeOptions {
 }
 
 export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseRoomRuntimeOptions) {
+  const { t } = useTranslation();
   const { roomId, gameId } = useParams();
   const effectiveGameId = gameId || defaultGameId;
   const queryClient = useQueryClient();
@@ -60,8 +63,8 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
     onSeatChange: invalidateRoom,
     onPrivate: (event) => {
       if (event.type === "SAFETY_NOTICE") {
-        const message = typeof event.payload?.message === "string" ? event.payload.message : "内容未通过安全检查";
-        toast.warning(message);
+        const message = typeof event.payload?.message === "string" ? event.payload.message : "";
+        toast.warning(localizeErrorMessage(message, "errors.contentBlocked"));
       }
       invalidateRuntime();
     },
@@ -99,9 +102,11 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
   );
 
   const handleActionError = useCallback(
-    (error: unknown, fallback: string) => {
-      const message = getApiErrorMessage(error, fallback);
-      const recoverable = allRecoverableMessages.some((item) => message.includes(item));
+    (error: unknown, fallbackKey: string) => {
+      const raw = getApiErrorMessage(error, "");
+      // 可恢复判断始终基于后端 raw 消息（含历史中文模式），不随界面语言变化
+      const recoverable = allRecoverableMessages.some((item) => raw.includes(item));
+      const message = localizeErrorMessage(raw, fallbackKey);
       if (recoverable) {
         toast.info(message);
       } else {
@@ -114,7 +119,7 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
 
   const joinMutation = useMutation({
     mutationFn: () => {
-      const password = room?.isPrivate ? window.prompt("请输入私密房间密码") || undefined : undefined;
+      const password = room?.isPrivate ? window.prompt(t("lobby.enterPrivatePassword")) || undefined : undefined;
       return roomApi.join(effectiveGameId, roomId || "", displayName, password);
     },
     onSuccess: (data) => {
@@ -122,7 +127,7 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
         invalidateRuntime();
       }
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, "加入房间失败")),
+    onError: (error: unknown) => toast.error(localizeErrorMessage(getApiErrorMessage(error, ""), "lobby.joinFailed")),
   });
 
   useEffect(() => {
@@ -143,10 +148,10 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
   const addAiMutation = useMutation({
     mutationFn: (personaId: string) => roomApi.addAi(effectiveGameId, roomId || "", personaId),
     onSuccess: () => {
-      toast.success("AI 已加入");
+      toast.success(t("lobby.aiSeated"));
       invalidateRoom();
     },
-    onError: (error: unknown) => handleActionError(error, "添加 AI 失败"),
+    onError: (error: unknown) => handleActionError(error, "lobby.addAiFailed"),
   });
 
   const state = stateQuery.data;
@@ -171,15 +176,15 @@ export function useRoomRuntime({ defaultGameId, recoverableMessages = [] }: UseR
     const unlocked = achievementApi.applySettlement(userKey, didWin);
     unlocked.forEach((item) => {
       const def = achievementApi.listDefinitions().find((d) => d.code === item.code);
-      toast.success(`成就解锁：${def?.name || item.code}`);
+      toast.success(t("v2.achievement.unlocked", { name: def?.name || item.code }));
     });
 
     const archive = replayApi.fromState(effectiveGameId, room, state);
     replayApi.save(userKey, archive);
-  }, [phase, state, userKey, roomId, effectiveGameId, room]);
+  }, [phase, state, userKey, roomId, effectiveGameId, room, t]);
 
   const startGame = useCallback(() => {
-    startMutation.mutate(undefined, { onError: (error: unknown) => handleActionError(error, "开局失败") });
+    startMutation.mutate(undefined, { onError: (error: unknown) => handleActionError(error, "errors.startFailed") });
   }, [startMutation, handleActionError]);
 
   return {

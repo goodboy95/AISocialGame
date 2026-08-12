@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChatMessage } from "@/types";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,7 +9,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageSquare, Send } from "lucide-react";
 
 const QUICK_EMOJIS = ["👍", "🤔", "😂", "😱", "😡", "😭", "😎", "💀"];
-const QUICK_PHRASES = ["我同意", "有点可疑", "等等", "继续说", "我反对", "快投票"];
+const QUICK_PHRASE_KEYS = [
+  "game.chat.quick.0",
+  "game.chat.quick.1",
+  "game.chat.quick.2",
+  "game.chat.quick.3",
+  "game.chat.quick.4",
+  "game.chat.quick.5",
+];
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -17,6 +25,7 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel = ({ messages, myPlayerId, onSend }: ChatPanelProps) => {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -29,7 +38,7 @@ export const ChatPanel = ({ messages, myPlayerId, onSend }: ChatPanelProps) => {
   return (
     <Card className="flex h-full min-h-[420px] flex-col">
       <div className="border-b px-3 py-2 text-sm font-medium flex items-center gap-2">
-        <MessageSquare className="h-4 w-4" /> 房间聊天
+        <MessageSquare className="h-4 w-4" /> {t("game.chat.title")}
       </div>
 
       <ScrollArea className="flex-1 px-3 py-2">
@@ -57,7 +66,7 @@ export const ChatPanel = ({ messages, myPlayerId, onSend }: ChatPanelProps) => {
             );
           })}
           <div ref={endRef} />
-          {recent.length === 0 && <div className="text-sm text-muted-foreground">暂无聊天消息</div>}
+          {recent.length === 0 && <div className="text-sm text-muted-foreground">{t("game.chat.empty")}</div>}
         </div>
       </ScrollArea>
 
@@ -71,9 +80,9 @@ export const ChatPanel = ({ messages, myPlayerId, onSend }: ChatPanelProps) => {
         </div>
 
         <div className="mb-2 flex flex-wrap gap-1">
-          {QUICK_PHRASES.map((phrase) => (
-            <Button key={phrase} variant="outline" size="sm" className="h-7 text-xs" onClick={() => onSend("QUICK_PHRASE", phrase)}>
-              {phrase}
+          {QUICK_PHRASE_KEYS.map((key) => (
+            <Button key={key} variant="outline" size="sm" className="h-7 text-xs" onClick={() => onSend("QUICK_PHRASE", t(key))}>
+              {t(key)}
             </Button>
           ))}
         </div>
@@ -82,7 +91,7 @@ export const ChatPanel = ({ messages, myPlayerId, onSend }: ChatPanelProps) => {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="说点什么..."
+            placeholder={t("game.chat.placeholder")}
             onKeyDown={(e) => {
               if (e.key === "Enter" && input.trim()) {
                 onSend("TEXT", input.trim());

@@ -13,7 +13,7 @@
 - `frontend/`：前端源码、构建配置、Playwright 工具配置
 - `backend/`：后端源码、SQL、proto、单测
 - `doc/`：接口、模块、测试与运维文档
-- `build.sh`：唯一部署脚本；本地域名默认为 `localsocialgame.testhut.top`，可通过 `APP_DOMAIN` 覆盖
+- `build.sh`：唯一部署脚本；本地域名默认为 `localsocialgame.testhut.top`，可通过 `APP_DOMAIN` 覆盖；每次部署重建 frontend 镜像（`docker compose build frontend`）以确保前端产物最新
 - `env.example`：无秘密的配置清单；复制为被忽略的 `env.local` 后填入真实值并设置权限 `0600`
 
 ## 认证与积分

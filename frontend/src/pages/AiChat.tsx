@@ -2,12 +2,15 @@ import { FormEvent, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useTranslation } from "react-i18next";
 import { aiApi, getApiErrorMessage } from "@/services/api";
+import { localizeErrorMessage } from "@/i18n/errors";
 import { AiMessage } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 const AiChat = () => {
+  const { t } = useTranslation();
   const { user, redirectToSsoLogin } = useAuth();
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState("");
@@ -42,7 +45,8 @@ const AiChat = () => {
         () => {},
       );
     } catch (error: any) {
-      toast.error(getApiErrorMessage(error, "AI 调用失败"));
+      const raw = getApiErrorMessage(error, t("aiChat.failed"));
+      toast.error(localizeErrorMessage(raw, "aiChat.failed"));
       setMessages(nextMessages);
     } finally {
       setSending(false);
@@ -53,11 +57,11 @@ const AiChat = () => {
     return (
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
-          <CardTitle>AI 对话</CardTitle>
+          <CardTitle>{t("aiChat.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="text-sm text-muted-foreground">请先登录后再使用 AI 流式对话。</div>
-          <Button onClick={() => void redirectToSsoLogin()}>前往登录</Button>
+          <div className="text-sm text-muted-foreground">{t("aiChat.needLogin")}</div>
+          <Button onClick={() => void redirectToSsoLogin()}>{t("common.goLogin")}</Button>
         </CardContent>
       </Card>
     );
@@ -67,11 +71,11 @@ const AiChat = () => {
     <div className="max-w-4xl mx-auto space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>AI 流式对话</CardTitle>
+          <CardTitle>{t("aiChat.streamTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="max-h-[420px] overflow-auto rounded-lg border bg-slate-50 p-3 space-y-3">
-            {!messages.length && <div className="text-sm text-muted-foreground">输入消息开始对话</div>}
+            {!messages.length && <div className="text-sm text-muted-foreground">{t("aiChat.startHint")}</div>}
             {messages.map((message, index) => (
               <div key={`${message.role}-${index}`} className={message.role === "user" ? "text-right" : "text-left"}>
                 <div
@@ -89,11 +93,11 @@ const AiChat = () => {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               rows={3}
-              placeholder="输入问题，按“发送”后将通过 SSE 逐字返回"
+              placeholder={t("aiChat.placeholder")}
             />
             <div className="flex justify-end">
               <Button type="submit" disabled={sending || !input.trim()}>
-                {sending ? "生成中..." : "发送"}
+                {sending ? t("aiChat.sending") : t("aiChat.send")}
               </Button>
             </div>
           </form>

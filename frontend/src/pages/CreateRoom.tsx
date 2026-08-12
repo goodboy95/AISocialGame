@@ -17,11 +17,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { gameApi, roomApi } from "@/services/api";
+import { localizeErrorMessage } from "@/i18n/errors";
+import { gameFieldLabel, gameName, gameOptionLabel } from "@/i18n/gameTexts";
+import { getApiErrorMessage } from "@/services/apiError";
 import { Game, GameConfigOption } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
 const CreateRoom = () => {
+  const { t } = useTranslation();
   const { gameId } = useParams();
   const navigate = useNavigate();
   const { user, redirectToSsoLogin } = useAuth();
@@ -37,7 +42,7 @@ const CreateRoom = () => {
   useEffect(() => {
     if (game) {
       const defaults: Record<string, any> = {
-        roomName: `[${game.name}] 玩家的房间`,
+        roomName: t("create.defaultRoomName", { game: gameName(game.id, game.name) }),
         isPrivate: false,
         commMode: "voice",
       };
@@ -46,9 +51,9 @@ const CreateRoom = () => {
       });
       setFormData(defaults);
     }
-  }, [game]);
+  }, [game, t]);
 
-  if (!game) return <div className="p-8 text-center">游戏不存在</div>;
+  if (!game) return <div className="p-8 text-center">{t("common.gameNotFound")}</div>;
 
   const handleInputChange = (id: string, value: any) => {
     setFormData(prev => ({ ...prev, [id]: value }));
@@ -65,10 +70,13 @@ const CreateRoom = () => {
       ),
     }),
     onSuccess: (room) => {
-      toast.success("房间创建成功");
+      toast.success(t("create.success"));
       navigate(`/room/${game.id}/${room.id}`);
     },
-    onError: () => toast.error("创建失败，请稍后重试"),
+    onError: (error: unknown) => {
+      const raw = getApiErrorMessage(error, t("create.failed"));
+      toast.error(localizeErrorMessage(raw, "create.failed"));
+    },
   });
 
   const handleCreate = () => {
@@ -77,7 +85,7 @@ const CreateRoom = () => {
       return;
     }
     if (formData.isPrivate && (!formData.password || String(formData.password).trim().length < 4)) {
-      toast.error("私密房间密码至少 4 位");
+      toast.error(t("create.passwordTooShort"));
       return;
     }
     createMutation.mutate();
@@ -91,7 +99,7 @@ const CreateRoom = () => {
   return (
     <div className="max-w-6xl mx-auto pb-24 md:pb-8 px-4">
       <Button variant="ghost" className="mb-4 md:mb-6 pl-0 hover:pl-2 transition-all" onClick={() => navigate(`/game/${gameId}`)}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回房间列表
+        <ArrowLeft className="mr-2 h-4 w-4" /> {t("create.back")}
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -100,20 +108,20 @@ const CreateRoom = () => {
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-slate-200 shadow-sm h-full">
             <CardHeader>
-              <CardTitle>基础设置</CardTitle>
-              <CardDescription>配置房间的基本信息</CardDescription>
+              <CardTitle>{t("create.basicTitle")}</CardTitle>
+              <CardDescription>{t("create.basicDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Room Cover Preview (Mock) */}
               <div className="aspect-video rounded-lg bg-slate-100 flex items-center justify-center border-2 border-dashed border-slate-200 relative overflow-hidden group cursor-pointer">
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 opacity-80" />
                 <div className="relative z-10 text-center text-white">
-                  <span className="text-sm font-medium">点击更换封面</span>
+                  <span className="text-sm font-medium">{t("create.coverChange")}</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="roomName">房间名称</Label>
+                <Label htmlFor="roomName">{t("create.roomName")}</Label>
                 <Input 
                   id="roomName" 
                   value={formData.roomName || ''}
@@ -122,27 +130,27 @@ const CreateRoom = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>隐私设置</Label>
+                <Label>{t("create.privacy")}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Button 
                     variant={!formData.isPrivate ? "default" : "outline"}
                     className={cn(!formData.isPrivate ? "bg-slate-900" : "text-slate-500")}
                     onClick={() => handleInputChange("isPrivate", false)}
                   >
-                    <Globe className="mr-2 h-4 w-4" /> 公开
+                    <Globe className="mr-2 h-4 w-4" /> {t("create.public")}
                   </Button>
                   <Button 
                     variant={formData.isPrivate ? "default" : "outline"}
                     className={cn(formData.isPrivate ? "bg-slate-900" : "text-slate-500")}
                     onClick={() => handleInputChange("isPrivate", true)}
                   >
-                    <Lock className="mr-2 h-4 w-4" /> 私密
+                    <Lock className="mr-2 h-4 w-4" /> {t("create.private")}
                   </Button>
                 </div>
                 {formData.isPrivate && (
                   <Input 
                     type="password" 
-                    placeholder="设置房间密码" 
+                    placeholder={t("create.passwordPlaceholder")}
                     className="mt-2"
                     onChange={(e) => handleInputChange("password", e.target.value)}
                   />
@@ -150,21 +158,21 @@ const CreateRoom = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>交流模式</Label>
+                <Label>{t("create.commMode")}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Button 
                     variant={formData.commMode === "voice" ? "default" : "outline"}
                     className={cn(formData.commMode === "voice" ? "bg-blue-600 hover:bg-blue-700" : "text-slate-500")}
                     onClick={() => handleInputChange("commMode", "voice")}
                   >
-                    <Mic className="mr-2 h-4 w-4" /> 语音模式
+                    <Mic className="mr-2 h-4 w-4" /> {t("create.voice")}
                   </Button>
                   <Button 
                     variant={formData.commMode === "text" ? "default" : "outline"}
                     className={cn(formData.commMode === "text" ? "bg-blue-600 hover:bg-blue-700" : "text-slate-500")}
                     onClick={() => handleInputChange("commMode", "text")}
                   >
-                    <Keyboard className="mr-2 h-4 w-4" /> 文字模式
+                    <Keyboard className="mr-2 h-4 w-4" /> {t("create.text")}
                   </Button>
                 </div>
               </div>
@@ -176,15 +184,15 @@ const CreateRoom = () => {
         <div className="lg:col-span-8 space-y-6">
           <Card className="border-slate-200 shadow-sm">
             <CardHeader>
-              <CardTitle>板子配置</CardTitle>
-              <CardDescription>自定义 {game.name} 的游戏规则</CardDescription>
+              <CardTitle>{t("create.configTitle")}</CardTitle>
+              <CardDescription>{t("create.configDesc", { game: gameName(game.id, game.name) })}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
               
               {/* 1. Player Count */}
               {game.configSchema.find(f => f.id === "playerCount") && (
                 <div className="space-y-3">
-                  <Label className="text-base">玩家人数</Label>
+                  <Label className="text-base">{t("create.playerCount")}</Label>
                   <div className="flex gap-3">
                     {game.configSchema.find(f => f.id === "playerCount")?.options?.map(opt => (
                       <Button
@@ -193,7 +201,7 @@ const CreateRoom = () => {
                         onClick={() => handleInputChange("playerCount", opt.value)}
                         className="flex-1"
                       >
-                        {opt.label}
+                        {gameOptionLabel(gameId, "playerCount", opt.value, opt.label)}
                       </Button>
                     ))}
                   </div>
@@ -203,7 +211,7 @@ const CreateRoom = () => {
               {/* 2. Templates (Visual Cards) */}
               {game.configSchema.find(f => f.id === "template") && (
                 <div className="space-y-3">
-                  <Label className="text-base">板子预设</Label>
+                  <Label className="text-base">{t("create.template")}</Label>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {game.configSchema.find(f => f.id === "template")?.options?.map(opt => (
                       <div 
@@ -216,11 +224,11 @@ const CreateRoom = () => {
                             : "border-slate-200 bg-white hover:border-blue-300"
                         )}
                       >
-                        <div className="font-bold text-slate-900">{opt.label}</div>
+                        <div className="font-bold text-slate-900">{gameOptionLabel(gameId, "template", opt.value, opt.label)}</div>
                         <div className="text-xs text-slate-500 mt-1">
-                          {opt.value === "standard" && "预言家、女巫、猎人、白痴"}
-                          {opt.value === "guard" && "预言家、女巫、猎人、守卫"}
-                          {opt.value === "no_god" && "无神职，全员平民与狼人"}
+                          {opt.value === "standard" && t("create.templateDesc.standard")}
+                          {opt.value === "guard" && t("create.templateDesc.guard")}
+                          {opt.value === "no_god" && t("create.templateDesc.no_god")}
                         </div>
                       </div>
                     ))}
@@ -232,7 +240,7 @@ const CreateRoom = () => {
               <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen} className="border rounded-lg bg-slate-50/50">
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" className="w-full flex justify-between p-4 hover:bg-slate-100">
-                    <span className="font-medium text-slate-700">高级规则设置</span>
+                    <span className="font-medium text-slate-700">{t("create.advanced")}</span>
                     {isAdvancedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -242,7 +250,7 @@ const CreateRoom = () => {
                     {game.configSchema.filter(f => isAdvancedField(f.id)).map((field) => (
                       <div key={field.id} className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <Label htmlFor={field.id} className="text-sm text-slate-600">{field.label}</Label>
+                          <Label htmlFor={field.id} className="text-sm text-slate-600">{gameFieldLabel(gameId, field.id, field.label)}</Label>
                           {field.type === "boolean" && (
                             <Switch 
                               id={field.id} 
@@ -258,12 +266,12 @@ const CreateRoom = () => {
                             onValueChange={(val) => handleInputChange(field.id, isNaN(Number(val)) ? val : Number(val))}
                           >
                             <SelectTrigger className="bg-white h-9">
-                              <SelectValue placeholder="请选择" />
+                              <SelectValue placeholder={t("create.selectPlaceholder")} />
                             </SelectTrigger>
                             <SelectContent>
                               {field.options?.map(opt => (
                                 <SelectItem key={opt.value} value={opt.value.toString()}>
-                                  {opt.label}
+                                  {gameOptionLabel(gameId, field.id, opt.value, opt.label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -293,24 +301,24 @@ const CreateRoom = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 md:static md:bg-transparent md:border-0 md:shadow-none md:p-0 md:mt-8">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="hidden md:block">
-            <div className="text-sm text-slate-500">当前配置</div>
+            <div className="text-sm text-slate-500">{t("create.currentConfig")}</div>
             <div className="font-bold text-slate-900 flex gap-2 items-center">
-              <span>{formData.playerCount}人局</span>
+              <span>{t("create.playersGame", { count: formData.playerCount })}</span>
               <span className="w-1 h-1 bg-slate-300 rounded-full" />
-              <span>{formData.commMode === 'voice' ? '语音' : '文字'}</span>
+              <span>{formData.commMode === 'voice' ? t('create.voiceShort') : t('create.textShort')}</span>
               <span className="w-1 h-1 bg-slate-300 rounded-full" />
-              <span>{formData.template === 'standard' ? '预女猎白' : formData.template || game.name}</span>
+              <span>{formData.template === 'standard' ? t('create.templateShort.standard') : formData.template || gameName(game.id, game.name)}</span>
             </div>
           </div>
           <div className="flex-1 md:flex-none flex gap-4 justify-end">
              <div className="flex items-center gap-1 md:mr-4">
-                <span className="text-sm text-slate-500">消耗</span>
+                <span className="text-sm text-slate-500">{t("create.cost")}</span>
                 <span className="text-xl font-bold text-blue-600">50</span>
-                <span className="text-xs text-slate-400">金币</span>
+                <span className="text-xs text-slate-400">{t("create.coins")}</span>
              </div>
              <Button size="lg" className="flex-1 md:w-48 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200" onClick={handleCreate}>
               <Zap className="mr-2 h-5 w-5 fill-current" />
-              创建并入座
+              {t("create.createAndSeat")}
             </Button>
           </div>
         </div>

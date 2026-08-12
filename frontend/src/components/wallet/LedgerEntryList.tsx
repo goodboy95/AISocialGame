@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LedgerEntry } from "@/types";
@@ -12,13 +13,14 @@ interface Props {
 }
 
 const LedgerEntryList = ({ entries, page, hasMore, loading, onPrev, onNext }: Props) => {
+  const { t } = useTranslation();
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">账本明细</CardTitle>
+        <CardTitle className="text-lg">{t("wallet.ledgerTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!entries.length && <div className="text-sm text-muted-foreground">暂无记录</div>}
+        {!entries.length && <div className="text-sm text-muted-foreground">{t("wallet.noRecords")}</div>}
         {entries.map((item) => (
           <div key={`${item.id}-${item.createdAt}`} className="rounded-lg border p-3 text-sm">
             <div className="flex items-center justify-between gap-3">
@@ -36,10 +38,10 @@ const LedgerEntryList = ({ entries, page, hasMore, loading, onPrev, onNext }: Pr
         ))}
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" disabled={loading || page <= 1} onClick={onPrev}>
-            上一页
+            {t("wallet.prev")}
           </Button>
           <Button variant="outline" size="sm" disabled={loading || !hasMore} onClick={onNext}>
-            下一页
+            {t("wallet.next")}
           </Button>
         </div>
       </CardContent>

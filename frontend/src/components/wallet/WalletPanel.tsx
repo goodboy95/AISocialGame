@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { walletApi } from "@/services/api";
+import { localizeErrorMessage } from "@/i18n/errors";
 import { useAuth } from "@/hooks/useAuth";
 import { CheckinStatusResponse, ExchangeHistoryRecord, LedgerEntry, RedemptionRecord, UsageRecord, User } from "@/types";
 import BalanceOverview from "./BalanceOverview";
@@ -18,6 +20,7 @@ interface Props {
 const PAGE_SIZE = 5;
 
 const WalletPanel = ({ initialBalance }: Props) => {
+  const { t } = useTranslation();
   const { updateBalance } = useAuth();
   const [balance, setBalance] = useState<User["balance"] | undefined>(initialBalance);
   const [checkinStatus, setCheckinStatus] = useState<CheckinStatusResponse | null>(null);
@@ -70,7 +73,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
       setExchangeHistory(exchangeData.items);
       await Promise.all([loadUsage(1), loadLedger(1)]);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "钱包数据加载失败");
+      toast.error(localizeErrorMessage(error?.response?.data?.message, "wallet.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -90,9 +93,9 @@ const WalletPanel = ({ initialBalance }: Props) => {
         lastCheckinDate: prev?.lastCheckinDate,
         tokensGrantedToday: result.tokensGranted,
       }));
-      toast.success(result.alreadyCheckedIn ? "今日已签到" : "签到成功");
+      toast.success(result.alreadyCheckedIn ? t("wallet.checkinToday") : t("wallet.checkinSuccess"));
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "签到失败");
+      toast.error(localizeErrorMessage(error?.response?.data?.message, "wallet.checkinFailed"));
     } finally {
       setChecking(false);
     }
@@ -103,15 +106,15 @@ const WalletPanel = ({ initialBalance }: Props) => {
     try {
       const result = await walletApi.redeemCode(code);
       if (!result.success) {
-        toast.error(result.errorMessage || "兑换失败");
+        toast.error(localizeErrorMessage(result.errorMessage, "wallet.redeemFailed"));
         return;
       }
       applyBalance(result.balance);
-      toast.success(`兑换成功，到账 ${result.tokensGranted} 积分`);
+      toast.success(t("wallet.redeemSuccess", { count: result.tokensGranted }));
       const redemptionData = await walletApi.getRedemptionHistory(1, PAGE_SIZE);
       setRedemptions(redemptionData.items);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "兑换失败");
+      toast.error(localizeErrorMessage(error?.response?.data?.message, "wallet.redeemFailed"));
     } finally {
       setRedeeming(false);
     }
@@ -122,14 +125,14 @@ const WalletPanel = ({ initialBalance }: Props) => {
     try {
       const result = await walletApi.exchangePublicToProject(amount, requestId);
       applyBalance(result.balance);
-      toast.success(`兑换成功，到账 ${result.exchangedTokens} 专属积分`);
+      toast.success(t("wallet.exchangeSuccess", { count: result.exchangedTokens }));
       const [history] = await Promise.all([
         walletApi.getExchangeHistory(1, PAGE_SIZE),
         loadLedger(1),
       ]);
       setExchangeHistory(history.items);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "兑换失败");
+      toast.error(localizeErrorMessage(error?.response?.data?.message, "wallet.redeemFailed"));
     } finally {
       setExchanging(false);
     }
@@ -149,7 +152,7 @@ const WalletPanel = ({ initialBalance }: Props) => {
       <RedeemCard redeeming={redeeming} onRedeem={onRedeem} />
       <ExchangeCard exchanging={exchanging} onExchange={onExchange} />
       <UsageRecordList
-        title="消费记录"
+        title={t("wallet.usageTitle")}
         records={usageRecords}
         page={usagePage}
         hasMore={usageHasMore}
@@ -167,10 +170,10 @@ const WalletPanel = ({ initialBalance }: Props) => {
       />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">兑换历史</CardTitle>
+          <CardTitle className="text-lg">{t("wallet.redeemHistoryTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {!redemptions.length && <div className="text-muted-foreground">暂无兑换记录</div>}
+          {!redemptions.length && <div className="text-muted-foreground">{t("wallet.noRedemptions")}</div>}
           {redemptions.map((item) => (
             <div key={`${item.code}-${item.redeemedAt}`} className="rounded-lg border p-3">
               <div className="font-medium">{item.code}</div>
@@ -184,22 +187,22 @@ const WalletPanel = ({ initialBalance }: Props) => {
       </Card>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">通用积分兑换记录</CardTitle>
+          <CardTitle className="text-lg">{t("wallet.exchangeHistoryTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {!exchangeHistory.length && <div className="text-muted-foreground">暂无兑换记录</div>}
+          {!exchangeHistory.length && <div className="text-muted-foreground">{t("wallet.noRedemptions")}</div>}
           {exchangeHistory.map((item) => (
             <div key={`${item.requestId}-${item.createdAt}`} className="rounded-lg border p-3 space-y-1">
-              <div className="font-medium">请求号：{item.requestId}</div>
+              <div className="font-medium">{t("wallet.exchangeRequest", { id: item.requestId })}</div>
               <div className="text-xs text-muted-foreground">
-                兑换数量：{item.exchangedTokens}
+                {t("wallet.exchangeAmount", { count: item.exchangedTokens })}
                 {item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString()}` : ""}
               </div>
               <div className="text-xs">
-                通用积分：{item.publicBefore} → {item.publicAfter}
+                {t("wallet.publicTokens", { before: item.publicBefore, after: item.publicAfter })}
               </div>
               <div className="text-xs">
-                项目永久积分：{item.projectPermanentBefore} → {item.projectPermanentAfter}
+                {t("wallet.projectTokens", { before: item.projectPermanentBefore, after: item.projectPermanentAfter })}
               </div>
             </div>
           ))}

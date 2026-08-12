@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { gameApi } from "@/services/api";
 import { quickMatchApi } from "@/services/v2Social";
+import { localizeErrorMessage } from "@/i18n/errors";
+import { gameName } from "@/i18n/gameTexts";
 import { Game } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +20,7 @@ interface QuickMatchDialogProps {
 }
 
 export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatchDialogProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, redirectToSsoLogin } = useAuth();
   const { data: games = [] } = useQuery<Game[]>({ queryKey: ["games"], queryFn: gameApi.list });
@@ -26,7 +30,7 @@ export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatch
 
   const start = async () => {
     if (!gameId) {
-      toast.error("请选择游戏类型");
+      toast.error(t("quickMatch.noGame"));
       return;
     }
     if (!user) {
@@ -36,11 +40,11 @@ export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatch
     setMatching(true);
     try {
       const result = await quickMatchApi.start(gameId, displayName);
-      toast.success(result.autoStarted ? "匹配成功，已自动开局" : "匹配成功，已进入房间");
+      toast.success(result.autoStarted ? t("quickMatch.successAuto") : t("quickMatch.successRoom"));
       onOpenChange(false);
       navigate(`/room/${gameId}/${result.roomId}`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "快速匹配失败，请稍后重试");
+      toast.error(localizeErrorMessage(error?.response?.data?.message, "index.quickMatchFailed"));
     } finally {
       setMatching(false);
     }
@@ -50,18 +54,18 @@ export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatch
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>快速匹配</DialogTitle>
-          <DialogDescription>一键加入可用房间，必要时自动创建房间并补齐 AI。</DialogDescription>
+          <DialogTitle>{t("quickMatch.title")}</DialogTitle>
+          <DialogDescription>{t("quickMatch.desc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           <Select value={gameId} onValueChange={setGameId}>
             <SelectTrigger>
-              <SelectValue placeholder="选择要匹配的游戏" />
+              <SelectValue placeholder={t("quickMatch.selectGame")} />
             </SelectTrigger>
             <SelectContent>
               {activeGames.map((game) => (
                 <SelectItem key={game.id} value={game.id}>
-                  {game.name}
+                  {gameName(game.id, game.name)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -69,10 +73,10 @@ export const QuickMatchDialog = ({ open, onOpenChange, displayName }: QuickMatch
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t("quickMatch.cancel")}
           </Button>
           <Button onClick={start} disabled={matching}>
-            {matching ? "匹配中..." : "开始匹配"}
+            {matching ? t("quickMatch.matching") : t("quickMatch.start")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Coins, Trophy, Clock, LogIn, Award, PlayCircle } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import WalletPanel from "@/components/wallet/WalletPanel";
 import { achievementApi, replayApi } from "@/services/v2Social";
 
 const Profile = () => {
+  const { t } = useTranslation();
   const { user, displayName, avatar, logout, redirectToSsoLogin } = useAuth();
   const [searchParams] = useSearchParams();
   const tab = searchParams.get("tab") || "wallet";
@@ -21,12 +23,12 @@ const Profile = () => {
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <LogIn className="h-5 w-5" /> 需要登录
+            <LogIn className="h-5 w-5" /> {t("profile.needLogin")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>请先登录账号以查看个人资产、战绩和等级。游客不会记录长久战绩。</p>
-          <Button onClick={() => void redirectToSsoLogin()}>前往登录</Button>
+          <p>{t("profile.loginDesc")}</p>
+          <Button onClick={() => void redirectToSsoLogin()}>{t("common.goLogin")}</Button>
         </CardContent>
       </Card>
     );
@@ -47,7 +49,7 @@ const Profile = () => {
             </div>
             <div className="flex gap-3 w-full md:w-auto justify-center">
               <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none" onClick={logout}>
-                退出登录
+                {t("user.logout")}
               </Button>
             </div>
           </div>
@@ -61,7 +63,7 @@ const Profile = () => {
               </div>
               <div>
                 <div className="text-2xl font-bold">{user.coins ?? 0}</div>
-                <div className="text-xs text-muted-foreground">金币余额</div>
+                <div className="text-xs text-muted-foreground">{t("profile.coinBalance")}</div>
               </div>
             </div>
             
@@ -71,7 +73,7 @@ const Profile = () => {
               </div>
               <div>
                 <div className="text-2xl font-bold">Lv.{user.level ?? 1}</div>
-                <div className="text-xs text-muted-foreground">当前等级</div>
+                <div className="text-xs text-muted-foreground">{t("profile.level")}</div>
               </div>
             </div>
 
@@ -81,7 +83,7 @@ const Profile = () => {
               </div>
               <div>
                 <div className="text-2xl font-bold">--</div>
-                <div className="text-xs text-muted-foreground">游戏时长（记录中）</div>
+                <div className="text-xs text-muted-foreground">{t("profile.playTime")}</div>
               </div>
             </div>
           </div>
@@ -90,11 +92,11 @@ const Profile = () => {
 
       <Tabs defaultValue={tab} className="w-full">
         <TabsList className="w-full grid grid-cols-5">
-          <TabsTrigger value="wallet">我的钱包</TabsTrigger>
-          <TabsTrigger value="history">对战记录</TabsTrigger>
-          <TabsTrigger value="stats">数据统计</TabsTrigger>
-          <TabsTrigger value="achievements">成就</TabsTrigger>
-          <TabsTrigger value="replays">回放</TabsTrigger>
+          <TabsTrigger value="wallet">{t("profile.tab.wallet")}</TabsTrigger>
+          <TabsTrigger value="history">{t("profile.tab.history")}</TabsTrigger>
+          <TabsTrigger value="stats">{t("profile.tab.stats")}</TabsTrigger>
+          <TabsTrigger value="achievements">{t("profile.tab.achievements")}</TabsTrigger>
+          <TabsTrigger value="replays">{t("profile.tab.replays")}</TabsTrigger>
         </TabsList>
         <TabsContent value="wallet" className="mt-6">
           <WalletPanel initialBalance={user.balance} />
@@ -102,32 +104,32 @@ const Profile = () => {
         <TabsContent value="history" className="mt-6">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">近期战绩</CardTitle>
+              <CardTitle className="text-lg">{t("profile.recentTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              暂无记录。完成一局游戏后这里会展示最新结果。
+              {t("profile.recentEmpty")}
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="stats">
           <Card>
             <CardContent className="pt-6 text-sm text-muted-foreground">
-              暂未汇总更详细的数据。完成对局后，系统会将胜场计入排行榜。
+              {t("profile.statsEmpty")}
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="achievements" className="mt-6">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">成就总览</CardTitle>
+              <CardTitle className="text-lg">{t("profile.achievementsTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Award className="h-4 w-4 text-amber-500" />
-                已解锁成就 {unlockedAchievements}
+                {t("profile.unlockedCount", { count: unlockedAchievements })}
               </div>
               <Button asChild>
-                <Link to="/achievements">查看全部成就</Link>
+                <Link to="/achievements">{t("profile.viewAllAchievements")}</Link>
               </Button>
             </CardContent>
           </Card>
@@ -135,15 +137,15 @@ const Profile = () => {
         <TabsContent value="replays" className="mt-6">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">回放总览</CardTitle>
+              <CardTitle className="text-lg">{t("profile.replaysTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <PlayCircle className="h-4 w-4 text-blue-500" />
-                已保存回放 {replayCount}
+                {t("profile.savedCount", { count: replayCount })}
               </div>
               <Button asChild>
-                <Link to="/replays">进入回放中心</Link>
+                <Link to="/replays">{t("profile.replayCenter")}</Link>
               </Button>
             </CardContent>
           </Card>

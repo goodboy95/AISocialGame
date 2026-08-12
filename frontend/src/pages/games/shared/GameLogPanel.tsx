@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,11 +10,12 @@ interface GameLogPanelProps {
 }
 
 export function GameLogPanel({ logs = [], emptyText }: GameLogPanelProps) {
+  const { t } = useTranslation();
   return (
     <Card className="p-4" data-testid="game-logs-panel">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold">游戏日志</h3>
-        <Badge variant="outline">实时</Badge>
+        <h3 className="font-semibold">{t("game.logTitle")}</h3>
+        <Badge variant="outline">{t("game.live")}</Badge>
       </div>
       <ScrollArea className="h-64 pr-2">
         <div className="space-y-2 text-sm">

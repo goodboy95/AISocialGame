@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { gameplayApi, roomApi } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ interface SpectatorChatMessage {
 }
 
 const SpectatorRoom = () => {
+  const { t } = useTranslation();
   const { gameId, roomId } = useParams();
   const { user, loading, redirectToSsoLogin } = useAuth();
   const [chatInput, setChatInput] = useState("");
@@ -53,26 +55,26 @@ const SpectatorRoom = () => {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Eye className="h-4 w-4" />
-            观战模式
+            {t("spectate.title")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2 text-sm">
-          <Badge variant="secondary">{room?.name || "房间"}</Badge>
-          <Badge variant="outline">阶段: {state?.phase || "--"}</Badge>
+          <Badge variant="secondary">{room?.name || t("spectate.room")}</Badge>
+          <Badge variant="outline">{t("spectate.phase", { phase: state?.phase || "--" })}</Badge>
           <Badge variant="outline">
-            存活 {aliveCount}/{players.length}
+            {t("spectate.alive", { alive: aliveCount, total: players.length })}
           </Badge>
-          <span className="text-muted-foreground">观战中无法执行发言/投票/夜晚行动。</span>
+          <span className="text-muted-foreground">{t("spectate.notice")}</span>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">玩家视图（上帝视角）</CardTitle>
+            <CardTitle className="text-base">{t("spectate.playerView")}</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading && <div className="text-sm text-muted-foreground">正在同步房间状态...</div>}
+            {isLoading && <div className="text-sm text-muted-foreground">{t("spectate.syncing")}</div>}
             {!isLoading && (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {players.map((player) => (
@@ -84,14 +86,14 @@ const SpectatorRoom = () => {
                       </Avatar>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{player.displayName}</div>
-                        <div className="text-xs text-muted-foreground">座位 {player.seatNumber + 1}</div>
+                        <div className="text-xs text-muted-foreground">{t("game.seat", { seat: player.seatNumber + 1 })}</div>
                       </div>
-                      {!player.alive && <Badge variant="destructive">出局</Badge>}
+                      {!player.alive && <Badge variant="destructive">{t("game.out")}</Badge>}
                       {player.role && <Badge variant="outline">{player.role}</Badge>}
                     </div>
                   </div>
                 ))}
-                {players.length === 0 && <div className="text-sm text-muted-foreground">暂无可展示的观战数据。</div>}
+                {players.length === 0 && <div className="text-sm text-muted-foreground">{t("spectate.noData")}</div>}
               </div>
             )}
           </CardContent>
@@ -99,7 +101,7 @@ const SpectatorRoom = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">观战聊天</CardTitle>
+            <CardTitle className="text-base">{t("spectate.chat")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <ScrollArea className="h-[320px] rounded-md border p-2">
@@ -110,11 +112,11 @@ const SpectatorRoom = () => {
                     <div>{message.content}</div>
                   </div>
                 ))}
-                {chatMessages.length === 0 && <div className="text-xs text-muted-foreground">暂无观战消息</div>}
+                {chatMessages.length === 0 && <div className="text-xs text-muted-foreground">{t("spectate.noMessages")}</div>}
               </div>
             </ScrollArea>
             <div className="flex gap-2">
-              <Input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="发送观战评论" />
+              <Input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder={t("spectate.placeholder")} />
               <Button
                 size="icon"
                 onClick={() => {
@@ -122,10 +124,10 @@ const SpectatorRoom = () => {
                   if (!text) return;
                   setChatMessages((prev) => [
                     ...prev,
-                    { id: `${Date.now()}`, sender: "观战者", content: text, time: new Date().toISOString() },
+                    { id: `${Date.now()}`, sender: t("spectate.sender"), content: text, time: new Date().toISOString() },
                   ]);
                   setChatInput("");
-                  toast.success("观战消息已发送");
+                  toast.success(t("spectate.sent"));
                 }}
               >
                 <Send className="h-4 w-4" />

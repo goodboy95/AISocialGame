@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Loader2, WifiOff } from "lucide-react";
 
@@ -8,6 +9,7 @@ interface ConnectionStatusBarProps {
 }
 
 export const ConnectionStatusBar = ({ connected, showReconnectAction, onReconnect }: ConnectionStatusBarProps) => {
+  const { t } = useTranslation();
   if (connected) {
     return null;
   }
@@ -17,15 +19,15 @@ export const ConnectionStatusBar = ({ connected, showReconnectAction, onReconnec
       {showReconnectAction ? (
         <>
           <WifiOff className="h-4 w-4" />
-          <span>连接已断开</span>
+          <span>{t("game.conn.disconnected")}</span>
           <Button size="sm" variant="secondary" className="h-6 text-xs" onClick={onReconnect}>
-            立即重连
+            {t("game.conn.reconnect")}
           </Button>
         </>
       ) : (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>连接中断，正在自动重连...</span>
+          <span>{t("game.conn.auto")}</span>
         </>
       )}
     </div>

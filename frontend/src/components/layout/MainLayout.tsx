@@ -1,16 +1,15 @@
 import { useMemo, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Award,
   Bell,
   BookOpen,
   Coins,
-  Compass,
   Gamepad2,
   Home,
   LayoutGrid,
-  MessageCircle,
+  MoreHorizontal,
   PlayCircle,
   Shield,
   Trophy,
@@ -28,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LanguageMenuItems, LanguageSelector } from "@/i18n/LanguageSelector";
 import { useAuth } from "@/hooks/useAuth";
 import { gameApi } from "@/services/api";
 import { friendApi } from "@/services/v2Social";
@@ -35,6 +35,7 @@ import { FriendPanel } from "@/components/social/FriendPanel";
 import { QuickMatchDialog } from "@/components/social/QuickMatchDialog";
 
 const MainLayout = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, displayName, redirectToSsoLogin } = useAuth();
@@ -76,48 +77,55 @@ const MainLayout = () => {
             {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
               <Link to="/" className={`transition-colors hover:text-primary ${isActive("/")}`}>
-                游戏大厅
+                {t("nav.home")}
               </Link>
               <Link to="/community" className={`transition-colors hover:text-primary ${isActive("/community")}`}>
-                社区广场
+                {t("nav.community")}
               </Link>
               <Link to="/ai-chat" className={`transition-colors hover:text-primary ${isActive("/ai-chat")}`}>
-                AI 对话
+                {t("nav.aiChat")}
               </Link>
               <Link to="/rankings" className={`transition-colors hover:text-primary ${isActive("/rankings")}`}>
-                排行榜
+                {t("nav.rankings")}
               </Link>
               <Link to="/achievements" className={`transition-colors hover:text-primary ${isActive("/achievements")}`}>
-                成就
+                {t("nav.achievements")}
               </Link>
               <Link to="/replays" className={`transition-colors hover:text-primary ${isActive("/replays")}`}>
-                回放
+                {t("nav.replays")}
               </Link>
               <Link to="/guide" className={`transition-colors hover:text-primary ${isActive("/guide")}`}>
-                百科
+                {t("nav.guide")}
               </Link>
             </nav>
           </div>
 
           {/* Right Side Actions */}
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-1.5 md:gap-4">
             <Button size="sm" className="hidden md:inline-flex" onClick={() => setQuickMatchOpen(true)}>
               <Zap className="mr-1 h-4 w-4" />
-              快速开始
+              {t("common.quickStart")}
             </Button>
 
-            <Button variant="outline" size="icon" className="relative" onClick={() => setFriendOpen(true)}>
-              <Users className="h-4 w-4" />
-              {requestCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 text-[10px] text-white">{requestCount}</span>}
-            </Button>
+            {/* Desktop quick actions (收起于移动端「更多」菜单) */}
+            <div className="hidden md:flex items-center gap-2 md:gap-4">
+              <Button variant="outline" size="icon" className="relative" onClick={() => setFriendOpen(true)}>
+                <Users className="h-4 w-4" />
+                {requestCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 text-[10px] text-white">{requestCount}</span>}
+              </Button>
 
-            <Button variant="outline" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
+              <Button variant="outline" size="icon" aria-label={t("header.notifications")}>
+                <Bell className="h-4 w-4" />
+              </Button>
 
+              <LanguageSelector />
+            </div>
+
+            {/* Wallet pill — 所有尺寸可见 */}
             <button
               type="button"
               onClick={() => navigate("/profile?tab=wallet")}
+              aria-label={t("header.wallet")}
               className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 md:px-3 md:py-1.5 rounded-full text-xs md:text-sm font-medium hover:bg-secondary transition-colors"
             >
               <Coins className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" />
@@ -147,37 +155,63 @@ const MainLayout = () => {
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="cursor-pointer w-full flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      个人中心
+                      {t("user.profile")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <LayoutGrid className="mr-2 h-4 w-4" />
-                    我的房间
+                    {t("user.myRooms")}
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/admin" className="cursor-pointer w-full flex items-center">
                       <Shield className="mr-2 h-4 w-4" />
-                      后台管理
+                      {t("user.admin")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-red-600" onClick={logout}>
-                    退出登录
+                    {t("user.logout")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <Button variant="outline" onClick={() => void redirectToSsoLogin()}>
-                登录
+                {t("common.login")}
               </Button>
             )}
+
+            {/* Mobile overflow menu：好友 / 通知 / 语言选择收纳于此 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="relative md:hidden" aria-label={t("header.more")}>
+                  <MoreHorizontal className="h-4 w-4" />
+                  {requestCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1 text-[10px] text-white">{requestCount}</span>}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem onClick={() => setFriendOpen(true)}>
+                  <Users className="mr-2 h-4 w-4" />
+                  <span className="flex-1">{t("friend.title")}</span>
+                  {requestCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-red-500 px-1.5 text-center text-[10px] font-medium text-white">{requestCount}</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Bell className="mr-2 h-4 w-4" />
+                  <span className="flex-1">{t("header.notifications")}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="font-normal text-xs text-muted-foreground">
+                  {t("i18n.selectLanguage")}
+                </DropdownMenuLabel>
+                <LanguageMenuItems />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <div className="border-t bg-slate-50/80">
-          <div className="container flex items-center gap-4 px-4 py-1 text-xs text-muted-foreground">
-            <span>在线玩家 {onlineTotal}</span>
-            <span>好友请求 {requestCount}</span>
-            <span>邀请通知 0</span>
+          <div className="container flex flex-wrap items-center gap-x-4 gap-y-0.5 px-4 py-1 text-xs text-muted-foreground">
+            <span>{t("header.onlinePlayers", { count: onlineTotal })}</span>
+            <span>{t("header.friendRequests", { count: requestCount })}</span>
+            <span>{t("header.inviteNotices", { count: 0 })}</span>
           </div>
         </div>
       </header>
@@ -192,23 +226,23 @@ const MainLayout = () => {
         <div className="grid grid-cols-5 h-16">
           <Link to="/" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/")}`}>
             <Home className="h-6 w-6" />
-            <span className="text-[10px] font-medium">大厅</span>
+            <span className="text-[10px] font-medium">{t("mobile.home")}</span>
           </Link>
           <Link to="/rankings" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/rankings")}`}>
             <Trophy className="h-6 w-6" />
-            <span className="text-[10px] font-medium">排行</span>
+            <span className="text-[10px] font-medium">{t("mobile.rankings")}</span>
           </Link>
           <button className="flex flex-col items-center justify-center gap-1 text-slate-400" onClick={() => setQuickMatchOpen(true)}>
             <Zap className="h-6 w-6" />
-            <span className="text-[10px] font-medium">速配</span>
+            <span className="text-[10px] font-medium">{t("mobile.quickMatch")}</span>
           </button>
           <Link to="/replays" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/replays")}`}>
             <PlayCircle className="h-6 w-6" />
-            <span className="text-[10px] font-medium">回放</span>
+            <span className="text-[10px] font-medium">{t("mobile.replays")}</span>
           </Link>
           <Link to="/guide" className={`flex flex-col items-center justify-center gap-1 ${isMobileActive("/guide")}`}>
             <BookOpen className="h-6 w-6" />
-            <span className="text-[10px] font-medium">百科</span>
+            <span className="text-[10px] font-medium">{t("mobile.guide")}</span>
           </Link>
         </div>
       </div>

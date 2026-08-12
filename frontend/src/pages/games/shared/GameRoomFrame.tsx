@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { ChatPanel } from "@/components/game/ChatPanel";
 import { ConnectionStatusBar } from "@/components/game/ConnectionStatusBar";
@@ -48,6 +49,7 @@ export function GameRoomFrame({
   onSendChat,
   children,
 }: GameRoomFrameProps) {
+  const { t } = useTranslation();
   return (
     <>
       <ConnectionStatusBar connected={connected} showReconnectAction={showReconnectAction} onReconnect={onReconnect} />
@@ -66,7 +68,7 @@ export function GameRoomFrame({
             {headerExtra}
             <CountdownTimer phaseEndsAt={phaseEndsAt} />
             <Badge variant="secondary">
-              {aliveCount}/{playerCount} 存活
+              {t("game.aliveBadge", { alive: aliveCount, total: playerCount })}
             </Badge>
           </div>
         </div>
