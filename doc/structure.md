@@ -35,6 +35,7 @@ AISocialGame/
 ├── env.example                               # 无敏感值环境变量模板
 ├── env.local                                 # 本机真实环境变量（不入库）
 ├── build.sh                                  # 唯一部署入口（Linux）
+├── scripts/windows/                          # Windows 原生按需构建、启动、停止、状态与 L1/L2 验证入口
 ├── README.md
 ├── AGENTS.md
 └── projectStructure.md
@@ -50,6 +51,7 @@ AISocialGame/
 ## 部署脚本
 
 - 统一入口：`build.sh`
+- Windows 原生按需入口：`scripts/windows/Build-Local.ps1`、`Start-Local.ps1`、`Stop-Local.ps1`、`Get-LocalStatus.ps1`、`Test-Local.ps1`；运行期 PID 状态位于用户本地目录，不写入仓库。
 - 默认本地域名：`localsocialgame.testhut.top`
 - 如需切换域名，直接通过 `APP_DOMAIN=... ./build.sh` 覆盖
 
