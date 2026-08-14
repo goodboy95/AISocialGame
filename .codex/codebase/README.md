@@ -5,7 +5,7 @@
 1. 先读根目录 `AGENTS.md`，确认项目边界、域名、端口和部署脚本约束。
 2. 再读 `doc/README.md`，按任务进入里程碑、结构、模块、API 或测试文档。
 3. 涉及公共服务接口时，读取 `/home/duwei/aienie-services/aienie-doc/interfaces/{user-service,ai-service,pay-service}/` 下对应服务契约。
-4. 先用 CodeGraph 查模块结构、调用链和影响面候选，再用 Serena 查 definition、references、symbol overview 和 rename。
+4. 先用 CodeGraph 查模块结构、调用链、影响面候选以及 definition、references、symbol overview 和 rename；CodeGraph 不可用时回退到 Grep/Read。
 5. 图谱或 LSP 结论只作为定位依据；修改前必须打开真实源码和相关文档确认。
 
 常用入口：
