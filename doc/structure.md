@@ -23,7 +23,10 @@ AISocialGame/
 │   ├── src/main/resources/application.yml
 │   └── src/test/
 ├── frontend/                                 # React + Vite 前端
-│   ├── src/pages/
+│   ├── src/main.tsx                          # /admin 精确分流到 App，其余路由加载 UserApp
+│   ├── src/App.tsx                           # 内嵌 Admin 入口（独立 chunk、固定简中）
+│   ├── src/UserApp.tsx                       # 用户端入口（i18n）
+│   ├── src/pages/                            # 用户页与 pages/admin 管理页
 │   ├── src/components/
 │   ├── src/services/
 │   ├── tests/                                # Playwright 相关测试资产
@@ -43,6 +46,7 @@ AISocialGame/
 ## 目录约束
 
 - 前端代码必须位于 `frontend/`。
+- 管理台是 `frontend/` 内按 `/admin` 路径加载的 React 入口，不存在第二套 Vue 或 `manage/` 前端；管理员权限由后端会话裁决。
 - 后端代码与 SQL 必须位于 `backend/`。
 - `frontend/` 与 `backend/` 外仅保留：文档、部署脚本、测试结果、`env.example` 与项目元信息。
 - `result/` 为运行时产物目录（例如真人对局报告），由 `.gitignore` 忽略，不参与提交。

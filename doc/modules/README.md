@@ -1,6 +1,7 @@
 # 模块文档索引
 
-> 更新时间：2026-06-06
+用户端与管理端共享 `frontend/` React 工程；`frontend/src/main.tsx` 只按路径选择
+`UserApp.tsx` 或 Admin `App.tsx`，下表中的管理模块不代表独立前端服务。
 
 | 模块 | 作用 | 入口实现位置 |
 |---|---|---|

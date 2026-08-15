@@ -1,7 +1,5 @@
 # gRPC 集成模块说明（v1.7）
 
-> 更新时间：2026-05-23
-
 ## 目标
 
 对接 user-service、pay-service、ai-service 三个外部服务，并通过静态域名地址建立 gRPC 通道。当前版本不使用 Consul 服务发现。

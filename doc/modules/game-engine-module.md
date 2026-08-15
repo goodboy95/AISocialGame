@@ -51,7 +51,7 @@ M3 将玩法规则从 `GamePlayService` 中拆出为可注册的 `GameEngine`。
 - 为 AI Adapter、Prompt 模板、合法性校验和兜底策略提供每玩法声明。
 - 让服务端玩法元数据逐步成为前端创建房间配置的单一来源。
 
-## v1.0 可维护性整改（2026-05-19）
+## v1.0 可维护性边界
 
 - 后端新增游戏常量类，engine 和 runtime 入口不再直接重复关键 phase/gameId 字符串。
 - 前端房间页公共能力已下沉到 `frontend/src/pages/games/shared/`，新增玩法应优先复用 `useRoomRuntime`、`GameRoomFrame`、`PlayerGrid`、`GameLogPanel` 和 `AiSeatControl`。

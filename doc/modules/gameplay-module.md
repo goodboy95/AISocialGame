@@ -26,23 +26,23 @@
 4. 阶段超时或操作完备时自动推进，结算后记录统计并回写房间状态。
 5. AI 动作会同步更新 `GameState.data.aiBeliefs`、`GameState.data.aiShortMemories` 与后台 trace，不改变玩家端可见信息边界。
 
-## 本轮新增修复（2026-03-04）
+## 当前连接与托管规则
 
 1. 断线判定阈值改为可配置：
    - 配置项：`connection.disconnect-threshold-seconds`
    - 默认值：`60`
-   - 变更目标：降低短时抖动导致的误判离线。
+   - 目的：降低短时抖动导致的误判离线。
 
 2. 狼人杀夜晚自动补行动策略优化：
    - 当存在在线真人夜晚角色（狼人/预言家/女巫）时，不再提前由系统自动补齐该角色夜晚动作；
    - 仅对“无在线真人参与”的角色执行自动补动作；
-   - 变更目标：避免真人夜晚还在场时被系统越权代操作。
+   - 目的：避免真人夜晚还在场时被系统越权代操作。
 
 3. 满房重连玩家识别修复：
    - `RoomService.joinRoom` 调整为“先匹配已在房间玩家，再检查满房”；
-   - 变更目标：确保已在房玩家重连后仍能拿到 `myPlayerId/mySeatNumber`，避免出现“轮到发言但无输入框”。
+   - 目的：确保已在房玩家重连后仍能拿到 `myPlayerId/mySeatNumber`，避免出现“轮到发言但无输入框”。
 
-## M3 插件化入口（2026-05-17）
+## M3 插件化入口
 
 - 新增 `GameEngine` 与 `GameEngineRegistry`。
 - 新增 `UndercoverGameEngine`、`WerewolfGameEngine`。
@@ -50,7 +50,7 @@
 - 新增 `PlayerAction` 与 `/action`，前端房间页已通过 `useGameEngine` 使用统一动作入口。
 - 当前 `GameRuntimeSupport` 仍保留迁移阶段的规则支撑逻辑，后续可继续拆入各 engine。
 
-## v1.0 可维护性整改（2026-05-19）
+## v1.0 可维护性边界
 
 - `GamePlayController` 改为通过 `@CurrentUser` 接收登录用户，避免每个接口重复读取 `X-Auth-Token`。
 - 请求 DTO 增加长度、枚举与 URL 校验，明显非法输入会在进入业务服务前被拒绝。
@@ -63,16 +63,16 @@
 - `backend/src/main/java/com/aisocialgame/dto/ws/*`：WS 推送事件 DTO。
 - `frontend/src/types/index.ts`：新增 WS 事件与聊天消息类型。
 
-## 验收方式（2026-03-04）
+## 验收方式
 
 - 本模块不再依赖自动化 4 局脚本进行最终验收。
-- 采用 subagent + Playwright 真人流程完成 4 场完整对局：
+- 隔离的浏览器验收应覆盖 4 类完整对局：
   - 谁是卧底：1 用户 + AI
   - 谁是卧底：3 用户 + AI
   - 狼人杀：1 用户 + AI
   - 狼人杀：3 用户 + AI
-- 每场需记录：
+- 每场证据应记录：
   - 人类玩家发言、投票、夜晚行动与决策依据
   - AI 角色发言与行为
   - 系统日志与结算结果
-- 报告目录：`result/game-reports/<run-id>/`（本地产物，不入库）。
+- 报告输出到测试运行器提供的工作树外目录，不把日期化结果、截图或账号秘密提交到仓库。

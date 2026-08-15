@@ -6,6 +6,7 @@
 
 - 后端：Java 25、Spring Boot、MySQL、Redis、gRPC
 - 前端：React 18、TypeScript、Vite、Tailwind、TanStack Query、shadcn/ui
+- 管理台：同一 React/Vite 前端内的 `/admin` 路由入口，按路径独立分包；不是独立 Vue/`manage` 项目
 - 部署：Docker Compose（仅编排本项目的前后端）
 
 ## 项目结构
@@ -147,6 +148,7 @@ APP_DOMAIN=socialgame.testhut.top ./build.sh
 - 本地域名：`localsocialgame.testhut.top`
 - 预发布域名：`socialgame.testhut.top`
 - 生产迁移目标：`socialgame.seekerhut.com`（完成切换验收前不得描述为当前入口）
+- 历史生产兼容域名：`socialgame.aienie.com`（仅作迁移兼容；切换验收后至少保留 12 个月，不作为新配置或默认入口）
 - 前端端口：`11030`
 - 后端端口：`11031`
 
@@ -156,3 +158,4 @@ APP_DOMAIN=socialgame.testhut.top ./build.sh
 - 认证与钱包：`doc/modules/auth-wallet-module.md`
 - gRPC 集成：`doc/modules/grpc-integration-module.md`
 - 测试与运维：`doc/test/integratedTest.md`
+- Windows 原生按需入口：`doc/operations/windows-native.md`

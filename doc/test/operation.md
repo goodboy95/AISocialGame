@@ -1,4 +1,4 @@
-# 系统功能与操作步骤（2026-03-04）
+# 系统功能与操作步骤
 
 ## 0. 入口与端口
 
@@ -61,7 +61,7 @@
 
 ## 5. 管理后台
 
-1. 管理员登录：使用受控账号和密码；TOTP 模式完成第二阶段验证，浏览器只接收 HttpOnly cookie。
+1. 通过同一站点的 `/admin/login` 进入 React 内嵌管理台；管理员登录使用受控账号和密码，TOTP 模式完成第二阶段验证，浏览器只接收 HttpOnly cookie。
    - 首次登录必须先按页面或 `scripts/admin-billing-migrate-all.sh` 提示完成 enrollment，并将一次性恢复码保存到 owner-only 位置。
 2. 进入积分管理页执行：
    - `migrate-user`
