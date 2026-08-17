@@ -78,6 +78,18 @@ function Get-ChildEnvironment([hashtable]$PrivateValues) {
     foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
     foreach ($entry in $PrivateValues.GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
     $result['VITE_LOCAL_BACKEND_PORT'] = '11031'
+    $result['SPRING_DATA_REDIS_HOST'] = 'localbase.testhut.top'
+    $result['QDRANT_HOST'] = 'http://localbase.testhut.top'
+    $result['USER_GRPC_ADDR'] = 'static://localuserservice.testhut.top:12001'
+    $result['BILLING_GRPC_ADDR'] = 'static://localpayservice.testhut.top:12021'
+    $result['AI_GRPC_ADDR'] = 'static://localaiservice.testhut.top:12011'
+    $localCaRootUri = 'file:///C:/ProgramData/AieniePki/pki/root/aienie-local-root-ca.crt'
+    $result['GRPC_CLIENT_USER_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
+    $result['GRPC_CLIENT_BILLING_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
+    $result['GRPC_CLIENT_AI_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
+    $result['USER_GRPC_NEGOTIATION_TYPE'] = 'TLS'
+    $result['BILLING_GRPC_NEGOTIATION_TYPE'] = 'TLS'
+    $result['AI_GRPC_NEGOTIATION_TYPE'] = 'TLS'
     return $result
 }
 
@@ -89,7 +101,7 @@ function Get-State {
 function Test-Record($Record) {
     try {
         $process = Get-Process -Id ([int]$Record.Pid) -ErrorAction Stop
-        $expected = [DateTime]::Parse([string]$Record.ProcessStartTimeUtc).ToUniversalTime()
+        $expected = if ($Record.ProcessStartTimeUtc -is [DateTime]) { ([DateTime]$Record.ProcessStartTimeUtc).ToUniversalTime() } else { [DateTimeOffset]::Parse([string]$Record.ProcessStartTimeUtc).UtcDateTime }
         return [Math]::Abs(($process.StartTime.ToUniversalTime() - $expected).TotalSeconds) -le 2
     } catch { return $false }
 }
@@ -108,6 +120,24 @@ function Test-Http([int]$Port, [string]$Path) {
     try { $response = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}{1}" -f $Port, $Path) -TimeoutSec 3 -SkipHttpErrorCheck; return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500 } catch { return $false }
 }
 
+function Resolve-ManagedProcess($Record, $Spec) {
+    $connection = Get-NetTCPConnection -State Listen -LocalPort $Spec.Port -ErrorAction Stop |
+        Where-Object { $_.LocalAddress -in @('127.0.0.1', '::1', '::') } |
+        Select-Object -First 1
+    if ($null -eq $connection) { throw "Native $($Spec.Name) has no listener on port $($Spec.Port) after readiness." }
+    $minimumStart = [DateTime]::Parse([string]$Record.ProcessStartTimeUtc).ToUniversalTime().AddSeconds(-2)
+    $current = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $connection.OwningProcess) -ErrorAction Stop
+    $managedRoot = $current
+    while ($current.ParentProcessId -gt 0) {
+        $parent = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $current.ParentProcessId) -ErrorAction SilentlyContinue
+        if ($null -eq $parent -or $parent.CreationDate.ToUniversalTime() -lt $minimumStart) { break }
+        $current = $parent
+        if ($current.Name -notin @('cmd.exe', 'powershell.exe', 'pwsh.exe')) { $managedRoot = $current }
+    }
+    $managed = Get-Process -Id $managedRoot.ProcessId -ErrorAction Stop
+    return [pscustomobject]@{ Name = $Record.Name; Pid = $managedRoot.ProcessId; ProcessStartTimeUtc = $managed.StartTime.ToUniversalTime().ToString('o'); Port = $Record.Port; HealthPath = $Record.HealthPath; Process = $Record.Process }
+}
+
 function Start-Component($Spec, [hashtable]$ChildEnvironment) {
     if ($Spec.RequiresInstall -and -not (Test-Path -LiteralPath (Join-Path $Spec.Directory 'node_modules') -PathType Container)) {
         throw "Native $($Spec.Name) dependencies are missing. Run Build-Local.ps1 before Start-Local.ps1."
@@ -120,7 +150,8 @@ function Start-Component($Spec, [hashtable]$ChildEnvironment) {
     do {
         if ($process.HasExited) { throw "Native $($Spec.Name) process exited during startup with code $($process.ExitCode)." }
         if ((Test-Tcp -Port $Spec.Port) -and (Test-Http -Port $Spec.Port -Path $Spec.Health)) {
-            return [pscustomobject]@{ Name = $Spec.Name; Pid = $process.Id; ProcessStartTimeUtc = (Get-Process -Id $process.Id).StartTime.ToUniversalTime().ToString('o'); Port = $Spec.Port; HealthPath = $Spec.Health; Process = $process }
+            $record = [pscustomobject]@{ Name = $Spec.Name; Pid = $process.Id; ProcessStartTimeUtc = (Get-Process -Id $process.Id).StartTime.ToUniversalTime().ToString('o'); Port = $Spec.Port; HealthPath = $Spec.Health; Process = $process }
+            return Resolve-ManagedProcess $record $Spec
         }
         Start-Sleep -Seconds 1
         $process.Refresh()
@@ -155,9 +186,6 @@ function Publish-OperationalState {
         'unknown'
     }
     & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
-    if ($LASTEXITCODE -ne 0) {
-        throw "Operational-state writer failed with exit code $LASTEXITCODE."
-    }
 }
 
 switch ($Action) {
@@ -185,7 +213,10 @@ switch ($Action) {
         foreach ($spec in $selected) { if (@($existing | Where-Object Name -eq $spec.Name).Count -gt 0) { throw "Native $($spec.Name) is already running. Use Get-LocalStatus.ps1 or Stop-Local.ps1." } }
         $started = @()
         try {
-            foreach ($spec in $selected) { $started += Start-Component $spec (Get-ChildEnvironment $privateValues) }
+            foreach ($spec in $selected) {
+                $started += Start-Component $spec (Get-ChildEnvironment $privateValues)
+                Save-State (@($existing) + @($started | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Pid = $_.Pid; ProcessStartTimeUtc = $_.ProcessStartTimeUtc; Port = $_.Port; HealthPath = $_.HealthPath } }))
+            }
             Save-State (@($existing) + @($started | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Pid = $_.Pid; ProcessStartTimeUtc = $_.ProcessStartTimeUtc; Port = $_.Port; HealthPath = $_.HealthPath } }))
             Publish-OperationalState
             & $PSCommandPath -Action Status
