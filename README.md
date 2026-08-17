@@ -143,6 +143,18 @@ APP_DOMAIN=socialgame.testhut.top ./build.sh
 4. 调试进程会读取权限为 `0600` 且未入库的 `../env.local`，未显式提供 `SERVER_PORT` 时会回退到 `BACKEND_PORT`。
 5. 启动成功后，可访问 `http://127.0.0.1:11031/actuator/health` 验证服务状态。
 
+### Windows 本机启动（localbase WSL）
+
+共享 MySQL、Redis 与 Qdrant 由 `aienie-wsl` 提供，应用仅通过 `localbase.testhut.top` 访问。首次启动前，请以管理员身份从项目根目录执行：
+
+```powershell
+.\scripts\windows\Ensure-LocalbaseHosts.ps1
+```
+
+该脚本幂等维护带标记的 `172.20.0.2 localbase.testhut.top` hosts 条目。准备好被 Git 忽略的 `env.local` 后，执行 `.\scripts\windows\Start-Native.ps1`；它按字面读取 `NAME=value`、验证 localbase 解析与共享数据端口，并将后端和前端分别限制在 `127.0.0.1:11031`、`127.0.0.1:11030`。执行 `.\scripts\windows\Stop-Native.ps1` 停止进程。停止不会删除 hosts 映射，日志与 PID 状态位于 `.native-run/`。
+
+Linux Docker Compose 使用非敏感 `LOCALBASE_HOST_IP=172.20.0.2`（默认值相同）仅映射 `localbase.testhut.top` 到 WSL provider；user、AI、pay 服务仍保留各自的 `host-gateway` 映射。
+
 ## 域名与端口
 
 - 本地域名：`localsocialgame.testhut.top`

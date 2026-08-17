@@ -12,6 +12,7 @@ backend/target/
 /backend/logs/
 /logs/
 /artifacts
+.native-run/
 /screenshot
 /result
 testuser.txt

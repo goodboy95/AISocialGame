@@ -19,3 +19,10 @@ process trees. Successful start, stop, status, and test commands update the
 shared product operational-state metric when its configured writer is
 available. Run the build before the first native start. Browser L4 acceptance
 remains a separate, already-running-runtime operation.
+
+Shared MySQL, Redis, Qdrant and all three public services stay on the VM known
+to operators as `ssh aienie-wsl`; the product itself never runs Docker or SSH.
+The launcher uses `localbase.testhut.top` for shared data and TLS gRPC
+`localuserservice/localpayservice/localaiservice.testhut.top` on
+`12001/12021/12011`, with the fixed Aienie local CA root injected into all
+three gRPC clients.
