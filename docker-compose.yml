@@ -20,7 +20,7 @@ services:
       - /home/duwei/aienie-runtime/observability/data/aisocialgame/logs:/app/logs
       - /home/duwei/aienie-runtime/observability/data/aisocialgame/records:/app/records
     extra_hosts:
-      - "localbase.testhut.top:host-gateway"
+      - "localbase.testhut.top:${LOCALBASE_HOST_IP:-172.20.0.2}"
       - "localuserservice.testhut.top:host-gateway"
       - "localpayservice.testhut.top:host-gateway"
       - "localaiservice.testhut.top:host-gateway"
