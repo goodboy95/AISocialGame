@@ -20,6 +20,10 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localbase.testhut.top}
       port: ${SPRING_DATA_REDIS_PORT:26379}
+      username: ${SPRING_DATA_REDIS_USERNAME:}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      ssl:
+        enabled: ${SPRING_DATA_REDIS_SSL_ENABLED:false}
 
 server:
   port: ${SERVER_PORT:${BACKEND_PORT:11031}}
@@ -93,6 +97,7 @@ qdrant:
   host: ${QDRANT_HOST:http://localbase.testhut.top}
   http-port: ${QDRANT_PORT:26333}
   enabled: ${QDRANT_ENABLED:true}
+  api-key: ${QDRANT_API_KEY:}
 
 connection:
   disconnect-threshold-seconds: ${APP_CONNECTION_DISCONNECT_THRESHOLD_SECONDS:60}
