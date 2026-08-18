@@ -185,7 +185,13 @@ function Publish-OperationalState {
     } else {
         'unknown'
     }
-    & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
+    try {
+        & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
+    } catch {
+        # Shared observability publishing is best-effort and must not turn a
+        # successful repository build or test into a false negative.
+        Write-Warning "Could not publish AISocialGame operational state: $($_.Exception.Message)"
+    }
 }
 
 switch ($Action) {
