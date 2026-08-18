@@ -13,4 +13,5 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 RUN npm install -g serve@14 --no-audit --no-fund
 EXPOSE 11030
+USER node
 CMD ["serve", "-s", "dist", "-l", "tcp://0.0.0.0:11030"]
