@@ -1,6 +1,5 @@
 package com.aisocialgame.integration.grpc.auth;
 
-import com.aisocialgame.config.AppProperties;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -15,10 +14,10 @@ public class UserGrpcAuthClientInterceptor implements ClientInterceptor {
     private static final Metadata.Key<String> INTERNAL_TOKEN_KEY =
             Metadata.Key.of("x-internal-token", Metadata.ASCII_STRING_MARSHALLER);
 
-    private final AppProperties appProperties;
+    private final UserServiceCallerJwtProvider tokenProvider;
 
-    public UserGrpcAuthClientInterceptor(AppProperties appProperties) {
-        this.appProperties = appProperties;
+    public UserGrpcAuthClientInterceptor(UserServiceCallerJwtProvider tokenProvider) {
+        this.tokenProvider = tokenProvider;
     }
 
     @Override
@@ -28,7 +27,7 @@ public class UserGrpcAuthClientInterceptor implements ClientInterceptor {
         return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, callOptions)) {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
-                headers.put(INTERNAL_TOKEN_KEY, appProperties.getExternal().getUserserviceInternalGrpcToken().trim());
+                headers.put(INTERNAL_TOKEN_KEY, tokenProvider.currentToken());
                 super.start(responseListener, headers);
             }
         };

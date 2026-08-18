@@ -4,7 +4,7 @@
 
 ## 服务地址与服务名
 
-- 本地默认地址：`USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
+- 本地默认地址：`USER_GRPC_ADDR=static://localuserservice.testhut.top:12001`
 - 默认传输：`USER_GRPC_NEGOTIATION_TYPE=TLS`
 - 当前发现方式：静态域名/端口，不使用 Consul。
 - gRPC 服务：
@@ -22,8 +22,8 @@
 
 ## 鉴权要求
 
-除少数公开方法外，user-service 受保护方法需携带：
-
-- `x-internal-token: ${USERSERVICE_INTERNAL_GRPC_TOKEN}`
-
-本项目由 `UserGrpcAuthClientInterceptor` 自动注入该 header。
+除少数公开方法外，user-service 受保护方法需在 `x-internal-token` 携带调用方短期 HS256 JWT。
+AISocialGame 的 `iss/sub` 固定为 `aisocialgame`，`aud` 固定为 `aienie-userservice-grpc`，TTL 为
+300 秒，并只申请 `user.auth.session.read`、`user.directory.read`、`user.ban.read`、
+`user.ban.write`。JWT 包含 `iat/nbf/exp/jti/scopes`，由 `UserGrpcAuthClientInterceptor` 在每次真实
+调用开始时获取并注入；旧静态 token 不再接受。

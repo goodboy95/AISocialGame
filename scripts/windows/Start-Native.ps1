@@ -23,6 +23,7 @@ if (-not $NativeWorker) {
 
 $modulePath = Join-Path $PSScriptRoot 'Native-Localbase.psm1'
 Import-Module -Name $modulePath -Force
+. (Join-Path $PSScriptRoot 'UserServiceJwt-Contract.ps1')
 
 $projectRoot = Get-NativeProjectRoot
 $stateDirectory = Get-NativeStateDirectory -ProjectRoot $projectRoot
@@ -32,11 +33,23 @@ $environmentNames = @(
     'QDRANT_HOST', 'QDRANT_PORT',
     'SERVER_ADDRESS', 'SERVER_PORT', 'BACKEND_PORT', 'VITE_LOCAL_BACKEND_PORT',
     'SSO_USER_SERVICE_BASE_URL', 'SSO_CALLBACK_URL', 'USER_GRPC_ADDR', 'BILLING_GRPC_ADDR', 'AI_GRPC_ADDR',
-    'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN', 'APP_EXTERNAL_PAYSERVICE_JWT',
+    'APP_EXTERNAL_GRPC_AUTH_REQUIRED', 'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN',
+    'APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID', 'APP_EXTERNAL_USERSERVICE_JWT_ISSUER',
+    'APP_EXTERNAL_USERSERVICE_JWT_SECRET', 'APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE',
+    'APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS', 'APP_EXTERNAL_USERSERVICE_JWT_SCOPES',
+    'APP_EXTERNAL_PAYSERVICE_JWT',
     'APP_EXTERNAL_AISERVICE_HMAC_CALLER', 'APP_EXTERNAL_AISERVICE_HMAC_SECRET'
 )
 
 Import-LiteralEnvironmentFile -Path $EnvironmentFile -ClearNames $environmentNames
+$userServiceJwtEnvironment = @{}
+foreach ($name in @('APP_EXTERNAL_GRPC_AUTH_REQUIRED', 'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN',
+        'APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID', 'APP_EXTERNAL_USERSERVICE_JWT_ISSUER',
+        'APP_EXTERNAL_USERSERVICE_JWT_SECRET', 'APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE',
+        'APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS', 'APP_EXTERNAL_USERSERVICE_JWT_SCOPES')) {
+    $userServiceJwtEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
+Assert-AisocialUserServiceJwtEnvironment -Values $userServiceJwtEnvironment
 Set-LocalbaseJdbcMySqlEndpoint -EnvironmentName 'SPRING_DATASOURCE_URL'
 $env:SPRING_DATA_REDIS_HOST = 'localbase.testhut.top'
 $env:SPRING_DATA_REDIS_PORT = '26379'
