@@ -13,7 +13,7 @@
 - `integration/grpc/client/AiGrpcClient`
   - 模型列表、对话、embeddings、ocr；proto 保留 `GenerateImage` 契约但 AISocialGame 当前不新增生图业务入口
 - `integration/grpc/auth/UserGrpcAuthClientInterceptor`
-  - 自动注入短期、调用方隔离的 `x-internal-token` JWT
+  - 自动注入短期、调用方隔离的 `authorization: Bearer <JWT>`，不发送旧 `x-internal-token`
 - `integration/grpc/auth/BillingGrpcAuthClientInterceptor`
   - 自动注入 `authorization: Bearer <service_jwt>`
 - `integration/grpc/auth/AiGrpcHmacClientInterceptor`

@@ -28,7 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UserGrpcAuthClientInterceptorTest {
-    private static final Metadata.Key<String> INTERNAL_TOKEN_KEY =
+    private static final Metadata.Key<String> AUTHORIZATION_KEY =
+            Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> LEGACY_INTERNAL_TOKEN_KEY =
             Metadata.Key.of("x-internal-token", Metadata.ASCII_STRING_MARSHALLER);
 
     @Test
@@ -40,7 +42,8 @@ class UserGrpcAuthClientInterceptorTest {
                     ServerCall<ReqT, RespT> call,
                     Metadata headers,
                     ServerCallHandler<ReqT, RespT> next) {
-                receivedTokens.add(headers.get(INTERNAL_TOKEN_KEY));
+                receivedTokens.add(headers.get(AUTHORIZATION_KEY));
+                assertEquals(null, headers.get(LEGACY_INTERNAL_TOKEN_KEY));
                 return Contexts.interceptCall(io.grpc.Context.current(), call, headers, next);
             }
         };
@@ -80,11 +83,13 @@ class UserGrpcAuthClientInterceptorTest {
 
             assertEquals(2, receivedTokens.size());
             assertNotEquals(receivedTokens.get(0), receivedTokens.get(1));
+            assertTrue(receivedTokens.get(0).startsWith("Bearer "));
+            assertTrue(receivedTokens.get(1).startsWith("Bearer "));
             assertEquals("grpc-jti-1", UserServiceCallerJwtProviderTest
-                    .parse(receivedTokens.get(0), Instant.parse("2026-08-19T02:00:00Z"))
+                    .parse(receivedTokens.get(0).substring("Bearer ".length()), Instant.parse("2026-08-19T02:00:00Z"))
                     .getBody().getId());
             assertEquals("grpc-jti-2", UserServiceCallerJwtProviderTest
-                    .parse(receivedTokens.get(1), clock.instant())
+                    .parse(receivedTokens.get(1).substring("Bearer ".length()), clock.instant())
                     .getBody().getId());
         } finally {
             channel.shutdownNow();

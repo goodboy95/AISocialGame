@@ -42,7 +42,7 @@
 
 缺失任一变量时，后端会在启动期 fail-fast。
 旧的 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 必须缺失或为空；任何非空值都会被 Java、Linux
-部署预检和 Windows 启动器拒绝。每次 gRPC 调用在 `x-internal-token` 中携带短期 caller JWT，进程只在
+部署预检和 Windows 启动器拒绝。每次 gRPC 调用在 `authorization: Bearer <JWT>` 中携带短期 caller JWT，旧 `x-internal-token` 禁用；进程只在
 安全刷新窗口外复用缓存，不记录 token 或 secret。
 
 ## 运行依赖

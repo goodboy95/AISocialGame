@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class UserGrpcAuthClientInterceptor implements ClientInterceptor {
-    private static final Metadata.Key<String> INTERNAL_TOKEN_KEY =
-            Metadata.Key.of("x-internal-token", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> AUTHORIZATION_KEY =
+            Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
 
     private final UserServiceCallerJwtProvider tokenProvider;
 
@@ -27,7 +27,7 @@ public class UserGrpcAuthClientInterceptor implements ClientInterceptor {
         return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, callOptions)) {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
-                headers.put(INTERNAL_TOKEN_KEY, tokenProvider.currentToken());
+                headers.put(AUTHORIZATION_KEY, "Bearer " + tokenProvider.currentToken());
                 super.start(responseListener, headers);
             }
         };

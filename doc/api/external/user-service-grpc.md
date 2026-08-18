@@ -22,7 +22,7 @@
 
 ## 鉴权要求
 
-除少数公开方法外，user-service 受保护方法需在 `x-internal-token` 携带调用方短期 HS256 JWT。
+除少数公开方法外，user-service 受保护方法需在 `authorization: Bearer <JWT>` 携带调用方短期 HS256 JWT；旧 `x-internal-token` 不再接受。
 AISocialGame 的 `iss/sub` 固定为 `aisocialgame`，`aud` 固定为 `aienie-userservice-grpc`，TTL 为
 300 秒，并只申请 `user.auth.session.read`、`user.directory.read`、`user.ban.read`、
 `user.ban.write`。JWT 包含 `iat/nbf/exp/jti/scopes`，由 `UserGrpcAuthClientInterceptor` 在每次真实
