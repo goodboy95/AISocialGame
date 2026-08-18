@@ -53,8 +53,6 @@ const CreateRoom = () => {
     }
   }, [game, t]);
 
-  if (!game) return <div className="p-8 text-center">{t("common.gameNotFound")}</div>;
-
   const handleInputChange = (id: string, value: any) => {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
@@ -71,7 +69,7 @@ const CreateRoom = () => {
     }),
     onSuccess: (room) => {
       toast.success(t("create.success"));
-      navigate(`/room/${game.id}/${room.id}`);
+      navigate(`/room/${gameId}/${room.id}`);
     },
     onError: (error: unknown) => {
       const raw = getApiErrorMessage(error, t("create.failed"));
@@ -95,6 +93,8 @@ const CreateRoom = () => {
   const isAdvancedField = (id: string) => {
     return !["template", "playerCount"].includes(id);
   };
+
+  if (!game) return <div className="p-8 text-center">{t("common.gameNotFound")}</div>;
 
   return (
     <div className="max-w-6xl mx-auto pb-24 md:pb-8 px-4">

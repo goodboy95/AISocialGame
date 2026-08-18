@@ -16,7 +16,7 @@ import { personaApi, roomApi } from "@/services/api";
 import { RoomSeat } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
-const Lobby = () => {
+const GenericLobby = () => {
   const { t } = useTranslation();
   const { roomId, gameId } = useParams();
   const { displayName, user, redirectToSsoLogin } = useAuth();
@@ -33,15 +33,6 @@ const Lobby = () => {
   });
 
   const hasJoinedRef = useRef(false);
-
-  const GameRoomComponent = gameId ? gameRoomComponents[gameId] : undefined;
-  if (GameRoomComponent) {
-    return (
-      <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">{t("lobby.loadingRoom")}</div>}>
-        <GameRoomComponent />
-      </Suspense>
-    );
-  }
 
   // --- GENERIC LOBBY FALLBACK ---
   
@@ -232,6 +223,22 @@ const Lobby = () => {
       </Card>
     </div>
   );
+};
+
+const Lobby = () => {
+  const { t } = useTranslation();
+  const { gameId } = useParams();
+  const GameRoomComponent = gameId ? gameRoomComponents[gameId] : undefined;
+
+  if (GameRoomComponent) {
+    return (
+      <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">{t("lobby.loadingRoom")}</div>}>
+        <GameRoomComponent />
+      </Suspense>
+    );
+  }
+
+  return <GenericLobby />;
 };
 
 export default Lobby;
