@@ -86,6 +86,30 @@ aienie_ci_sha256_file() {
   sha256sum -- "$1" | awk '{print $1}'
 }
 
+aienie_ci_assert_runtime_toolchain_contract() {
+  local dockerfile="$AIENIE_CI_REPO_ROOT/backend/Dockerfile"
+  local compose="$AIENIE_CI_REPO_ROOT/ci/aisocialgame-runtime-compose.yml"
+  local start="$AIENIE_CI_REPO_ROOT/backend/start-backend.sh"
+  local builder='FROM maven:3.9.16-eclipse-temurin-25-alpine@sha256:af1e0b9de1a3617dc13eaff61b7ff92118c0051855eac223d8d3d9acb9848d4f AS builder'
+  local runtime='FROM eclipse-temurin:25.0.3_9-jre-alpine-3.23@sha256:28db6fdf60e38945e43d840c0333aeaec66c15943070104f7586fd3c9d1665b0'
+  local ca_source='        source: /etc/aienie-staging-pki/root.pem'
+  local ca_block
+  [[ "$(grep -Fxc -- "$builder" "$dockerfile")" == 1 ]] || aienie_ci_fail 'backend builder image is not the approved immutable toolchain'
+  [[ "$(grep -Fxc -- "$runtime" "$dockerfile")" == 1 ]] || aienie_ci_fail 'backend runtime image is not the approved immutable toolchain'
+  [[ "$(grep -c '^FROM ' "$dockerfile")" == 2 ]] || aienie_ci_fail 'backend Dockerfile must contain exactly the approved builder and runtime stages'
+  [[ "$(grep -Fxc -- '      - "127.0.0.1:11031:20030"' "$compose")" == 1 ]] || aienie_ci_fail 'Compose backend host/container listener mapping is not canonical'
+  [[ "$(grep -Fxc -- '      - "127.0.0.1:11030:11030"' "$compose")" == 1 ]] || aienie_ci_fail 'Compose frontend host port is not loopback-only'
+  [[ "$(grep -Fxc -- "$ca_source" "$compose")" == 1 ]] || aienie_ci_fail 'Compose staging trust source is not fixed'
+  ca_block="$(grep -A5 -F -- "$ca_source" "$compose")"
+  grep -Fq -- 'target: /run/aienie/trust/staging-root.pem' <<<"$ca_block" || aienie_ci_fail 'Compose staging trust target is not canonical'
+  grep -Fq -- 'read_only: true' <<<"$ca_block" || aienie_ci_fail 'Compose staging trust mount is not read-only'
+  grep -Fq -- 'create_host_path: false' <<<"$ca_block" || aienie_ci_fail 'Compose may create a missing staging root path'
+  ! grep -Eq -- '/home/|extra_hosts|host-gateway' "$compose" || aienie_ci_fail 'Compose contains local runtime authority'
+  grep -Fq -- 'http://127.0.0.1:20030/actuator/health' "$compose" || aienie_ci_fail 'Compose strict backend health gate is missing'
+  grep -Fq -- 'condition: service_healthy' "$compose" || aienie_ci_fail 'Compose frontend dependency is not readiness-gated'
+  ! grep -Fq -- '--contract-canary' "$start" || aienie_ci_fail 'production backend entrypoint exposes a contract canary'
+}
+
 aienie_ci_write_specs() {
   local output="$1" kind module
   : >"$output"
@@ -389,11 +413,12 @@ aienie_ci_prepare_phase() {
   export AIENIE_CI_CACHE_DIR AIENIE_CI_OUTPUT_DIR AIENIE_DEPENDENCY_MANIFEST
   aienie_ci_assert_manifest_path
   aienie_ci_need python3; aienie_ci_need realpath; aienie_ci_need sha256sum; aienie_ci_need find; aienie_ci_need uname
-  aienie_ci_need awk; aienie_ci_need cp; aienie_ci_need chmod
+  aienie_ci_need awk; aienie_ci_need cp; aienie_ci_need chmod; aienie_ci_need grep
   (( ${#AIENIE_CI_MAVEN_MODULES[@]} == 0 )) || { aienie_ci_need mvn; aienie_ci_need java; }
   (( ${#AIENIE_CI_NPM_MODULES[@]} == 0 && ${#AIENIE_CI_STATIC_NODE_MODULES[@]} == 0 )) || { aienie_ci_need node; aienie_ci_need npm; }
   (( ${#AIENIE_CI_PNPM_MODULES[@]} == 0 )) || { aienie_ci_need node; aienie_ci_need pnpm; }
   aienie_ci_assert_native_architecture
+  aienie_ci_assert_runtime_toolchain_contract
   AIENIE_CI_SCRATCH_DIR="$(mktemp -d)"
   specs="$AIENIE_CI_SCRATCH_DIR/modules.tsv"; toolchains="$AIENIE_CI_SCRATCH_DIR/toolchains.tsv"
   AIENIE_CI_SPECS_PATH="$specs"; AIENIE_CI_TOOLCHAINS_PATH="$toolchains"

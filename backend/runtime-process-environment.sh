@@ -1,0 +1,12 @@
+#!/bin/sh
+
+clear_process_overrides() {
+  # Only release-execution authority is scrubbed here. Application configuration
+  # and secrets continue to come from the fixed read-only staging env file.
+  unset SPRING_APPLICATION_JSON SPRING_CONFIG_LOCATION \
+    SPRING_CONFIG_ADDITIONAL_LOCATION SPRING_CONFIG_IMPORT \
+    SERVER_ADDRESS SERVER_PORT GRPC_CLIENT_GLOBAL_SECURITY_AUTHORITY_OVERRIDE \
+    HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY GRPC_PROXY GRPC_PROXY_EXP \
+    SSL_CERT_FILE SSL_CERT_DIR GRPC_DEFAULT_SSL_ROOTS_FILE_PATH \
+    JAVAX_NET_SSL_TRUSTSTORE JAVAX_NET_SSL_TRUSTSTOREPASSWORD
+}

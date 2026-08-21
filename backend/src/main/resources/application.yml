@@ -28,6 +28,15 @@ spring:
 server:
   port: ${SERVER_PORT:${BACKEND_PORT:11031}}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   file:
     name: ${LOGGING_FILE_NAME:${APP_LOG_DIR:./logs}/aisocialgame.log}
@@ -87,6 +96,7 @@ app:
   demo-seed:
     enabled: ${APP_DEMO_SEED_ENABLED:false}
   external:
+    payservice-plaintext-enabled: ${BILLING_GRPC_PLAINTEXT_ENABLED:false}
     grpc-auth-required: ${APP_EXTERNAL_GRPC_AUTH_REQUIRED:true}
     userservice-internal-grpc-token: ${APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN:}
     userservice-jwt:
@@ -96,7 +106,16 @@ app:
       audience: ${APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE:aienie-userservice-grpc}
       ttl-seconds: ${APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS:300}
       scopes: ${APP_EXTERNAL_USERSERVICE_JWT_SCOPES:user.auth.session.read,user.directory.read,user.ban.read,user.ban.write}
-    payservice-jwt: ${APP_EXTERNAL_PAYSERVICE_JWT:}
+    payservice-legacy-static-token: ${APP_EXTERNAL_PAYSERVICE_JWT:}
+    payservice-jwt:
+      caller-id: ${APP_EXTERNAL_PAYSERVICE_JWT_CALLER_ID:aisocialgame}
+      issuer: ${APP_EXTERNAL_PAYSERVICE_JWT_ISSUER:aisocialgame}
+      service: ${APP_EXTERNAL_PAYSERVICE_JWT_SERVICE:aisocialgame}
+      secret: ${APP_EXTERNAL_PAYSERVICE_JWT_SECRET:}
+      audience: ${APP_EXTERNAL_PAYSERVICE_JWT_AUDIENCE:aienie-payservice-grpc}
+      role: ${APP_EXTERNAL_PAYSERVICE_JWT_ROLE:SERVICE}
+      ttl-seconds: ${APP_EXTERNAL_PAYSERVICE_JWT_TTL_SECONDS:300}
+      scopes: ${APP_EXTERNAL_PAYSERVICE_JWT_SCOPES:billing.balance.read,billing.checkin.write,billing.checkin.read,billing.ledger.read,billing.balance.convert,billing.onboarding.write,billing.redeem.write}
     aiservice-hmac-caller: ${APP_EXTERNAL_AISERVICE_HMAC_CALLER:}
     aiservice-hmac-secret: ${APP_EXTERNAL_AISERVICE_HMAC_SECRET:}
 
@@ -114,9 +133,15 @@ grpc:
     user:
       address: ${USER_GRPC_ADDR:static://localuserservice.testhut.top:12001}
       negotiationType: ${USER_GRPC_NEGOTIATION_TYPE:TLS}
+      security:
+        trust-cert-collection: ${GRPC_CLIENT_USER_SECURITY_TRUST_CERT_COLLECTION:}
     billing:
-      address: ${BILLING_GRPC_ADDR:static://localpayservice.testhut.top:443}
+      address: ${BILLING_GRPC_ADDR:static://localpayservice.testhut.top:12021}
       negotiationType: ${BILLING_GRPC_NEGOTIATION_TYPE:TLS}
+      security:
+        trust-cert-collection: ${GRPC_CLIENT_BILLING_SECURITY_TRUST_CERT_COLLECTION:}
     ai:
-      address: ${AI_GRPC_ADDR:static://localaiservice.testhut.top:443}
+      address: ${AI_GRPC_ADDR:static://localaiservice.testhut.top:12011}
       negotiationType: ${AI_GRPC_NEGOTIATION_TYPE:TLS}
+      security:
+        trust-cert-collection: ${GRPC_CLIENT_AI_SECURITY_TRUST_CERT_COLLECTION:}

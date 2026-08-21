@@ -32,8 +32,8 @@ write_fake node 'if [[ "${1:-}" == "--version" ]]; then echo v22.99.0-test; else
 write_fake npm 'if [[ "${1:-}" == "--version" ]]; then echo 10.99.0-test; else mkdir -p "$AIENIE_CI_CACHE_DIR/npm"; printf "%s" "$AIENIE_CI_PHASE" >"$AIENIE_CI_CACHE_DIR/npm/$AIENIE_CI_PHASE.bin"; fi'
 write_fake pnpm 'if [[ "${1:-}" == "--version" ]]; then echo 11.99.0-test; else mkdir -p "$AIENIE_CI_CACHE_DIR/pnpm"; printf "%s" "$AIENIE_CI_PHASE" >"$AIENIE_CI_CACHE_DIR/pnpm/$AIENIE_CI_PHASE.bin"; fi'
 write_fake trivy 'exit 0'
-write_fake bundle-helper 'mkdir -p "$2/components"; printf component >"$2/components/bundle.bin"'
-write_fake flatten-helper 'rm -rf -- "$3"; mkdir -p "$3"; cp -a -- "$2/." "$3/"; printf payload >"$3/payload.bin"'
+write_fake bundle-helper 'mkdir -p "$2/components/backend" "$2/components/frontend/dist"; printf jar >"$2/components/backend/app.jar"; printf html >"$2/components/frontend/dist/index.html"'
+write_fake flatten-helper 'rm -rf -- "$3"; mkdir -p "$3/backend" "$3/frontend/dist"; cp -- "$2/components/backend/app.jar" "$3/backend/app.jar"; cp -- "$2/components/frontend/dist/index.html" "$3/frontend/dist/index.html"; printf payload >"$3/payload.bin"'
 
 export PATH="$fake_bin:$PATH"
 export AIENIE_CI_SOURCE_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -75,15 +75,53 @@ export AIENIE_CI_OUTPUT_DIR="$work_dir/build-output"
 export AIENIE_DEPENDENCY_MANIFEST="$AIENIE_CI_OUTPUT_DIR/repository-dependency-manifest.json"
 export PROJECT_BUNDLE_HELPER="$fake_bin/bundle-helper"
 export PROJECT_FLATTEN_HELPER="$fake_bin/flatten-helper"
+export APP_BACKEND_PORT=65530 APP_FRONTEND_PORT=65531
+export APP_RUNTIME_ROOT=/ambient-poison APP_CERT_HOST=/ambient-poison.crt
 if ! bash "$repo_root/ci/build-release.sh" "$AIENIE_CI_OUTPUT_DIR" >"$work_dir/positive-build.log" 2>&1; then
   cat "$work_dir/positive-build.log" >&2
   echo 'Positive offline Build failed.' >&2
   exit 1
 fi
-[[ -f "$AIENIE_CI_OUTPUT_DIR/payload.bin" && -f "$AIENIE_DEPENDENCY_MANIFEST" ]] || {
-  echo 'Positive offline Build did not produce payload plus protected manifest.' >&2
+[[ -f "$AIENIE_CI_OUTPUT_DIR/release/staging-oci-role-contract.json" ]]
+cmp -s "$repo_root/ci/aisocialgame-runtime-compose.yml" "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+python3 "$repo_root/ci/verify-staging-oci-role-contract.py" \
+  "$AIENIE_CI_OUTPUT_DIR/release/staging-oci-role-contract.json" \
+  "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml" ai-social-game
+"$fake_bin/python3" - "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml" "$work_dir/short-protected-bind.yml" <<'PY'
+import pathlib,re,sys
+raw=pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')
+pattern=re.compile(r'(?m)^(\s*)- type: bind\n\1  source: \./env\.txt\n\1  target: /app/env\.txt\n\1  read_only: true\n\1  bind:\n\1    create_host_path: false$')
+poisoned,count=pattern.subn(lambda match: f'{match.group(1)}- ./env.txt:/app/env.txt:ro',raw,count=1)
+assert count == 1
+pathlib.Path(sys.argv[2]).write_text(poisoned,encoding='utf-8')
+PY
+if python3 "$repo_root/ci/verify-staging-oci-role-contract.py" \
+  "$AIENIE_CI_OUTPUT_DIR/release/staging-oci-role-contract.json" \
+  "$work_dir/short-protected-bind.yml" ai-social-game >/dev/null 2>&1; then
+  echo 'AISocialGame staging contract accepted an auto-created protected file bind.' >&2
+  exit 1
+fi
+[[ -f "$AIENIE_CI_OUTPUT_DIR/payload.bin" && -f "$AIENIE_DEPENDENCY_MANIFEST" \
+  && -f "$AIENIE_CI_OUTPUT_DIR/backend/app.jar" \
+  && -x "$AIENIE_CI_OUTPUT_DIR/backend/start-backend.sh" \
+  && -f "$AIENIE_CI_OUTPUT_DIR/backend/runtime-process-environment.sh" \
+  && -f "$AIENIE_CI_OUTPUT_DIR/frontend/dist/index.html" \
+  && -x "$AIENIE_CI_OUTPUT_DIR/docker/staging-load-env-file.sh" ]] || {
+  echo 'Positive offline Build did not produce the complete runtime payload plus protected manifest.' >&2
   exit 1
 }
+grep -Fq 'AISOCIALGAME_BACKEND_IMAGE' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq 'AISOCIALGAME_FRONTEND_IMAGE' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq '127.0.0.1:11031:20030' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq 'entrypoint: ["/app/bin/start-backend.sh"]' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq 'command: ["/app/env.txt"]' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq 'source: /etc/aienie-staging-pki/root.pem' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+grep -Fq 'condition: service_healthy' "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"
+if grep -Eq '(^|[[:space:]])build:|env_file:|/home/|extra_hosts|host-gateway|sh[[:space:]]+-c|\$\{[^}]*(PORT|HOST|ROOT)[^}]*\}' \
+  "$AIENIE_CI_OUTPUT_DIR/docker-compose.yml"; then
+  echo 'AISocialGame release Compose retained local or ambient runtime authority.' >&2
+  exit 1
+fi
 cache_after="$("$fake_bin/python3" - "$AIENIE_CI_CACHE_DIR" <<'PY'
 import hashlib,pathlib,sys
 root=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
@@ -98,7 +136,7 @@ PY
   exit 1
 }
 
-write_fake cache-tamper-helper 'mkdir -p "$2/components"; printf component >"$2/components/bundle.bin"; chmod u+w -- "$PROTECTED_CACHE_UNDER_TEST/.aienie-cache-contract"; printf tampered >>"$PROTECTED_CACHE_UNDER_TEST/.aienie-cache-contract"'
+write_fake cache-tamper-helper 'mkdir -p "$2/components/backend" "$2/components/frontend/dist"; printf jar >"$2/components/backend/app.jar"; printf html >"$2/components/frontend/dist/index.html"; chmod u+w -- "$PROTECTED_CACHE_UNDER_TEST/.aienie-cache-contract"; printf tampered >>"$PROTECTED_CACHE_UNDER_TEST/.aienie-cache-contract"'
 mkdir -p "$work_dir/cache-tamper-output"
 cp -- "$resolved_manifest" "$work_dir/cache-tamper-output/repository-dependency-manifest.json"
 chmod a-w -- "$work_dir/cache-tamper-output/repository-dependency-manifest.json"
@@ -116,7 +154,7 @@ cp -- "$work_dir/cache-contract.backup" "$AIENIE_CI_CACHE_DIR/.aienie-cache-cont
 chmod a-w -- "$AIENIE_CI_CACHE_DIR/.aienie-cache-contract"
 unset PROTECTED_CACHE_UNDER_TEST
 
-write_fake manifest-tamper-flatten 'rm -rf -- "$3"; mkdir -p "$3"; cp -a -- "$2/." "$3/"; printf "{}\\n" >"$3/repository-dependency-manifest.json"'
+write_fake manifest-tamper-flatten 'rm -rf -- "$3"; mkdir -p "$3/backend" "$3/frontend/dist"; cp -- "$2/components/backend/app.jar" "$3/backend/app.jar"; cp -- "$2/components/frontend/dist/index.html" "$3/frontend/dist/index.html"; printf "{}\\n" >"$3/repository-dependency-manifest.json"'
 mkdir -p "$work_dir/manifest-tamper-output"
 cp -- "$resolved_manifest" "$work_dir/manifest-tamper-output/repository-dependency-manifest.json"
 chmod a-w -- "$work_dir/manifest-tamper-output/repository-dependency-manifest.json"

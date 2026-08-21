@@ -7,7 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ExternalGrpcAuthValidatorTest {
-    private static final String SECRET = "aisocialgame-userservice-test-secret-32-bytes";
+    private static final String USER_SECRET = "aisocialgame-userservice-test-secret-32-bytes";
+    private static final String PAY_SECRET = "aisocialgame-payservice-test-secret-32-bytes";
 
     @Test
     void rejectsMissingExternalAuthenticationConfiguration() {
@@ -36,21 +37,29 @@ class ExternalGrpcAuthValidatorTest {
     }
 
     @Test
+    void rejectsLegacyPayToken() {
+        AppProperties legacy = validProperties();
+        legacy.getExternal().setPayserviceLegacyStaticToken("legacy-private-token");
+        assertThrows(IllegalStateException.class,
+                () -> new ExternalGrpcAuthValidator(legacy).validate());
+    }
+
+    @Test
     void rejectsInvalidCallerConfigurationWithoutDisclosingSecret() {
         AppProperties properties = validProperties();
         properties.getExternal().getUserserviceJwt().setScopes("user.auth.session.read,user.admin.write");
 
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> new ExternalGrpcAuthValidator(properties).validate());
-        assertFalse(error.getMessage().contains(SECRET));
+        assertFalse(error.getMessage().contains(USER_SECRET));
     }
 
     private AppProperties validProperties() {
         AppProperties properties = new AppProperties();
-        properties.getExternal().setPayserviceJwt("pay-service-test-jwt");
+        properties.getExternal().getPayserviceJwt().setSecret(PAY_SECRET);
         properties.getExternal().setAiserviceHmacCaller("aisocialgame");
-        properties.getExternal().setAiserviceHmacSecret("ai-service-test-secret");
-        properties.getExternal().getUserserviceJwt().setSecret(SECRET);
+        properties.getExternal().setAiserviceHmacSecret("ai-service-test-secret-distinct-32-bytes");
+        properties.getExternal().getUserserviceJwt().setSecret(USER_SECRET);
         return properties;
     }
 }

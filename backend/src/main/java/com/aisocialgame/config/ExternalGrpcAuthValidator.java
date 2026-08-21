@@ -33,14 +33,12 @@ public class ExternalGrpcAuthValidator {
 
         try {
             UserServiceJwtConfigurationValidator.validate(external.getUserserviceJwt());
+            PayServiceJwtConfigurationValidator.validate(external);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("Invalid UserService caller JWT configuration", exception);
+            throw new IllegalStateException("Invalid external caller JWT configuration", exception);
         }
 
         List<String> missing = new ArrayList<>();
-        if (!StringUtils.hasText(external.getPayserviceJwt())) {
-            missing.add("APP_EXTERNAL_PAYSERVICE_JWT");
-        }
         if (!StringUtils.hasText(external.getAiserviceHmacCaller())) {
             missing.add("APP_EXTERNAL_AISERVICE_HMAC_CALLER");
         }
