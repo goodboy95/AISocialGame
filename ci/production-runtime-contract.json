@@ -28,9 +28,62 @@
       ]
     }
   },
+  "protected_config_overlay_contract": {
+    "schema_version": "aienie-production-protected-config-overlay-contract-v1",
+    "allowed_files": [
+      {
+        "target_path": "env.txt",
+        "file_mode": "0600",
+        "owner": "runtime_identity",
+        "consumers": ["backend-runtime", "production-migration-executor"]
+      }
+    ],
+    "forbidden_exact_paths": ["docker-compose.yml", "application.yml", "prompt.yml"],
+    "forbidden_prefixes": ["backend/", "frontend/", "release/"],
+    "artifact_override_policy": "deny",
+    "unlisted_path_policy": "deny"
+  },
   "ownership": {"uid_source": "AIENIE_RUNTIME_UID", "gid_source": "AIENIE_RUNTIME_GID", "must_match": true},
   "artifact_mount_policy": "release-root-relative-read-only",
-  "migration": {"engine": "mysql-client", "ledger": "release/migrations/sql-ledger.json", "sql_root": "release/migrations/sql", "checkpoint": "control-plane-signed-prestart-receipt", "ddl_mode": "external-before-app", "plan_selection": "signed-explicit-no-auto-detection"},
+  "migration": {
+    "mode": "explicit-sql-ledger",
+    "ledger": "release/migrations/sql-ledger.json",
+    "plan": "release/migrations/production-plan.json",
+    "ledger_table": "aienie_sql_migration_ledger",
+    "execution": "one-shot-before-app",
+    "startup_behavior": "hibernate-validate-only",
+    "checksum_drift": "fail-closed",
+    "plan_selection": "sealed-candidate-file-no-auto-detection",
+    "executor": {
+      "path": "release/production-migration-executor",
+      "cli": "precheck|execute|reconcile <component>",
+      "stdin": "none",
+      "environment": "fixed-protected-candidate-only",
+      "stdout": "compact-canonical-secret-free-json"
+    },
+    "artifact_manifest": "release/production-migration-artifacts.json",
+    "precheck": "strict-read-only",
+    "restore_point": "consistent-jdbc-logical-checkpoint-before-execute",
+    "authority": "signed-v4-platform-evidence-and-helper-invocation",
+    "stdout_schema": "aienie-production-migration-executor-receipt-v1"
+  },
+  "preactivation_authority": {
+    "schema_version": "aienie-production-preactivation-authority-v1",
+    "required_for": ["backend-runtime"],
+    "container_root": "/run/aienie/release-authority",
+    "files": [
+      "production-release-manifest-v4.json",
+      "production-publication-receipt.json",
+      "production-publication-receipt.json.sig",
+      "production-publication-public-key.pem",
+      "production-preactivation-authority.json",
+      "production-preactivation-authority.json.sig",
+      "production-preactivation-authority-public-key.pem"
+    ],
+    "projection": "exact-seven-individual-read-only-files",
+    "signature": "double-ed25519-canonical-json-raw64",
+    "startup_policy": "fail-closed-before-production-b0"
+  },
   "authorization": {"minimum_release_manifest_version": 4, "policy": "signed-v4-only", "outer_signature_required": true},
   "platform_injected_digest_fields": ["source_commit", "config_digest", "artifact_digest", "image_digests"]
 }
