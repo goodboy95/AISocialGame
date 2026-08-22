@@ -21,4 +21,9 @@ for d in v['dependencies']:
  if not d['tls_required'] or not h.endswith('.seekerhut.com') or h not in runtime or p not in runtime:raise SystemExit(f'dependency {d}')
 for x in v['persistent_bindings']:
  if not x['source'].startswith(f'/srv/aienie-products/{e}/') or x['source'] not in compose:raise SystemExit(f'persistence {x}')
+expected_backup={'schema_version':'aienie-production-backup-contract-v1','nightly':{'include':['/srv/aienie-products/ai-social-game/records'],'exclude':[{'source':'/srv/aienie-products/ai-social-game/logs','classification':'operational-log'}]}}
+if v.get('backup')!=expected_backup:raise SystemExit('production backup classification drifted')
+purposes={item['source']:item['purpose'] for item in v['persistent_bindings']};classified=set(expected_backup['nightly']['include'])|{item['source'] for item in expected_backup['nightly']['exclude']}
+if classified!=set(purposes):raise SystemExit('backup policy must classify every persistent binding')
+if purposes.get('/srv/aienie-products/ai-social-game/logs')!='operational-log':raise SystemExit('nightly-excluded logs must be operational-log')
 if re.search(r'(?m)^\s*-\s+\./',compose) or 'create_host_path: false' not in compose:raise SystemExit('bind policy')
