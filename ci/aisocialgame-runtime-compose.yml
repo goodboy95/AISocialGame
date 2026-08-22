@@ -82,5 +82,4 @@ services:
     networks: [aisocialgame]
 
 networks:
-  aisocialgame:
-    name: aisocialgame
+  aisocialgame: {}

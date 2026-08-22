@@ -1,0 +1,27 @@
+{
+  "schema_version": "aienie-product-production-contract-v1",
+  "canonical_component_id": "ai-social-game",
+  "profile_id": "prod-products-68",
+  "environment": "production",
+  "public_origin": "https://socialgame.seekerhut.com",
+  "compose_path": "docker-compose.yml",
+  "release_unit": ["backend", "frontend"],
+  "listeners": ["127.0.0.1:11030:11030", "127.0.0.1:11031:20030"],
+  "dependencies": [
+    {"id": "mysql", "authority": "base.seekerhut.com:13306", "tls_required": true},
+    {"id": "redis", "authority": "base.seekerhut.com:16379", "tls_required": true},
+    {"id": "qdrant", "authority": "base.seekerhut.com:16333", "tls_required": true},
+    {"id": "user-service", "authority": "userservice.seekerhut.com:12001", "tls_required": true},
+    {"id": "pay-service", "authority": "payservice.seekerhut.com:12021", "tls_required": true},
+    {"id": "ai-service", "authority": "aiservice.seekerhut.com:12011", "tls_required": true}
+  ],
+  "persistent_bindings": [
+    {"source": "/srv/aienie-products/ai-social-game/logs", "target": "/app/logs", "purpose": "retained-logs"},
+    {"source": "/srv/aienie-products/ai-social-game/records", "target": "/app/records", "purpose": "audit-records"}
+  ],
+  "ownership": {"uid_source": "AIENIE_RUNTIME_UID", "gid_source": "AIENIE_RUNTIME_GID", "must_match": true},
+  "artifact_mount_policy": "release-root-relative-read-only",
+  "migration": {"engine": "mysql-client", "ledger": "release/migrations/sql-ledger.json", "sql_root": "release/migrations/sql", "checkpoint": "control-plane-signed-prestart-receipt", "ddl_mode": "external-before-app", "plan_selection": "signed-explicit-no-auto-detection"},
+  "authorization": {"minimum_release_manifest_version": 4, "policy": "signed-v4-only", "outer_signature_required": true},
+  "platform_injected_digest_fields": ["source_commit", "config_digest", "artifact_digest", "image_digests"]
+}
