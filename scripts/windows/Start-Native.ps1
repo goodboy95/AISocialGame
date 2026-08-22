@@ -72,7 +72,7 @@ $frontendDirectory = Join-Path $projectRoot 'frontend'
 try {
     $backendProcess = Start-NativeProcess -Name 'backend' -FilePath $backendCommand -ArgumentList @('-q', 'spring-boot:run') -WorkingDirectory $backendDirectory -StateDirectory $stateDirectory -ProjectRoot $projectRoot
     Wait-NativeLoopbackPort -Port 11031 -TimeoutSeconds 180 -ExpectedRootProcessId $backendProcess.Id -Name 'backend' -StateDirectory $stateDirectory -ProjectRoot $projectRoot
-    $frontendProcess = Start-NativeProcess -Name 'frontend' -FilePath $frontendCommand -ArgumentList @('run', 'dev', '--', '--host', '127.0.0.1', '--port', '11030', '--strictPort') -WorkingDirectory $frontendDirectory -StateDirectory $stateDirectory -ProjectRoot $projectRoot
+    $frontendProcess = Start-NativeProcess -Name 'frontend' -FilePath $frontendCommand -ArgumentList @('--dir', $frontendDirectory, 'exec', 'vite', '--host', '127.0.0.1', '--port', '11030', '--strictPort') -WorkingDirectory $frontendDirectory -StateDirectory $stateDirectory -ProjectRoot $projectRoot
     Wait-NativeLoopbackPort -Port 11030 -ExpectedRootProcessId $frontendProcess.Id -Name 'frontend' -StateDirectory $stateDirectory -ProjectRoot $projectRoot
 }
 catch {

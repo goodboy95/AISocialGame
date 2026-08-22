@@ -65,10 +65,21 @@ public class PayServiceJwtStartupGuard {
                                            String[] activeProfiles,
                                            String[] defaultProfiles,
                                            boolean testAuthorized) {
+        validateFinalConfiguration(properties, rawEnvironment, activeProfiles, defaultProfiles,
+                testAuthorized, System.getProperty("os.name", ""));
+    }
+
+    static void validateFinalConfiguration(AppProperties properties,
+                                           Map<String, String> rawEnvironment,
+                                           String[] activeProfiles,
+                                           String[] defaultProfiles,
+                                           boolean testAuthorized,
+                                           String osName) {
         if (testAuthorized) {
             return;
         }
-        if (activeProfiles != null && activeProfiles.length != 0) {
+        boolean windowsLocal = isWindowsLocal(rawEnvironment, activeProfiles, osName);
+        if (activeProfiles != null && activeProfiles.length != 0 && !windowsLocal) {
             throw new IllegalStateException("Spring active profiles are forbidden for AISocialGame runtime");
         }
         if (defaultProfiles == null || !Arrays.equals(defaultProfiles, new String[]{"default"})) {
@@ -93,6 +104,21 @@ public class PayServiceJwtStartupGuard {
         if (legacy != null && !legacy.isEmpty()) {
             throw new IllegalStateException("Legacy APP_EXTERNAL_PAYSERVICE_JWT must be absent or empty");
         }
+    }
+
+    private static boolean isWindowsLocal(Map<String, String> rawEnvironment,
+                                          String[] activeProfiles,
+                                          String osName) {
+        return rawEnvironment != null
+                && activeProfiles != null
+                && Arrays.equals(activeProfiles, new String[]{"local"})
+                && osName != null
+                && osName.startsWith("Windows")
+                && "local".equals(rawEnvironment.get("ENV"))
+                && "local".equals(rawEnvironment.get("APP_ENV"))
+                && "windows-local".equals(rawEnvironment.get("AIENIE_RUNTIME_PLANE"))
+                && "local".equals(rawEnvironment.get("SPRING_PROFILES_ACTIVE"))
+                && "127.0.0.1".equals(rawEnvironment.get("SERVER_ADDRESS"));
     }
 
     private static void requireBound(Map<String, String> rawEnvironment,
