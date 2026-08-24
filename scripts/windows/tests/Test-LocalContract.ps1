@@ -35,7 +35,7 @@ foreach ($required in @(
         '''backend\pom.xml''',
         '''--dir'', (Join-Path $repoRoot ''frontend'')',
         '[''APP_PROJECT_KEY''] = ''aisocialgame''',
-        '--maxWorkers=2'
+        '--maxWorkers=1'
 )) {
     if ($runtimeText.IndexOf($required, [StringComparison]::Ordinal) -lt 0) {
         throw "AISocialGame local contract is missing: $required"

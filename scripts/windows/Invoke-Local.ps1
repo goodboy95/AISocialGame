@@ -22,7 +22,7 @@ $stateRoot = Join-Path $(if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $en
 $statePath = Join-Path $stateRoot 'processes.json'
 $components = @(
     [pscustomobject]@{ Name = 'Backend'; Directory = (Join-Path $repoRoot 'backend'); Command = 'mvn.cmd'; Install = @(); Build = @('-q', '-DskipTests', 'package'); Test = @('-q', 'test'); Start = @('-f', (Join-Path $repoRoot 'backend\pom.xml'), '-q', 'spring-boot:run'); Port = 11031; Health = '/actuator/health'; HealthKind = 'JsonUp'; RequiresInstall = $false },
-    [pscustomobject]@{ Name = 'Frontend'; Directory = (Join-Path $repoRoot 'frontend'); Command = 'pnpm.cmd'; Install = @('install', '--frozen-lockfile'); Build = @('run', 'build'); Test = @('run', 'test:unit', '--maxWorkers=2'); Start = @('--dir', (Join-Path $repoRoot 'frontend'), 'exec', 'vite', '--host', '127.0.0.1', '--port', '11030', '--strictPort'); Port = 11030; Health = '/'; HealthKind = 'Http200'; RequiresInstall = $true }
+    [pscustomobject]@{ Name = 'Frontend'; Directory = (Join-Path $repoRoot 'frontend'); Command = 'pnpm.cmd'; Install = @('install', '--frozen-lockfile'); Build = @('run', 'build'); Test = @('run', 'test:unit', '--maxWorkers=1'); Start = @('--dir', (Join-Path $repoRoot 'frontend'), 'exec', 'vite', '--host', '127.0.0.1', '--port', '11030', '--strictPort'); Port = 11030; Health = '/'; HealthKind = 'Http200'; RequiresInstall = $true }
 )
 
 function Get-Selected {
