@@ -2,7 +2,12 @@
 set -euo pipefail
 repo="$(cd "${1:?repo}"&&pwd -P)";out="$(cd "${2:?bundle}"&&pwd -P)";fail(){ echo "AISocialGame production assembly failed: $*" >&2;exit 2;};[[ "$out" != /&&"$out" != "$repo"&&! -L "$out" ]]||fail unsafe
 put(){ local s="$1" t="$2" m="$3";[[ -f "$s"&&! -L "$s"&&! -L "$t" ]]||fail "$s";mkdir -p "$(dirname "$t")";install -m "$m" "$s" "$t";[[ "$(sha256sum "$s"|awk '{print $1}')" = "$(sha256sum "$t"|awk '{print $1}')" ]]||fail digest;}
-[[ -f "$out/backend/app.jar" && ! -L "$out/backend/app.jar" ]] || fail 'flattened backend JAR is missing or unsafe'
+if [[ ! -f "$out/backend/app.jar" || -L "$out/backend/app.jar" ]]; then
+  jar_source="$(find "$out/backend/target" -maxdepth 1 -type f -name '*.jar' ! -name '*.original' -print -quit 2>/dev/null || true)"
+  [[ -n "$jar_source" && -f "$jar_source" && ! -L "$jar_source" ]] || fail 'flattened backend JAR is missing or unsafe'
+  install -m 0444 -- "$jar_source" "$out/backend/app.jar"
+fi
+[[ -s "$out/backend/app.jar" && ! -L "$out/backend/app.jar" ]] || fail 'production backend JAR is empty or unsafe'
 [[ -f "$out/frontend/dist/index.html" && ! -L "$out/frontend/dist/index.html" ]] || fail 'flattened frontend dist is missing or unsafe'
 put "$repo/backend/start-production-backend.sh" "$out/backend/start-production-backend.sh" 0555
 put "$repo/backend/production-migration-entrypoint.sh" "$out/backend/production-migration-entrypoint.sh" 0555
