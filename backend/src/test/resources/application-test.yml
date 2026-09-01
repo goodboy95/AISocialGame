@@ -14,7 +14,7 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 app:
-  project-key: test-project
+  project-key: aisocialgame
   auth:
     token-ttl-hours: 24
   ai:

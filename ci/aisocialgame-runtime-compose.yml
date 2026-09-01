@@ -1,0 +1,85 @@
+services:
+  backend:
+    container_name: aisocial-backend
+    image: "${AISOCIALGAME_BACKEND_IMAGE:?ReleaseManifest v3 must inject the immutable backend image digest}"
+    user: "${AIENIE_RUNTIME_UID:?AIENIE_RUNTIME_UID is required}:${AIENIE_RUNTIME_GID:?AIENIE_RUNTIME_GID is required}"
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    tmpfs: ["/tmp:mode=1777,size=256m"]
+    working_dir: /app
+    entrypoint: ["/app/bin/start-backend.sh"]
+    command: ["/app/env.txt"]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "2.0"
+    pids_limit: 256
+    ports:
+      - "127.0.0.1:11031:20030"
+    volumes:
+      - type: bind
+        source: ./backend/start-backend.sh
+        target: /app/bin/start-backend.sh
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./backend/runtime-process-environment.sh
+        target: /app/bin/runtime-process-environment.sh
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./docker/staging-load-env-file.sh
+        target: /app/bin/staging-load-env-file.sh
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./env.txt
+        target: /app/env.txt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /etc/aienie-staging-pki/root.pem
+        target: /run/aienie/trust/staging-root.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./logs/backend:/app/logs
+      - ./logs/records:/app/records
+    healthcheck:
+      test:
+        - CMD
+        - /opt/java/openjdk/bin/java
+        - -Dloader.main=com.aisocialgame.health.StrictHttpHealthProbe
+        - -cp
+        - /app/app.jar
+        - org.springframework.boot.loader.launch.PropertiesLauncher
+        - http://127.0.0.1:20030/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+    networks: [aisocialgame]
+
+  frontend:
+    container_name: aisocial-frontend
+    image: "${AISOCIALGAME_FRONTEND_IMAGE:?ReleaseManifest v3 must inject the immutable frontend image digest}"
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    tmpfs:
+      - /var/cache/nginx:mode=1777,size=64m
+      - /var/run:mode=1777,size=16m
+      - /tmp:mode=1777,size=16m
+    ports:
+      - "127.0.0.1:11030:11030"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [aisocialgame]
+
+networks:
+  aisocialgame: {}

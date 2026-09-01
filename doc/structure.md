@@ -62,7 +62,7 @@ AISocialGame/
 ## 关键配置约束
 
 - gRPC 地址默认走静态域名：
-  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
+  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:12001`
   - `BILLING_GRPC_ADDR=static://localpayservice.testhut.top:443`
   - `AI_GRPC_ADDR=static://localaiservice.testhut.top:443`
   - `USER_GRPC_NEGOTIATION_TYPE=TLS`、`BILLING_GRPC_NEGOTIATION_TYPE=TLS`、`AI_GRPC_NEGOTIATION_TYPE=TLS`

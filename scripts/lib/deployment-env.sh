@@ -31,6 +31,12 @@ AISOCIAL_RUNTIME_ENV_NAMES=(
   AI_SERVICE_BASE_URL
   APP_EXTERNAL_GRPC_AUTH_REQUIRED
   APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN
+  APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID
+  APP_EXTERNAL_USERSERVICE_JWT_ISSUER
+  APP_EXTERNAL_USERSERVICE_JWT_SECRET
+  APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE
+  APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS
+  APP_EXTERNAL_USERSERVICE_JWT_SCOPES
   APP_EXTERNAL_PAYSERVICE_JWT
   APP_EXTERNAL_AISERVICE_HMAC_CALLER
   APP_EXTERNAL_AISERVICE_HMAC_SECRET
@@ -89,9 +95,8 @@ aisocial_load_runtime_env() {
   AISOCIAL_ENV_FILE_KEYS=()
 
   while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
-    local line="$raw_line"
+    local line="${raw_line%$'\r'}"
     line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
     if [[ -z "$line" || "$line" == \#* ]]; then
       continue
     fi
@@ -106,12 +111,23 @@ aisocial_load_runtime_env() {
 
     local name="${line%%=*}"
     local value="${line#*=}"
+    local raw_value="$value"
     name="${name%"${name##*[![:space:]]}"}"
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
 
     if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       echo "Invalid env key in $env_file" >&2
+      return 1
+    fi
+    if [[ "$name" == "APP_EXTERNAL_USERSERVICE_JWT_SECRET" ]]; then
+      if [[ "$raw_value" != "$value" || "$value" == \"* || "$value" == *\" || "$value" == \'* || "$value" == *\' ]]; then
+        echo "APP_EXTERNAL_USERSERVICE_JWT_SECRET must be an unquoted value without boundary whitespace" >&2
+        return 1
+      fi
+    fi
+    if [[ "$name" == "APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN" && "$raw_value" != "$value" ]]; then
+      echo "APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN is legacy and must be absent or empty" >&2
       return 1
     fi
     if [[ ( "$value" == \"*\" && "$value" == *\" ) || ( "$value" == \'*\' && "$value" == *\' ) ]]; then
@@ -121,6 +137,62 @@ aisocial_load_runtime_env() {
     AISOCIAL_ENV_FILE_KEYS["$name"]=1
     export "$name=$value"
   done < "$env_file"
+}
+
+aisocial_validate_userservice_jwt_contract() {
+  if [[ -n "${APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN:-}" ]]; then
+    echo "APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN is legacy and must be absent or empty" >&2
+    return 1
+  fi
+  if [[ "${APP_EXTERNAL_GRPC_AUTH_REQUIRED:-true}" != "true" ]]; then
+    return 0
+  fi
+
+  aisocial_require_env_file_vars \
+    APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID \
+    APP_EXTERNAL_USERSERVICE_JWT_ISSUER \
+    APP_EXTERNAL_USERSERVICE_JWT_SECRET \
+    APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE \
+    APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS \
+    APP_EXTERNAL_USERSERVICE_JWT_SCOPES || return 1
+
+  if [[ "$APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID" != "aisocialgame" ||
+        "$APP_EXTERNAL_USERSERVICE_JWT_ISSUER" != "aisocialgame" ]]; then
+    echo "UserService caller JWT identity must be aisocialgame" >&2
+    return 1
+  fi
+  if [[ "$APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE" != "aienie-userservice-grpc" ]]; then
+    echo "UserService caller JWT audience is not canonical" >&2
+    return 1
+  fi
+  if [[ ! "$APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS" =~ ^[0-9]+$ ]] ||
+     (( APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS < 30 || APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS > 900 )); then
+    echo "UserService caller JWT TTL must be between 30 and 900 seconds" >&2
+    return 1
+  fi
+  if [[ "$APP_EXTERNAL_USERSERVICE_JWT_SCOPES" != "user.auth.session.read,user.directory.read,user.ban.read,user.ban.write" ]]; then
+    echo "UserService caller JWT scopes violate least privilege" >&2
+    return 1
+  fi
+
+  local secret="$APP_EXTERNAL_USERSERVICE_JWT_SECRET"
+  local normalized_secret="${secret^^}"
+  local secret_bytes
+  secret_bytes="$(LC_ALL=C printf '%s' "$secret" | wc -c | tr -d '[:space:]')"
+  if (( secret_bytes < 32 || secret_bytes > 4096 )) ||
+     [[ "$secret" != "${secret#"${secret%%[![:space:]]*}"}" ||
+        "$secret" != "${secret%"${secret##*[![:space:]]}"}" ||
+        "$normalized_secret" == *REPLACE* || "$normalized_secret" == *CHANGE_ME* ||
+        "$normalized_secret" == *CHANGE-ME* || "$normalized_secret" == *CHANGEME* ||
+        "$normalized_secret" == *PLACEHOLDER* ||
+        "$normalized_secret" == \<* || "$normalized_secret" == *\> ]]; then
+    echo "UserService caller JWT secret is invalid" >&2
+    return 1
+  fi
+  if LC_ALL=C printf '%s' "$secret" | grep -q '[[:cntrl:]]'; then
+    echo "UserService caller JWT secret contains a control character" >&2
+    return 1
+  fi
 }
 
 aisocial_require_env_file_vars() {
@@ -143,11 +215,12 @@ aisocial_require_deployment_env_sources() {
 
   if [[ "${APP_EXTERNAL_GRPC_AUTH_REQUIRED:-true}" == "true" ]]; then
     aisocial_require_env_file_vars \
-      APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN \
       APP_EXTERNAL_PAYSERVICE_JWT \
       APP_EXTERNAL_AISERVICE_HMAC_CALLER \
       APP_EXTERNAL_AISERVICE_HMAC_SECRET || return 1
   fi
+
+  aisocial_validate_userservice_jwt_contract || return 1
 
   if [[ "${AUTH_MODE:-}" == "totp" ]]; then
     aisocial_require_env_file_vars ADMIN_TOTP_ENCRYPTION_KEYS ADMIN_TOTP_ACTIVE_KEY_VERSION || return 1

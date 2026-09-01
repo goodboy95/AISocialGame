@@ -8,6 +8,8 @@ import java.util.List;
 @Component
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
+    public static final String CANONICAL_PROJECT_KEY = "aisocialgame";
+
     private String projectKey = "aisocialgame";
     private Sso sso = new Sso();
     private Ai ai = new Ai();
@@ -23,6 +25,13 @@ public class AppProperties {
 
     public void setProjectKey(String projectKey) {
         this.projectKey = projectKey;
+    }
+
+    public static String requireCanonicalProjectKey(String projectKey) {
+        if (!CANONICAL_PROJECT_KEY.equals(projectKey)) {
+            throw new IllegalArgumentException("External request project key is not canonical");
+        }
+        return projectKey;
     }
 
     public Ai getAi() {
@@ -285,7 +294,9 @@ public class AppProperties {
     public static class External {
         private boolean grpcAuthRequired = true;
         private String userserviceInternalGrpcToken = "";
-        private String payserviceJwt = "";
+        private UserServiceJwt userserviceJwt = new UserServiceJwt();
+        private String payserviceLegacyStaticToken = "";
+        private PayServiceJwt payserviceJwt = new PayServiceJwt();
         private String aiserviceHmacCaller = "";
         private String aiserviceHmacSecret = "";
 
@@ -305,11 +316,27 @@ public class AppProperties {
             this.userserviceInternalGrpcToken = userserviceInternalGrpcToken;
         }
 
-        public String getPayserviceJwt() {
+        public UserServiceJwt getUserserviceJwt() {
+            return userserviceJwt;
+        }
+
+        public void setUserserviceJwt(UserServiceJwt userserviceJwt) {
+            this.userserviceJwt = userserviceJwt;
+        }
+
+        public String getPayserviceLegacyStaticToken() {
+            return payserviceLegacyStaticToken;
+        }
+
+        public void setPayserviceLegacyStaticToken(String payserviceLegacyStaticToken) {
+            this.payserviceLegacyStaticToken = payserviceLegacyStaticToken;
+        }
+
+        public PayServiceJwt getPayserviceJwt() {
             return payserviceJwt;
         }
 
-        public void setPayserviceJwt(String payserviceJwt) {
+        public void setPayserviceJwt(PayServiceJwt payserviceJwt) {
             this.payserviceJwt = payserviceJwt;
         }
 
@@ -327,6 +354,138 @@ public class AppProperties {
 
         public void setAiserviceHmacSecret(String aiserviceHmacSecret) {
             this.aiserviceHmacSecret = aiserviceHmacSecret;
+        }
+    }
+
+    public static class PayServiceJwt {
+        private String callerId = "aisocialgame";
+        private String issuer = "aisocialgame";
+        private String service = "aisocialgame";
+        private String secret = "";
+        private String audience = "aienie-payservice-grpc";
+        private String role = "SERVICE";
+        private long ttlSeconds = 300L;
+        private String scopes = String.join(",", PayServiceJwtConfigurationValidator.REQUIRED_SCOPES);
+
+        public String getCallerId() {
+            return callerId;
+        }
+
+        public void setCallerId(String callerId) {
+            this.callerId = callerId;
+        }
+
+        public String getIssuer() {
+            return issuer;
+        }
+
+        public void setIssuer(String issuer) {
+            this.issuer = issuer;
+        }
+
+        public String getService() {
+            return service;
+        }
+
+        public void setService(String service) {
+            this.service = service;
+        }
+
+        public String getSecret() {
+            return secret;
+        }
+
+        public void setSecret(String secret) {
+            this.secret = secret;
+        }
+
+        public String getAudience() {
+            return audience;
+        }
+
+        public void setAudience(String audience) {
+            this.audience = audience;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public void setRole(String role) {
+            this.role = role;
+        }
+
+        public long getTtlSeconds() {
+            return ttlSeconds;
+        }
+
+        public void setTtlSeconds(long ttlSeconds) {
+            this.ttlSeconds = ttlSeconds;
+        }
+
+        public String getScopes() {
+            return scopes;
+        }
+
+        public void setScopes(String scopes) {
+            this.scopes = scopes;
+        }
+    }
+
+    public static class UserServiceJwt {
+        private String callerId = "aisocialgame";
+        private String issuer = "aisocialgame";
+        private String secret = "";
+        private String audience = "aienie-userservice-grpc";
+        private long ttlSeconds = 300L;
+        private String scopes = "user.auth.session.read,user.directory.read,user.ban.read,user.ban.write";
+
+        public String getCallerId() {
+            return callerId;
+        }
+
+        public void setCallerId(String callerId) {
+            this.callerId = callerId;
+        }
+
+        public String getIssuer() {
+            return issuer;
+        }
+
+        public void setIssuer(String issuer) {
+            this.issuer = issuer;
+        }
+
+        public String getSecret() {
+            return secret;
+        }
+
+        public void setSecret(String secret) {
+            this.secret = secret;
+        }
+
+        public String getAudience() {
+            return audience;
+        }
+
+        public void setAudience(String audience) {
+            this.audience = audience;
+        }
+
+        public long getTtlSeconds() {
+            return ttlSeconds;
+        }
+
+        public void setTtlSeconds(long ttlSeconds) {
+            this.ttlSeconds = ttlSeconds;
+        }
+
+        public String getScopes() {
+            return scopes;
+        }
+
+        public void setScopes(String scopes) {
+            this.scopes = scopes;
         }
     }
 

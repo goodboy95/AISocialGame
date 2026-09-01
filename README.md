@@ -30,12 +30,20 @@
 
 默认启用 `APP_EXTERNAL_GRPC_AUTH_REQUIRED=true`，并要求以下变量非空：
 
-- `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
+- `APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID=aisocialgame`
+- `APP_EXTERNAL_USERSERVICE_JWT_ISSUER=aisocialgame`
+- `APP_EXTERNAL_USERSERVICE_JWT_SECRET`（独立、至少 32 UTF-8 字节）
+- `APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE=aienie-userservice-grpc`
+- `APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS=300`
+- `APP_EXTERNAL_USERSERVICE_JWT_SCOPES=user.auth.session.read,user.directory.read,user.ban.read,user.ban.write`
 - `APP_EXTERNAL_PAYSERVICE_JWT`
 - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
 - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
 
 缺失任一变量时，后端会在启动期 fail-fast。
+旧的 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 必须缺失或为空；任何非空值都会被 Java、Linux
+部署预检和 Windows 启动器拒绝。每次 gRPC 调用在 `authorization: Bearer <JWT>` 中携带短期 caller JWT，旧 `x-internal-token` 禁用；进程只在
+安全刷新窗口外复用缓存，不记录 token 或 secret。
 
 ## 运行依赖
 
@@ -49,7 +57,7 @@
 本地部署默认不依赖 Consul：
 
 - MySQL / Redis / Qdrant：`localbase.testhut.top:23306 / 26379 / 26333`
-- user-service gRPC：`static://localuserservice.testhut.top:443`，TLS
+- user-service gRPC：`static://localuserservice.testhut.top:12001`，TLS
 - pay-service gRPC：`static://localpayservice.testhut.top:443`，TLS
 - ai-service gRPC：`static://localaiservice.testhut.top:443`，TLS
 - SSO 入口：`https://localuserservice.testhut.top`
@@ -145,13 +153,17 @@ APP_DOMAIN=socialgame.testhut.top ./build.sh
 
 ### Windows 本机启动（localbase WSL）
 
-共享 MySQL、Redis 与 Qdrant 由 `aienie-wsl` 提供，应用仅通过 `localbase.testhut.top` 访问。首次启动前，请以管理员身份从项目根目录执行：
+共享 MySQL、Redis、Qdrant 和 AI/User/Pay 公共服务由 `aienie-wsl` 提供；Windows 原生应用是另一套本地实例。准备好仓库外的 `%LOCALAPPDATA%\Aienie\secrets\aisocialgame.env` 后，从项目根目录执行：
 
 ```powershell
-.\scripts\windows\Ensure-LocalbaseHosts.ps1
+.\scripts\windows\Build-Local.ps1
+.\scripts\windows\Start-Local.ps1
+.\scripts\windows\Get-LocalStatus.ps1
+.\scripts\windows\Stop-Local.ps1
+.\scripts\windows\Test-Local.ps1 -Level L2
 ```
 
-该脚本幂等维护带标记的 `172.20.0.2 localbase.testhut.top` hosts 条目。准备好被 Git 忽略的 `env.local` 后，执行 `.\scripts\windows\Start-Native.ps1`；它按字面读取 `NAME=value`、验证 localbase 解析与共享数据端口，并将后端和前端分别限制在 `127.0.0.1:11031`、`127.0.0.1:11030`。执行 `.\scripts\windows\Stop-Native.ps1` 停止进程。停止不会删除 hosts 映射，日志与 PID 状态位于 `.native-run/`。
+标准入口不修改 hosts、ACL，不要求管理员权限或 UAC，也不访问 Config Center 或监控状态写入器。后端和前端分别限制在 `127.0.0.1:11031`、`127.0.0.1:11030`；跨服务只访问 `localbase.testhut.top` 和三个 `local*.testhut.top` TLS 服务。进程状态与日志位于 `%LOCALAPPDATA%\Aienie\native-runs\aisocialgame`。完整边界见 [`doc/operations/windows-native.md`](doc/operations/windows-native.md)。
 
 Linux Docker Compose 使用非敏感 `LOCALBASE_HOST_IP=172.20.0.2`（默认值相同）仅映射 `localbase.testhut.top` 到 WSL provider；user、AI、pay 服务仍保留各自的 `host-gateway` 映射。
 

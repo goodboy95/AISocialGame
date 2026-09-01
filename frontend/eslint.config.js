@@ -24,6 +24,12 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-unused-vars": "off",
+      // The existing API model still contains intentionally untyped payloads.
+      // Keep them visible during the migration without making release lint
+      // unable to report correctness rules such as conditional React hooks.
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
     },
   },
 );

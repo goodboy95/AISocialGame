@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('Build', 'Start', 'Stop', 'Status', 'Test')][string]$Action,
     [ValidateSet('All', 'Backend', 'Frontend')][string]$Component = 'All',
-    [string]$EnvironmentFile = (Join-Path $PSScriptRoot '..\..\env.local'),
+    [string]$EnvironmentFile = (Join-Path $(if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $env:TEMP }) 'Aienie\secrets\aisocialgame.env'),
     [ValidateRange(30, 900)][int]$StartupTimeoutSeconds = 180,
     [ValidateSet('L1', 'L2')][string]$TestLevel = 'L2',
     [switch]$AsJson
@@ -10,6 +10,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'UserServiceJwt-Contract.ps1')
+Import-Module (Join-Path $PSScriptRoot 'LocalRuntime.psm1') -Force
 
 if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7 -or $env:OS -ne 'Windows_NT') {
     throw 'AISocialGame Windows-native operations require PowerShell 7 or newer on Windows.'
@@ -18,14 +20,9 @@ if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $stateRoot = Join-Path $(if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $env:TEMP }) 'Aienie\native-runs\aisocialgame'
 $statePath = Join-Path $stateRoot 'processes.json'
-$operationalStateWriter = if ([string]::IsNullOrWhiteSpace($env:AIENIE_PRODUCT_STATE_WRITER)) {
-    Join-Path $repoRoot '..\..\aienie-runtime\infrastructure\monitoring\windows-agent\Set-AienieProductOperationalState.ps1'
-} else {
-    $env:AIENIE_PRODUCT_STATE_WRITER
-}
 $components = @(
-    [pscustomobject]@{ Name = 'Backend'; Directory = (Join-Path $repoRoot 'backend'); Command = 'mvn.cmd'; Install = @(); Build = @('-q', '-DskipTests', 'package'); Test = @('-q', 'test'); Start = @('-q', 'spring-boot:run'); Port = 11031; Health = '/actuator/health'; RequiresInstall = $false },
-    [pscustomobject]@{ Name = 'Frontend'; Directory = (Join-Path $repoRoot 'frontend'); Command = 'pnpm.cmd'; Install = @('install', '--frozen-lockfile'); Build = @('run', 'build'); Test = @('run', 'test:unit'); Start = @('run', 'dev', '--', '--host', '127.0.0.1', '--port', '11030', '--strictPort'); Port = 11030; Health = '/'; RequiresInstall = $true }
+    [pscustomobject]@{ Name = 'Backend'; Directory = (Join-Path $repoRoot 'backend'); Command = 'mvn.cmd'; Install = @(); Build = @('-q', '-DskipTests', 'package'); Test = @('-q', 'test'); Start = @('-f', (Join-Path $repoRoot 'backend\pom.xml'), '-q', 'spring-boot:run'); Port = 11031; Health = '/actuator/health'; HealthKind = 'JsonUp'; RequiresInstall = $false },
+    [pscustomobject]@{ Name = 'Frontend'; Directory = (Join-Path $repoRoot 'frontend'); Command = 'pnpm.cmd'; Install = @('install', '--frozen-lockfile'); Build = @('run', 'build'); Test = @('run', 'test:unit', '--maxWorkers=1'); Start = @('--dir', (Join-Path $repoRoot 'frontend'), 'exec', 'vite', '--host', '127.0.0.1', '--port', '11030', '--strictPort'); Port = 11030; Health = '/'; HealthKind = 'Http200'; RequiresInstall = $true }
 )
 
 function Get-Selected {
@@ -52,9 +49,7 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments, [string]$Working
 }
 
 function Read-PrivateEnvironment([string]$Path) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Environment file was not found: $Path" }
-    $file = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-    if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Environment file must not be a reparse point: $Path" }
+    $file = Get-Item -LiteralPath (Resolve-AienieLocalPrivateFile -Path $Path -Label 'Environment file') -Force -ErrorAction Stop
     $blocked = @('PATH', 'PATHEXT', 'COMSPEC', 'SYSTEMROOT', 'WINDIR', 'PSMODULEPATH', 'JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS', 'MAVEN_OPTS', 'NODE_OPTIONS')
     $result = @{}
     $lineNumber = 0
@@ -64,7 +59,7 @@ function Read-PrivateEnvironment([string]$Path) {
         $match = [Regex]::Match($line, '^\s*(?:export\s+)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=(?<value>.*)$')
         if (-not $match.Success) { throw "Environment file has an unsupported line at $lineNumber. Use literal NAME=value entries only." }
         $name = $match.Groups['name'].Value
-        if ($blocked -contains $name.ToUpperInvariant() -or $name -like 'SPRING_CONFIG_*') { throw "Environment file cannot set protected process variable '$name'." }
+        if ($blocked -contains $name.ToUpperInvariant() -or (Test-AienieProtectedProcessVariable -Name $name)) { throw "Environment file cannot set protected process variable '$name'." }
         if ($result.ContainsKey($name)) { throw "Environment file defines '$name' more than once." }
         $value = $match.Groups['value'].Value
         if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) { $value = $value.Substring(1, $value.Length - 2) }
@@ -76,20 +71,45 @@ function Read-PrivateEnvironment([string]$Path) {
 function Get-ChildEnvironment([hashtable]$PrivateValues) {
     $result = @{}
     foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
+    Assert-AienieLocalOnlyEnvironment -Values $result
+    Assert-AienieLocalOnlyEnvironment -Values $PrivateValues
+    foreach ($name in @('APP_EXTERNAL_GRPC_AUTH_REQUIRED', 'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN',
+            'APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID', 'APP_EXTERNAL_USERSERVICE_JWT_ISSUER',
+            'APP_EXTERNAL_USERSERVICE_JWT_SECRET', 'APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE',
+            'APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS', 'APP_EXTERNAL_USERSERVICE_JWT_SCOPES')) {
+        $result.Remove($name)
+    }
     foreach ($entry in $PrivateValues.GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
+    Assert-AienieLocalOnlyEnvironment -Values $result
+    Remove-AienieProcessInjectionEnvironment -Values $result
+    $result['ENV'] = 'local'
+    $result['APP_ENV'] = 'local'
+    $result['SPRING_PROFILES_ACTIVE'] = 'local'
+    $result['AIENIE_RUNTIME_PLANE'] = 'windows-local'
+    $result['AUTH_MODE'] = 'password'
+    $result['APP_PROJECT_KEY'] = 'aisocialgame'
+    $result['SERVER_ADDRESS'] = '127.0.0.1'
+    $result['SERVER_PORT'] = '11031'
     $result['VITE_LOCAL_BACKEND_PORT'] = '11031'
+    $result['SPRING_DATASOURCE_URL'] = 'jdbc:mysql://localbase.testhut.top:23306/aisocialgame?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
     $result['SPRING_DATA_REDIS_HOST'] = 'localbase.testhut.top'
+    $result['SPRING_DATA_REDIS_PORT'] = '26379'
+    $result['SPRING_DATA_REDIS_SSL_ENABLED'] = 'false'
     $result['QDRANT_HOST'] = 'http://localbase.testhut.top'
+    $result['QDRANT_PORT'] = '26333'
     $result['USER_GRPC_ADDR'] = 'static://localuserservice.testhut.top:12001'
     $result['BILLING_GRPC_ADDR'] = 'static://localpayservice.testhut.top:12021'
     $result['AI_GRPC_ADDR'] = 'static://localaiservice.testhut.top:12011'
-    $localCaRootUri = 'file:///C:/ProgramData/AieniePki/pki/root/aienie-local-root-ca.crt'
-    $result['GRPC_CLIENT_USER_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
-    $result['GRPC_CLIENT_BILLING_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
-    $result['GRPC_CLIENT_AI_SECURITY_TRUST_CERT_COLLECTION'] = $localCaRootUri
+    $result['GRPC_CLIENT_USER_SECURITY_TRUST_CERT_COLLECTION'] = ''
+    $result['GRPC_CLIENT_BILLING_SECURITY_TRUST_CERT_COLLECTION'] = ''
+    $result['GRPC_CLIENT_AI_SECURITY_TRUST_CERT_COLLECTION'] = ''
     $result['USER_GRPC_NEGOTIATION_TYPE'] = 'TLS'
     $result['BILLING_GRPC_NEGOTIATION_TYPE'] = 'TLS'
     $result['AI_GRPC_NEGOTIATION_TYPE'] = 'TLS'
+    $result['BILLING_GRPC_PLAINTEXT_ENABLED'] = 'false'
+    $result['APP_SECURITY_ALLOW_PLAINTEXT_GRPC'] = 'false'
+    $result['SSO_USER_SERVICE_BASE_URL'] = 'https://localuserservice.testhut.top'
+    $result['SSO_CALLBACK_URL'] = 'https://localsocialgame.testhut.top/sso/callback'
     return $result
 }
 
@@ -99,16 +119,14 @@ function Get-State {
 }
 
 function Test-Record($Record) {
-    try {
-        $process = Get-Process -Id ([int]$Record.Pid) -ErrorAction Stop
-        $expected = if ($Record.ProcessStartTimeUtc -is [DateTime]) { ([DateTime]$Record.ProcessStartTimeUtc).ToUniversalTime() } else { [DateTimeOffset]::Parse([string]$Record.ProcessStartTimeUtc).UtcDateTime }
-        return [Math]::Abs(($process.StartTime.ToUniversalTime() - $expected).TotalSeconds) -le 2
-    } catch { return $false }
+    $spec = $components | Where-Object Name -ceq ([string]$Record.Name) | Select-Object -First 1
+    if ($null -eq $spec) { return $false }
+    return Test-AienieManagedProcessRecord -Record $Record -ExpectedName $spec.Name -ExpectedWorkingRoot $spec.Directory -ExpectedPorts @($spec.Port)
 }
 
 function Save-State([object[]]$Records) {
     New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
-    [pscustomobject]@{ product = 'AISocialGame'; projectRoot = $repoRoot; updatedUtc = [DateTime]::UtcNow.ToString('o'); processes = @($Records) } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $statePath -Encoding utf8NoBOM
+    [pscustomobject]@{ product = 'AISocialGame'; projectRoot = $repoRoot; updatedUtc = [DateTime]::UtcNow.ToString('o'); processes = @($Records) } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding utf8NoBOM
 }
 
 function Test-Tcp([int]$Port) {
@@ -116,26 +134,12 @@ function Test-Tcp([int]$Port) {
     try { $task = $client.ConnectAsync('127.0.0.1', $Port); return $task.Wait(1000) -and $client.Connected } catch { return $false } finally { $client.Dispose() }
 }
 
-function Test-Http([int]$Port, [string]$Path) {
-    try { $response = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}{1}" -f $Port, $Path) -TimeoutSec 3 -SkipHttpErrorCheck; return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500 } catch { return $false }
+function Test-Http([int]$Port, [string]$Path, [ValidateSet('Http200', 'JsonUp')][string]$HealthKind = 'Http200') {
+    return Invoke-AienieBoundedHttp -Uri ("http://127.0.0.1:{0}{1}" -f $Port, $Path) -TimeoutSeconds 3 -RequireJsonUp:($HealthKind -eq 'JsonUp')
 }
 
 function Resolve-ManagedProcess($Record, $Spec) {
-    $connection = Get-NetTCPConnection -State Listen -LocalPort $Spec.Port -ErrorAction Stop |
-        Where-Object { $_.LocalAddress -in @('127.0.0.1', '::1', '::') } |
-        Select-Object -First 1
-    if ($null -eq $connection) { throw "Native $($Spec.Name) has no listener on port $($Spec.Port) after readiness." }
-    $minimumStart = [DateTime]::Parse([string]$Record.ProcessStartTimeUtc).ToUniversalTime().AddSeconds(-2)
-    $current = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $connection.OwningProcess) -ErrorAction Stop
-    $managedRoot = $current
-    while ($current.ParentProcessId -gt 0) {
-        $parent = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $current.ParentProcessId) -ErrorAction SilentlyContinue
-        if ($null -eq $parent -or $parent.CreationDate.ToUniversalTime() -lt $minimumStart) { break }
-        $current = $parent
-        if ($current.Name -notin @('cmd.exe', 'powershell.exe', 'pwsh.exe')) { $managedRoot = $current }
-    }
-    $managed = Get-Process -Id $managedRoot.ProcessId -ErrorAction Stop
-    return [pscustomobject]@{ Name = $Record.Name; Pid = $managedRoot.ProcessId; ProcessStartTimeUtc = $managed.StartTime.ToUniversalTime().ToString('o'); Port = $Record.Port; HealthPath = $Record.HealthPath; Process = $Record.Process }
+    return Complete-AienieManagedProcessRecord -Record $Record -Ports @($Spec.Port)
 }
 
 function Start-Component($Spec, [hashtable]$ChildEnvironment) {
@@ -146,46 +150,46 @@ function Start-Component($Spec, [hashtable]$ChildEnvironment) {
     $logs = Join-Path $stateRoot 'logs'
     New-Item -ItemType Directory -Path $logs -Force | Out-Null
     $process = Start-Process -FilePath (Get-Tool $Spec.Command) -ArgumentList $Spec.Start -WorkingDirectory $Spec.Directory -Environment $ChildEnvironment -RedirectStandardOutput (Join-Path $logs "$($Spec.Name.ToLowerInvariant()).stdout.log") -RedirectStandardError (Join-Path $logs "$($Spec.Name.ToLowerInvariant()).stderr.log") -PassThru
-    $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
-    do {
-        if ($process.HasExited) { throw "Native $($Spec.Name) process exited during startup with code $($process.ExitCode)." }
-        if ((Test-Tcp -Port $Spec.Port) -and (Test-Http -Port $Spec.Port -Path $Spec.Health)) {
-            $record = [pscustomobject]@{ Name = $Spec.Name; Pid = $process.Id; ProcessStartTimeUtc = (Get-Process -Id $process.Id).StartTime.ToUniversalTime().ToString('o'); Port = $Spec.Port; HealthPath = $Spec.Health; Process = $process }
-            return Resolve-ManagedProcess $record $Spec
+    $launchedStartUtc = try { $process.StartTime.ToUniversalTime() } catch { $null }
+    $record = $null
+    try {
+        $record = New-AienieRootProcessRecord -Name $Spec.Name -Process $process -WorkingRoot $Spec.Directory
+        $record | Add-Member -NotePropertyName Port -NotePropertyValue $Spec.Port
+        $record | Add-Member -NotePropertyName HealthPath -NotePropertyValue $Spec.Health
+        $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
+        do {
+            if ($process.HasExited) { throw "Native $($Spec.Name) process exited during startup with code $($process.ExitCode)." }
+            if ((Test-Tcp -Port $Spec.Port) -and (Test-Http -Port $Spec.Port -Path $Spec.Health -HealthKind $Spec.HealthKind)) {
+                return Resolve-ManagedProcess $record $Spec
+            }
+            Start-Sleep -Seconds 1
+            $process.Refresh()
+        } while ([DateTime]::UtcNow -lt $deadline)
+        throw "Native $($Spec.Name) did not become healthy on port $($Spec.Port) within $StartupTimeoutSeconds seconds."
+    } catch {
+        if ($null -ne $record) {
+            Stop-AienieRootProcessRecord -Record $record
+        } else {
+            $current = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+            if ($null -ne $current -and $null -ne $launchedStartUtc -and
+                [Math]::Abs(($current.StartTime.ToUniversalTime() - $launchedStartUtc).TotalMilliseconds) -le 1000) {
+                & (Join-Path $env:SystemRoot 'System32\taskkill.exe') /PID ([string]$process.Id) /T /F 2>$null | Out-Null
+            }
         }
-        Start-Sleep -Seconds 1
-        $process.Refresh()
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Native $($Spec.Name) did not become healthy on port $($Spec.Port) within $StartupTimeoutSeconds seconds."
+        $process.Dispose()
+        throw
+    }
 }
 
 function Stop-Record($Record) {
-    if (-not (Test-Record $Record)) { return $false }
-    & taskkill.exe /PID ([string]$Record.Pid) /T /F | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Unable to stop native $($Record.Name) process $($Record.Pid) (taskkill exit $LASTEXITCODE)." }
+    $spec = $components | Where-Object Name -ceq ([string]$Record.Name) | Select-Object -First 1
+    if ($null -eq $spec) { return $false }
+    if (@($Record.Listeners).Count -eq 0 -and $null -ne $Record.PSObject.Properties['Process']) {
+        Stop-AienieRootProcessRecord -Record $Record
+        return $true
+    }
+    Stop-AienieManagedProcessRecord -Record $Record -ExpectedName $spec.Name -ExpectedWorkingRoot $spec.Directory -ExpectedPorts @($spec.Port)
     return $true
-}
-
-function Publish-OperationalState {
-    if (-not (Test-Path -LiteralPath $operationalStateWriter -PathType Leaf)) {
-        Write-Verbose "Operational-state writer is unavailable: $operationalStateWriter"
-        return
-    }
-    $state = Get-State
-    $records = if ($null -eq $state) { @() } else { @($state.processes) }
-    $live = @($records | Where-Object { Test-Record $_ })
-    $healthyComponents = @($components | Where-Object {
-            (Test-Tcp $_.Port) -and (Test-Http $_.Port $_.Health)
-        })
-    $desiredState = if ($live.Count -gt 0) { 'running' } else { 'stopped' }
-    $health = if ($healthyComponents.Count -eq $components.Count) {
-        'healthy'
-    } elseif ($live.Count -gt 0) {
-        'unhealthy'
-    } else {
-        'unknown'
-    }
-    & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
 }
 
 switch ($Action) {
@@ -199,13 +203,14 @@ switch ($Action) {
     'Test' {
         foreach ($spec in Get-Selected) {
             $tool = Get-Tool $spec.Command
-            $arguments = if ($TestLevel -eq 'L1') { $spec.Build } else { $spec.Test }
-            Invoke-Checked $tool $arguments $spec.Directory "$($spec.Name) $TestLevel verification"
+            if ($spec.Install.Count -gt 0) { Invoke-Checked $tool $spec.Install $spec.Directory "$($spec.Name) dependency installation" }
+            Invoke-Checked $tool $spec.Build $spec.Directory "$($spec.Name) L1 build"
+            if ($TestLevel -eq 'L2') { Invoke-Checked $tool $spec.Test $spec.Directory "$($spec.Name) L2 tests" }
         }
-        Publish-OperationalState
     }
     'Start' {
         $privateValues = Read-PrivateEnvironment $EnvironmentFile
+        Assert-AisocialUserServiceJwtEnvironment -Values $privateValues
         $state = Get-State
         $existing = if ($null -eq $state) { @() } else { @($state.processes | Where-Object { Test-Record $_ }) }
         if ($null -ne $state -and -not [string]::Equals([string]$state.projectRoot, $repoRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Native process state belongs to another checkout: $($state.projectRoot)" }
@@ -215,10 +220,9 @@ switch ($Action) {
         try {
             foreach ($spec in $selected) {
                 $started += Start-Component $spec (Get-ChildEnvironment $privateValues)
-                Save-State (@($existing) + @($started | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Pid = $_.Pid; ProcessStartTimeUtc = $_.ProcessStartTimeUtc; Port = $_.Port; HealthPath = $_.HealthPath } }))
+                Save-State (@($existing) + @($started | ForEach-Object { ConvertTo-AieniePersistedProcessRecord -Record $_ }))
             }
-            Save-State (@($existing) + @($started | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Pid = $_.Pid; ProcessStartTimeUtc = $_.ProcessStartTimeUtc; Port = $_.Port; HealthPath = $_.HealthPath } }))
-            Publish-OperationalState
+            Save-State (@($existing) + @($started | ForEach-Object { ConvertTo-AieniePersistedProcessRecord -Record $_ }))
             & $PSCommandPath -Action Status
         } catch {
             foreach ($record in $started) { try { Stop-Record $record | Out-Null } catch { Write-Warning "Could not clean up native $($record.Name): $($_.Exception.Message)" } }
@@ -234,19 +238,17 @@ switch ($Action) {
         $remaining = @()
         foreach ($record in @($state.processes)) {
             if ($Component -ne 'All' -and $record.Name -ne $Component) { $remaining += $record; continue }
-            if (Stop-Record $record) { Write-Output "Stopped AISocialGame $($record.Name) process $($record.Pid)." }
+            if (Stop-Record $record) { Write-Output "Stopped AISocialGame $($record.Name) process $($record.RootProcess.ProcessId)." }
         }
         if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue } else { Save-State $remaining }
-        Publish-OperationalState
     }
     'Status' {
         $state = Get-State
         $records = if ($null -eq $state) { @() } else { @($state.processes) }
         $result = foreach ($spec in $components) {
             $record = @($records | Where-Object Name -eq $spec.Name | Select-Object -First 1)
-            [pscustomobject]@{ product = 'AISocialGame'; component = $spec.Name; port = $spec.Port; processRecorded = $record.Count -eq 1; processLive = ($record.Count -eq 1 -and (Test-Record $record[0])); tcpListening = Test-Tcp $spec.Port; healthy = Test-Http $spec.Port $spec.Health }
+            [pscustomobject]@{ product = 'AISocialGame'; component = $spec.Name; port = $spec.Port; processRecorded = $record.Count -eq 1; processLive = ($record.Count -eq 1 -and (Test-Record $record[0])); tcpListening = Test-Tcp $spec.Port; healthy = Test-Http $spec.Port $spec.Health $spec.HealthKind }
         }
-        Publish-OperationalState
         if ($AsJson) { $result | ConvertTo-Json -Depth 4 } else { $result | Format-Table -AutoSize }
     }
 }
