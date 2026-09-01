@@ -21,6 +21,32 @@ class PayServiceJwtStartupGuardTest {
     }
 
     @Test
+    void acceptsOnlyExactWindowsLocalProfileSelectorsAndLoopback() {
+        AppProperties properties = validProperties();
+        Map<String, String> local = canonicalEnvironment();
+        local.put("ENV", "local");
+        local.put("APP_ENV", "local");
+        local.put("AIENIE_RUNTIME_PLANE", "windows-local");
+        local.put("SPRING_PROFILES_ACTIVE", "local");
+        local.put("SERVER_ADDRESS", "127.0.0.1");
+
+        assertDoesNotThrow(() -> PayServiceJwtStartupGuard.validateFinalConfiguration(
+                properties, local, new String[]{"local"}, new String[]{"default"}, false,
+                "Windows 11"));
+
+        Map<String, String> wildcard = new HashMap<>(local);
+        wildcard.put("SERVER_ADDRESS", "0.0.0.0");
+        assertThrows(IllegalStateException.class,
+                () -> PayServiceJwtStartupGuard.validateFinalConfiguration(
+                        properties, wildcard, new String[]{"local"}, new String[]{"default"},
+                        false, "Windows 11"));
+        assertThrows(IllegalStateException.class,
+                () -> PayServiceJwtStartupGuard.validateFinalConfiguration(
+                        properties, local, new String[]{"local"}, new String[]{"default"},
+                        false, "Linux"));
+    }
+
+    @Test
     void validatesFinalBindingBeforeServerCreation() {
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("app.external.grpc-auth-required", "true")
