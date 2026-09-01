@@ -30,12 +30,20 @@
 
 默认启用 `APP_EXTERNAL_GRPC_AUTH_REQUIRED=true`，并要求以下变量非空：
 
-- `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
+- `APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID=aisocialgame`
+- `APP_EXTERNAL_USERSERVICE_JWT_ISSUER=aisocialgame`
+- `APP_EXTERNAL_USERSERVICE_JWT_SECRET`（独立、至少 32 UTF-8 字节）
+- `APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE=aienie-userservice-grpc`
+- `APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS=300`
+- `APP_EXTERNAL_USERSERVICE_JWT_SCOPES=user.auth.session.read,user.directory.read,user.ban.read,user.ban.write`
 - `APP_EXTERNAL_PAYSERVICE_JWT`
 - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
 - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
 
 缺失任一变量时，后端会在启动期 fail-fast。
+旧的 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 必须缺失或为空；任何非空值都会被 Java、Linux
+部署预检和 Windows 启动器拒绝。每次 gRPC 调用在 `authorization: Bearer <JWT>` 中携带短期 caller JWT，旧 `x-internal-token` 禁用；进程只在
+安全刷新窗口外复用缓存，不记录 token 或 secret。
 
 ## 运行依赖
 
@@ -49,7 +57,7 @@
 本地部署默认不依赖 Consul：
 
 - MySQL / Redis / Qdrant：`localbase.testhut.top:23306 / 26379 / 26333`
-- user-service gRPC：`static://localuserservice.testhut.top:443`，TLS
+- user-service gRPC：`static://localuserservice.testhut.top:12001`，TLS
 - pay-service gRPC：`static://localpayservice.testhut.top:443`，TLS
 - ai-service gRPC：`static://localaiservice.testhut.top:443`，TLS
 - SSO 入口：`https://localuserservice.testhut.top`

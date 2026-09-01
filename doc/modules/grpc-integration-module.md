@@ -13,7 +13,7 @@
 - `integration/grpc/client/AiGrpcClient`
   - 模型列表、对话、embeddings、ocr；proto 保留 `GenerateImage` 契约但 AISocialGame 当前不新增生图业务入口
 - `integration/grpc/auth/UserGrpcAuthClientInterceptor`
-  - 自动注入 `x-internal-token`
+  - 自动注入短期、调用方隔离的 `authorization: Bearer <JWT>`，不发送旧 `x-internal-token`
 - `integration/grpc/auth/BillingGrpcAuthClientInterceptor`
   - 自动注入 `authorization: Bearer <service_jwt>`
 - `integration/grpc/auth/AiGrpcHmacClientInterceptor`
@@ -21,7 +21,7 @@
 ## 当前配置策略
 
 - 地址：
-  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:443`
+  - `USER_GRPC_ADDR=static://localuserservice.testhut.top:12001`
   - `BILLING_GRPC_ADDR=static://localpayservice.testhut.top:443`
   - `AI_GRPC_ADDR=static://localaiservice.testhut.top:443`
 - SSO HTTP 入口：
@@ -44,12 +44,15 @@
 
 默认 `APP_EXTERNAL_GRPC_AUTH_REQUIRED=true`，并要求：
 
-- `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN`
+- `APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID/ISSUER/SECRET/AUDIENCE/TTL_SECONDS/SCOPES`
 - `APP_EXTERNAL_PAYSERVICE_JWT`
 - `APP_EXTERNAL_AISERVICE_HMAC_CALLER`
 - `APP_EXTERNAL_AISERVICE_HMAC_SECRET`
 
-启动期由 `ExternalGrpcAuthValidator` 进行 fail-fast 校验，缺失即拒绝启动。
+启动期由 `ExternalGrpcAuthValidator` 进行 fail-fast 校验。UserService caller 固定为
+`aisocialgame`，audience 固定为 `aienie-userservice-grpc`，scope 精确限制为会话读取、目录读取、
+封禁读取和封禁写入；旧 `APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN` 非空、扩权、弱 secret、错误
+identity/audience 或 TTL 越界均拒绝启动。
 
 ### pay-service JWT 时效要求
 

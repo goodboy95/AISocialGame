@@ -1,7 +1,6 @@
 package com.aisocialgame.config;
 
 import jakarta.annotation.PostConstruct;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -9,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-@Profile("!test")
 public class ExternalGrpcAuthValidator {
 
     private final AppProperties appProperties;
@@ -21,14 +19,25 @@ public class ExternalGrpcAuthValidator {
     @PostConstruct
     public void validate() {
         AppProperties.External external = appProperties.getExternal();
-        if (external == null || !external.isGrpcAuthRequired()) {
+        if (external == null) {
+            throw new IllegalStateException("External gRPC authentication configuration is required");
+        }
+
+        if (StringUtils.hasLength(external.getUserserviceInternalGrpcToken())) {
+            throw new IllegalStateException(
+                    "Legacy APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN must be absent or empty");
+        }
+        if (!external.isGrpcAuthRequired()) {
             return;
         }
 
-        List<String> missing = new ArrayList<>();
-        if (!StringUtils.hasText(external.getUserserviceInternalGrpcToken())) {
-            missing.add("APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN");
+        try {
+            UserServiceJwtConfigurationValidator.validate(external.getUserserviceJwt());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Invalid UserService caller JWT configuration", exception);
         }
+
+        List<String> missing = new ArrayList<>();
         if (!StringUtils.hasText(external.getPayserviceJwt())) {
             missing.add("APP_EXTERNAL_PAYSERVICE_JWT");
         }

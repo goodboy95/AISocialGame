@@ -10,6 +10,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'UserServiceJwt-Contract.ps1')
 
 if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7 -or $env:OS -ne 'Windows_NT') {
     throw 'AISocialGame Windows-native operations require PowerShell 7 or newer on Windows.'
@@ -76,6 +77,12 @@ function Read-PrivateEnvironment([string]$Path) {
 function Get-ChildEnvironment([hashtable]$PrivateValues) {
     $result = @{}
     foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
+    foreach ($name in @('APP_EXTERNAL_GRPC_AUTH_REQUIRED', 'APP_EXTERNAL_USERSERVICE_INTERNAL_GRPC_TOKEN',
+            'APP_EXTERNAL_USERSERVICE_JWT_CALLER_ID', 'APP_EXTERNAL_USERSERVICE_JWT_ISSUER',
+            'APP_EXTERNAL_USERSERVICE_JWT_SECRET', 'APP_EXTERNAL_USERSERVICE_JWT_AUDIENCE',
+            'APP_EXTERNAL_USERSERVICE_JWT_TTL_SECONDS', 'APP_EXTERNAL_USERSERVICE_JWT_SCOPES')) {
+        $result.Remove($name)
+    }
     foreach ($entry in $PrivateValues.GetEnumerator()) { $result[[string]$entry.Key] = [string]$entry.Value }
     $result['VITE_LOCAL_BACKEND_PORT'] = '11031'
     $result['SPRING_DATA_REDIS_HOST'] = 'localbase.testhut.top'
@@ -185,7 +192,13 @@ function Publish-OperationalState {
     } else {
         'unknown'
     }
-    & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
+    try {
+        & $operationalStateWriter -Component 'ai-social-game' -DesiredState $desiredState -Health $health
+    } catch {
+        # Shared observability publishing is best-effort and must not turn a
+        # successful repository build or test into a false negative.
+        Write-Warning "Could not publish AISocialGame operational state: $($_.Exception.Message)"
+    }
 }
 
 switch ($Action) {
@@ -206,6 +219,7 @@ switch ($Action) {
     }
     'Start' {
         $privateValues = Read-PrivateEnvironment $EnvironmentFile
+        Assert-AisocialUserServiceJwtEnvironment -Values $privateValues
         $state = Get-State
         $existing = if ($null -eq $state) { @() } else { @($state.processes | Where-Object { Test-Record $_ }) }
         if ($null -ne $state -and -not [string]::Equals([string]$state.projectRoot, $repoRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Native process state belongs to another checkout: $($state.projectRoot)" }
