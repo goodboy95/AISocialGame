@@ -101,7 +101,7 @@ class PayServiceJwtStartupGuardTest {
     }
 
     @Test
-    void acceptsCanonicalTestPublicTrustAndRejectsProductionB0() {
+    void acceptsCanonicalTestPublicTrustAndRejectsProductionWithoutSignedPreactivationAuthority() {
         MockEnvironment testEnvironment = new MockEnvironment()
                 .withProperty("grpc.client.billing.address", PayServiceTransportPolicy.TEST_TARGET)
                 .withProperty("grpc.client.billing.negotiationType", "TLS")

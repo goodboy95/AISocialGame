@@ -78,7 +78,7 @@ class AiServiceTransportStartupGuardTest {
     }
 
     @Test
-    void rejectsWrongTrustAndFrozenProductionAtCanonicalPort() {
+    void rejectsWrongTrustAndProductionWithoutSignedPreactivationAuthority() {
         Map<String, String> wrongTrust = raw("local", AiServiceTransportPolicy.LOCAL_TARGET,
                 "file:/private/attacker-ca.crt");
         assertThrows(IllegalStateException.class,

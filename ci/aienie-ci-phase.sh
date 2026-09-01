@@ -5,6 +5,9 @@ set -euo pipefail
 # release platform.  The caller must declare the module arrays before calling
 # aienie_ci_prepare_phase.
 
+readonly AIENIE_CI_REQUIRED_NODE_VERSION='v22.23.2'
+readonly AIENIE_CI_REQUIRED_PNPM_VERSION='11.22.0'
+
 aienie_ci_fail() {
   printf 'Aienie repository CI contract failed: %s\n' "$*" >&2
   exit 2
@@ -233,6 +236,107 @@ aienie_ci_resolve_maven() {
       mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
         dependency:go-offline dependency:resolve dependency:resolve-plugins
     )
+    if grep -q '<artifactId>[[:space:]]*protobuf-maven-plugin[[:space:]]*</artifactId>' \
+      "$AIENIE_CI_REPO_ROOT/$module/pom.xml"; then
+      local effective_pom resolver classifier
+      effective_pom="$AIENIE_CI_SCRATCH_DIR/effective-pom-${module//\//_}.xml"
+      (
+        cd "$AIENIE_CI_REPO_ROOT/$module"
+        mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
+          help:effective-pom -Doutput="$effective_pom" >/dev/null
+      )
+      case "$(uname -m)" in
+        x86_64|amd64) classifier='linux-x86_64' ;;
+        aarch64|arm64) classifier='linux-aarch_64' ;;
+        *) aienie_ci_fail "unsupported native classifier for protobuf tools: $(uname -m)" ;;
+      esac
+      resolver="${AIENIE_CI_PROTOBUF_TOOL_RESOLVER:-/opt/aienie-ci/resolve_maven_protobuf_tools.py}"
+      [[ -f "$resolver" && ! -L "$resolver" ]] || aienie_ci_fail "protobuf tool resolver is missing or unsafe: $resolver"
+      mapfile -t protobuf_artifacts < <(python3 "$resolver" "$effective_pom" "$classifier")
+      (( ${#protobuf_artifacts[@]} == 2 )) || aienie_ci_fail "protobuf tool resolver returned an unexpected artifact set for $module"
+      local artifact
+      for artifact in "${protobuf_artifacts[@]}"; do
+        mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
+          dependency:get -Dtransitive=true -Dartifact="$artifact"
+      done
+    fi
+
+    # Materialize the effective POM once so plugin-managed test dependencies
+    # are resolved from the repository's actual dependency management rather
+    # than guessed versions. Maven's go-offline goal does not reliably include
+    # the provider used by the configured Surefire plugin.
+    local effective_pom
+    effective_pom="$AIENIE_CI_SCRATCH_DIR/effective-pom-${module//\//_}.xml"
+    (
+      cd "$AIENIE_CI_REPO_ROOT/$module"
+      mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
+        help:effective-pom -Doutput="$effective_pom" >/dev/null
+    )
+
+    local launcher_version
+    launcher_version="$(python3 - "$effective_pom" <<'PY'
+import pathlib
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(pathlib.Path(sys.argv[1])).getroot()
+
+def local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+def children(element):
+    return {local_name(child.tag): (child.text or "").strip()
+            for child in list(element)}
+
+property_values = {}
+for element in root.iter():
+    if local_name(element.tag) == "properties":
+        for child in list(element):
+            value = (child.text or "").strip()
+            if value:
+                property_values[local_name(child.tag)] = value
+
+for element in root.iter():
+    if local_name(element.tag) != "dependency":
+        continue
+    values = children(element)
+    if (values.get("groupId") == "org.junit.platform"
+            and values.get("artifactId") == "junit-platform-launcher"
+            and values.get("version")
+            and "${" not in values["version"]):
+        print(values["version"])
+        raise SystemExit(0)
+
+for key in ("junit-platform.version", "junit.platform.version"):
+    value = property_values.get(key, "")
+    if value and "${" not in value:
+        print(value)
+        raise SystemExit(0)
+raise SystemExit("effective POM does not expose junit-platform-launcher version")
+PY
+)"
+    [[ "$launcher_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] ||
+      aienie_ci_fail "could not resolve junit-platform-launcher version for $module"
+
+    # Warm both Surefire providers used by Aienie and the exact JUnit Platform
+    # launcher selected by the effective POM while repository access is still
+    # allowed; the sealed build phase then runs the same tests fully offline.
+    local surefire_version
+    for surefire_version in 3.2.5 3.5.2; do
+      mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
+        dependency:get -Dtransitive=true \
+        -Dartifact="org.apache.maven.surefire:surefire-junit-platform:${surefire_version}"
+    done
+    mvn -B -ntp -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" \
+      dependency:get -Dtransitive=true \
+      -Dartifact="org.junit.platform:junit-platform-launcher:${launcher_version}"
+
+    # Resolve the complete test class path without running tests.  Maven's
+    # dependency plugin can omit provider-transitive artifacts (for example
+    # junit-platform-launcher), while the test lifecycle resolves them
+    # authoritatively.
+    (cd "$AIENIE_CI_REPO_ROOT/$module" && mvn -B -ntp \
+      -Dmaven.repo.local="$AIENIE_CI_CACHE_DIR/maven" -DskipTests test)
   done
   local artifact
   for artifact in "${AIENIE_CI_MAVEN_EXTRA_ARTIFACTS[@]}"; do
@@ -417,6 +521,14 @@ aienie_ci_prepare_phase() {
   (( ${#AIENIE_CI_MAVEN_MODULES[@]} == 0 )) || { aienie_ci_need mvn; aienie_ci_need java; }
   (( ${#AIENIE_CI_NPM_MODULES[@]} == 0 && ${#AIENIE_CI_STATIC_NODE_MODULES[@]} == 0 )) || { aienie_ci_need node; aienie_ci_need npm; }
   (( ${#AIENIE_CI_PNPM_MODULES[@]} == 0 )) || { aienie_ci_need node; aienie_ci_need pnpm; }
+  if (( ${#AIENIE_CI_NPM_MODULES[@]} > 0 || ${#AIENIE_CI_PNPM_MODULES[@]} > 0 || ${#AIENIE_CI_STATIC_NODE_MODULES[@]} > 0 )); then
+    [[ "$(node --version)" == "$AIENIE_CI_REQUIRED_NODE_VERSION" ]] ||
+      aienie_ci_fail "Node.js must be exactly ${AIENIE_CI_REQUIRED_NODE_VERSION#v}"
+  fi
+  if (( ${#AIENIE_CI_PNPM_MODULES[@]} > 0 )); then
+    [[ "$(pnpm --version)" == "$AIENIE_CI_REQUIRED_PNPM_VERSION" ]] ||
+      aienie_ci_fail "pnpm must be exactly $AIENIE_CI_REQUIRED_PNPM_VERSION"
+  fi
   aienie_ci_assert_native_architecture
   aienie_ci_assert_runtime_toolchain_contract
   AIENIE_CI_SCRATCH_DIR="$(mktemp -d)"

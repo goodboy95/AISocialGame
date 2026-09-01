@@ -6,7 +6,6 @@ import java.util.Map;
 final class AiServiceTransportPolicy {
     static final String LOCAL_TARGET = "static://localaiservice.testhut.top:12011";
     static final String TEST_TARGET = "static://aiservice.testhut.top:12011";
-    // Production B0 remains frozen until its separate cutover is approved.
     static final String PRODUCTION_TARGET = "static://aiservice.seekerhut.com:12011";
     static final String STAGING_TRUST =
             "file:/run/aienie/trust/staging-root.pem";
@@ -42,7 +41,7 @@ final class AiServiceTransportPolicy {
         }
         Expected expected = new Expected(runtimeEnvironment, expectedTarget, trust);
         if ("production".equals(runtimeEnvironment)) {
-            throw new IllegalStateException("Production B0 runtime remains frozen");
+            ProductionPreactivationAuthority.requireAuthorized();
         }
         return expected;
     }

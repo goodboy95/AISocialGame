@@ -43,6 +43,14 @@ Build 在执行仓库 L2 编译/测试前重新验证清单、工具链、锁文
 进入产物。任何缺失输入、写权限或联网降级都会直接失败。运行时配置、秘密、证书和 Config
 Center 文件都不是这两个阶段的输入，也不得进入产物。
 
+## Production bundle
+
+Build 阶段设置 `AIENIE_RELEASE_ENVIRONMENT=production` 后，入口生成 production Compose、
+运行合同和 SQL migration ledger/checkpoint 合同。生产 schema 计划必须由平台签名的 v4 外层
+清单明确选择，禁止运行时自动猜测；没有有效 v4 授权时保持冻结。可写目录只允许位于
+`/srv/aienie-products/ai-social-game`，外部连接只使用 `seekerhut.com` TLS authority。
+夜间备份只包含 records；logs 按 `operational-log` 分类排除，env/admin 等保护配置不在备份集合内。
+
 ## 本仓库模块
 
 - Maven: `backend`

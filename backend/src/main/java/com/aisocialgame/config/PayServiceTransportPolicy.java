@@ -38,7 +38,7 @@ final class PayServiceTransportPolicy {
         }
         Expected expected = new Expected(runtimeEnvironment, target, trust);
         if ("production".equals(runtimeEnvironment)) {
-            throw new IllegalStateException("Production B0 runtime remains frozen");
+            ProductionPreactivationAuthority.requireAuthorized();
         }
         return expected;
     }
