@@ -1,5 +1,6 @@
 package com.aisocialgame.integration.grpc.client;
 
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.auth.BillingGrpcAuthClientInterceptor;
 import com.aisocialgame.integration.grpc.dto.BalanceSnapshot;
@@ -60,7 +61,7 @@ public class BillingGrpcClient {
         try {
             long publicTokens = getPublicPermanentTokens(userId);
             var projectResponse = balanceStub.getProjectBalance(GetProjectBalanceRequest.newBuilder()
-                    .setProjectKey(projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .build());
             var projectBalance = projectResponse.getBalance();
@@ -78,7 +79,7 @@ public class BillingGrpcClient {
     public BalanceSnapshot getProjectBalance(String projectKey, long userId) {
         try {
             var projectResponse = balanceStub.getProjectBalance(GetProjectBalanceRequest.newBuilder()
-                    .setProjectKey(projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .build());
             var projectBalance = projectResponse.getBalance();
@@ -108,7 +109,7 @@ public class BillingGrpcClient {
         try {
             var response = checkinStub.checkin(CheckinRequest.newBuilder()
                     .setRequestId(requestId == null ? "" : requestId)
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .build());
             long publicTokens = getPublicTokens(userId);
@@ -128,7 +129,7 @@ public class BillingGrpcClient {
     public CheckinStatusResult getCheckinStatus(String projectKey, long userId) {
         try {
             var response = checkinStub.getCheckinStatus(GetCheckinStatusRequest.newBuilder()
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .build());
             return new CheckinStatusResult(
@@ -144,7 +145,7 @@ public class BillingGrpcClient {
     public PagedResult<UsageRecordSnapshot> listUsageRecords(String projectKey, long userId, int page, int size) {
         try {
             var response = queryStub.listUsageRecords(ListUsageRecordsRequest.newBuilder()
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setPage(page)
                     .setSize(size)
@@ -172,7 +173,7 @@ public class BillingGrpcClient {
         try {
             var response = queryStub.listLedgerEntries(ListLedgerEntriesRequest.newBuilder()
                     .setUserId(userId)
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setPage(page)
                     .setSize(size)
                     .build());
@@ -209,7 +210,7 @@ public class BillingGrpcClient {
         try {
             var response = conversionStub.convertPublicToProject(ConvertPublicToProjectRequest.newBuilder()
                     .setRequestId(requestId == null ? "" : requestId)
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setCredits(credits)
                     .setTokens(credits)
@@ -227,7 +228,7 @@ public class BillingGrpcClient {
         try {
             var response = onboardingStub.ensureUserInitialized(EnsureUserInitializedRequest.newBuilder()
                     .setRequestId(requestId == null ? "" : requestId)
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .build());
             if (!response.getSuccess()) {
@@ -242,7 +243,7 @@ public class BillingGrpcClient {
         try {
             var response = redeemCodeStub.redeemCode(RedeemCodeRequest.newBuilder()
                     .setRequestId(requestId == null ? "" : requestId)
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setCode(code == null ? "" : code.trim())
                     .build());
@@ -265,7 +266,7 @@ public class BillingGrpcClient {
     public PagedResult<RedemptionRecordSnapshot> getRedemptionHistory(String projectKey, long userId, int page, int size) {
         try {
             var response = redeemCodeStub.getRedemptionHistory(GetRedemptionHistoryRequest.newBuilder()
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setPage(page)
                     .setSize(size)

@@ -22,4 +22,5 @@ cleanup() {
 trap cleanup EXIT
 WORKSPACE="$repo_root" bash "$helper" "AISocialGame" "$legacy_dir"
 bash "$flatten" "AISocialGame" "$legacy_dir" "$output_dir"
+bash "$repo_root/ci/assemble-aisocialgame-runtime.sh" "$repo_root" "$output_dir"
 aienie_ci_finalize_build_inputs

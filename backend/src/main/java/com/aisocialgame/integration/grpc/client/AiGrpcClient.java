@@ -1,5 +1,6 @@
 package com.aisocialgame.integration.grpc.client;
 
+import com.aisocialgame.config.AppProperties;
 import com.aisocialgame.exception.ApiException;
 import com.aisocialgame.integration.grpc.auth.AiGrpcHmacClientInterceptor;
 import com.aisocialgame.integration.grpc.dto.AiChatMessageDto;
@@ -59,7 +60,7 @@ public class AiGrpcClient {
         try {
             ChatCompletionsRequest.Builder builder = ChatCompletionsRequest.newBuilder()
                     .setRequestId(UUID.randomUUID().toString())
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setSessionId(sessionId == null ? "" : sessionId)
                     .setModel(model == null ? "" : model);
@@ -90,7 +91,7 @@ public class AiGrpcClient {
         try {
             EmbeddingsRequest.Builder builder = EmbeddingsRequest.newBuilder()
                     .setRequestId(UUID.randomUUID().toString())
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setSessionId(sessionId == null ? "" : sessionId)
                     .setModel(model == null ? "" : model)
@@ -125,7 +126,7 @@ public class AiGrpcClient {
         try {
             OcrParseRequest.Builder builder = OcrParseRequest.newBuilder()
                     .setRequestId(UUID.randomUUID().toString())
-                    .setProjectKey(projectKey == null ? "" : projectKey)
+                    .setProjectKey(AppProperties.requireCanonicalProjectKey(projectKey))
                     .setUserId(userId)
                     .setSessionId(sessionId == null ? "" : sessionId)
                     .setModel(model == null ? "" : model)
