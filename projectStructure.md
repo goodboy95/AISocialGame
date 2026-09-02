@@ -11,7 +11,7 @@ AISocialGame/
 ├── backend/                 Spring Boot 后端、SQL、proto 与测试
 ├── frontend/                React 18 + TypeScript + Vite 单一前端工程
 ├── doc/                     架构、模块、API、运维与可重复测试说明
-├── ci/                      发版中心两阶段发布契约（build-release.sh 唯一发版入口）
+├── scripts/ci/                      发版中心两阶段发布契约（build-release.sh 唯一发版入口）
 ├── scripts/windows/         Windows 本机调试启动脚本（Start-Backend/Start-Frontend）
 └── env.example              无秘密配置模板（本地 F5 调试用）
 ```
@@ -37,7 +37,7 @@ AISocialGame/
 
 ## 运行入口
 
-- 发版中心发布（Linux Docker）：`ci/build-release.sh`（运行时配置由 config-center 提供）。
+- 发版中心发布（Linux Docker）：`scripts/ci/build-release.sh`（运行时配置由 config-center 提供）。
 - Windows 本机调试入口：`scripts/windows/Start-Backend.ps1`、`Start-Frontend.ps1`
   （前台运行，Ctrl+C 停止）。
 - 浏览器本地入口：`https://localsocialgame.testhut.top`；管理台为同站

@@ -12,15 +12,15 @@ fi
 put "$repo/backend/start-production-backend.sh" "$out/backend/start-production-backend.sh" 0555
 put "$repo/backend/production-migration-entrypoint.sh" "$out/backend/production-migration-entrypoint.sh" 0555
 put "$repo/backend/runtime-process-environment.sh" "$out/backend/runtime-process-environment.sh" 0444
-put "$repo/docker/production-load-env-file.sh" "$out/docker/production-load-env-file.sh" 0555
+put "$repo/scripts/docker/production-load-env-file.sh" "$out/docker/production-load-env-file.sh" 0555
 put "$repo/frontend/nginx.conf" "$out/frontend/nginx.conf" 0444
-put "$repo/ci/aisocialgame-production-runtime-compose.yml" "$out/docker-compose.yml" 0444
-put "$repo/ci/production-runtime-contract.json" "$out/release/production-runtime-contract.json" 0444
-put "$repo/ci/production-persistence-preflight.sh" "$out/release/production-persistence-preflight.sh" 0555
-put "$repo/ci/production-migration-executor" "$out/release/production-migration-executor" 0555
-python3 "$repo/ci/write-production-sql-ledger.py" "$repo" "$out/release/migrations";chmod -R a-w "$out/release/migrations"
-python3 "$repo/ci/verify-production-runtime-contract.py" "$out/release/production-runtime-contract.json" "$out/docker-compose.yml" ai-social-game "$out/backend/start-production-backend.sh" "$out/release/production-migration-executor" "$out/backend/production-migration-entrypoint.sh" "$out/release/migrations/sql-ledger.json" "$out/release/migrations/production-plan.json"
-python3 "$repo/ci/write-production-migration-artifacts.py" "$out" "$out/release/production-migration-artifacts.json"
+put "$repo/scripts/ci/aisocialgame-production-runtime-compose.yml" "$out/docker-compose.yml" 0444
+put "$repo/scripts/ci/production-runtime-contract.json" "$out/release/production-runtime-contract.json" 0444
+put "$repo/scripts/ci/production-persistence-preflight.sh" "$out/release/production-persistence-preflight.sh" 0555
+put "$repo/scripts/ci/production-migration-executor" "$out/release/production-migration-executor" 0555
+python3 "$repo/scripts/ci/write-production-sql-ledger.py" "$repo" "$out/release/migrations";chmod -R a-w "$out/release/migrations"
+python3 "$repo/scripts/ci/verify-production-runtime-contract.py" "$out/release/production-runtime-contract.json" "$out/docker-compose.yml" ai-social-game "$out/backend/start-production-backend.sh" "$out/release/production-migration-executor" "$out/backend/production-migration-entrypoint.sh" "$out/release/migrations/sql-ledger.json" "$out/release/migrations/production-plan.json"
+python3 "$repo/scripts/ci/write-production-migration-artifacts.py" "$out" "$out/release/production-migration-artifacts.json"
 chmod 0444 "$out/release/production-migration-artifacts.json"
 python3 - "$out" <<'PY'
 import json,pathlib,sys

@@ -7,7 +7,7 @@ trap 'chmod -R u+w -- "$work_dir" 2>/dev/null || true; rm -rf -- "$work_dir"' EX
 mkdir -p "$work_dir/bundle/backend" "$work_dir/bundle/frontend/dist"
 printf 'compiled-backend-placeholder\n' >"$work_dir/bundle/backend/app.jar"
 printf '<!doctype html><title>compiled frontend placeholder</title>\n' >"$work_dir/bundle/frontend/dist/index.html"
-bash "$repo_root/ci/assemble-aisocialgame-production-runtime.sh" "$repo_root" "$work_dir/bundle"
+bash "$repo_root/scripts/ci/assemble-aisocialgame-production-runtime.sh" "$repo_root" "$work_dir/bundle"
 python3 - "$work_dir/bundle/release/production-runtime-contract.json" <<'PY'
 import json
 import pathlib
@@ -41,7 +41,7 @@ contract["protected_config_overlay_contract"]["allowed_files"].append({
 })
 pathlib.Path(sys.argv[2]).write_text(json.dumps(contract), encoding="utf-8")
 PY
-if python3 "$repo_root/ci/verify-production-runtime-contract.py" \
+if python3 "$repo_root/scripts/ci/verify-production-runtime-contract.py" \
   "$work_dir/forbidden-overlay.json" \
   "$work_dir/bundle/docker-compose.yml" \
   ai-social-game \

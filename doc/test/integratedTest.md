@@ -2,14 +2,14 @@
 
 ## 1. 执行入口
 
-- 部署入口：发版中心（`ci/build-release.sh`）
+- 部署入口：发版中心（`scripts/ci/build-release.sh`）
 - 本地域名：`https://localsocialgame.testhut.top`
 - 前端端口：`11030`
 - 后端端口：`11031`
 
 ## 2. 发版链路
 
-统一通过发版中心发布，入口为 `ci/build-release.sh`（两阶段 Resolve/Build 契约）。
+统一通过发版中心发布，入口为 `scripts/ci/build-release.sh`（两阶段 Resolve/Build 契约）。
 
 标准链路包含：
 

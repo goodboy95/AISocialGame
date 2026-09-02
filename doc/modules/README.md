@@ -30,5 +30,5 @@
 
 ## 回归说明
 
-- 发版链路（`ci/build-release.sh`）仅负责依赖解析、构建、测试与运行时包组装，不登录管理员、不执行特权迁移，也不自动执行 Playwright。
+- 发版链路（`scripts/ci/build-release.sh`）仅负责依赖解析、构建、测试与运行时包组装，不登录管理员、不执行特权迁移，也不自动执行 Playwright。
 - 真实验收统一采用 subagent + Playwright 真人流程，详见 `doc/test/integratedTest.md` 与 `doc/test/operation.md`。

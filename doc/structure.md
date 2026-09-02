@@ -32,7 +32,7 @@ AISocialGame/
 │   ├── tests/                                # Playwright 相关测试资产
 │   └── playwright.config.ts
 ├── doc/                                      # 项目文档
-├── ci/                                       # 发版中心两阶段发布契约与运行时组装
+├── scripts/ci/                                       # 发版中心两阶段发布契约与运行时组装
 ├── result/                                   # 本地测试产物（默认不入库）
 ├── env.example                               # 无敏感值环境变量模板（本地 F5 调试用）
 ├── env.local                                 # 本机真实环境变量（不入库）
@@ -46,13 +46,13 @@ AISocialGame/
 - 前端代码必须位于 `frontend/`。
 - 管理台是 `frontend/` 内按 `/admin` 路径加载的 React 入口，不存在第二套 Vue 或 `manage/` 前端；管理员权限由后端会话裁决。
 - 后端代码与 SQL 必须位于 `backend/`。
-- `frontend/` 与 `backend/` 外仅保留：文档、发版契约（`ci/`）、调试脚本、测试结果、`env.example` 与项目元信息。
+- `frontend/` 与 `backend/` 外仅保留：文档、发版契约（`scripts/ci/`）、调试脚本、测试结果、`env.example` 与项目元信息。
 - `result/` 为运行时产物目录（例如真人对局报告），由 `.gitignore` 忽略，不参与提交。
 - `backend/.vscode/launch.json` 与 `backend/.vscode/tasks.json` 允许入库，用于 Java F5 调试；其他 `.vscode` 内容仍保持忽略。
 
 ## 部署脚本
 
-- 发版入口：发版中心统一使用 `ci/build-release.sh`（两阶段 Resolve/Build 契约，Linux Docker 运行时配置由 config-center 提供）。
+- 发版入口：发版中心统一使用 `scripts/ci/build-release.sh`（两阶段 Resolve/Build 契约，Linux Docker 运行时配置由 config-center 提供）。
 - Windows 本机调试入口：`scripts/windows/Start-Backend.ps1`、`Start-Frontend.ps1`（前台运行，Ctrl+C 停止，不写入进程状态文件）。
 - 默认本地域名：`localsocialgame.testhut.top`
 
@@ -66,7 +66,7 @@ AISocialGame/
 - SSO HTTP 入口通过 `SSO_USER_SERVICE_BASE_URL` 配置。
 - 三服务 gRPC 鉴权变量在本地调试时通过权限为 `0600` 且未入库的 `env.local`（VS Code F5）或 `%LOCALAPPDATA%\Aienie\secrets\aisocialgame.env`（Windows 调试脚本）注入；发版环境由 config-center 在部署侧注入。`env.example` 只保留占位符清单。
 - 非 test profile 会校验弱口令、MySQL TLS 和 gRPC 明文配置，详见 `doc/modules/security-hardening-module.md`。
-- 发版链路（`ci/build-release.sh`）只负责依赖解析、构建、测试与运行时包组装，不登录管理员、不执行特权迁移，也不自动执行 Playwright；构建产物不含运行时配置与秘密。
+- 发版链路（`scripts/ci/build-release.sh`）只负责依赖解析、构建、测试与运行时包组装，不登录管理员、不执行特权迁移，也不自动执行 Playwright；构建产物不含运行时配置与秘密。
 - M1 AI 拟人质量闭环新增 `ai_decision_traces` 与 `ai_persona_memories`，用于服务端质检、回放准备和 Persona 记忆沉淀。
 - 本地开箱即用数据由 `DemoSeedService` 管理，只有显式设置 `APP_DEMO_SEED_ENABLED=true` 时才会开启；真实浏览器验收脚本位于 `frontend/tests/acceptance-real.spec.ts`。
 - M2 结构化事件与回放新增 `game_events` 与 `game_archives`，`GameState.logs` 继续服务房间页，服务端回放 API 位于 `ReplayController`。

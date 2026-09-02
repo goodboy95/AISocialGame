@@ -7,14 +7,14 @@
 - 后端：Java 25、Spring Boot、MySQL、Redis、gRPC
 - 前端：React 18、TypeScript、Vite、Tailwind、TanStack Query、shadcn/ui
 - 管理台：同一 React/Vite 前端内的 `/admin` 路由入口，按路径独立分包；不是独立 Vue/`manage` 项目
-- 部署：发版中心发布到 Linux Docker（`ci/build-release.sh` 唯一发版入口）
+- 部署：发版中心发布到 Linux Docker（`scripts/ci/build-release.sh` 唯一发版入口）
 
 ## 项目结构
 
 - `frontend/`：前端源码、构建配置、Playwright 工具配置
 - `backend/`：后端源码、SQL、proto、单测
 - `doc/`：接口、模块、测试与运维文档
-- `ci/`：发版中心两阶段发布契约（Resolve/Build，见 `ci/README.md`）
+- `scripts/ci/`：发版中心两阶段发布契约（Resolve/Build，见 `scripts/ci/README.md`）
 - `scripts/windows/`：Windows 本机调试启动脚本（Start-Backend.ps1 / Start-Frontend.ps1）
 - `env.example`：无秘密的配置清单；复制为被忽略的 `env.local` 后填入真实值并设置权限 `0600`，仅供 VS Code F5 后端调试使用
 
@@ -93,11 +93,11 @@ mysql \
 说明：
 - 执行前先备份目标库；`20260519` 脚本仅在尚未应用时执行。
 - 启动应用前必须确认 `backend/sql/20260810_admin_totp_auth.sql` 已成功应用，认证表均存在。
-- 正式环境的 schema 计划由发版中心 production SQL ledger/checkpoint 合同管控（见 `ci/README.md`）。
+- 正式环境的 schema 计划由发版中心 production SQL ledger/checkpoint 合同管控（见 `scripts/ci/README.md`）。
 
 ### 发版中心发布（Linux Docker）
 
-- 发版入口统一为 `ci/build-release.sh`（两阶段 Resolve/Build 契约，详见 `ci/README.md`）。
+- 发版入口统一为 `scripts/ci/build-release.sh`（两阶段 Resolve/Build 契约，详见 `scripts/ci/README.md`）。
 - 构建产物不包含任何运行时配置、秘密、证书或 Config Center 文件。
 - Linux 服务器上的运行时配置（数据库、Redis、gRPC 鉴权等）由 config-center 在部署侧注入（运行时以 `env.txt` 形式挂载），不使用仓库本地配置。
 - 发版链路只负责构建与发布，不登录管理员，也不自动执行余额迁移。
