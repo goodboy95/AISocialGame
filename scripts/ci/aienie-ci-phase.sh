@@ -494,7 +494,7 @@ aienie_ci_build_static_node() {
 }
 
 aienie_ci_prepare_phase() {
-  AIENIE_CI_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[1]}")/.." && pwd -P)"
+  AIENIE_CI_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[1]}")/../.." && pwd -P)"
   export AIENIE_CI_REPO_ROOT
   aienie_ci_require_value AIENIE_CI_PHASE
   aienie_ci_require_value AIENIE_CI_CACHE_DIR
