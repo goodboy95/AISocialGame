@@ -20,7 +20,7 @@
 | 认证与钱包模块 | 管理 SSO 登录态、本地专属积分、签到、兑换码、通用转专属兑换、AI 成功调用后本地扣减 | `backend/src/main/java/com/aisocialgame/controller/AuthController.java`、`backend/src/main/java/com/aisocialgame/controller/WalletController.java`、`backend/src/main/java/com/aisocialgame/service/ProjectCreditService.java`、`frontend/src/components/wallet/*` |
 | 管理后台模块 | 管理管理员登录、用户封禁、积分流水检查、调账/冲正/迁移、兑换码创建、联通性诊断 | `backend/src/main/java/com/aisocialgame/controller/admin/*.java`、`frontend/src/pages/admin/*` |
 | gRPC 集成模块 | 管理 user/pay/ai 静态地址、当前 proto 契约、鉴权拦截器和本地项目钱包边界 | `backend/src/main/java/com/aisocialgame/integration/*`、`doc/modules/grpc-integration-module.md` |
-| 第三方组件对齐模块 | 记录 MySQL/Redis/Qdrant 外部依赖对接与配置策略 | `doc/modules/third-party-components.md`、`backend/src/main/resources/application.yml`、`env.example`、`build.sh` |
+| 第三方组件对齐模块 | 记录 MySQL/Redis/Qdrant 外部依赖对接与配置策略 | `doc/modules/third-party-components.md`、`backend/src/main/resources/application.yml`、`env.example` |
 | 安全加固模块 | 记录 v1.0 审计后的登录边界、房间权限、WS/CORS、AI 接口与运行配置加固 | `doc/modules/security-hardening-module.md`、`backend/src/main/java/com/aisocialgame/config/*` |
 
 ## 后续里程碑
@@ -30,5 +30,5 @@
 
 ## 回归说明
 
-- `build.sh` 当前仅负责构建、部署与健康检查，不登录管理员、不执行特权迁移，也不自动执行 Playwright。
+- 发版链路（`ci/build-release.sh`）仅负责依赖解析、构建、测试与运行时包组装，不登录管理员、不执行特权迁移，也不自动执行 Playwright。
 - 真实验收统一采用 subagent + Playwright 真人流程，详见 `doc/test/integratedTest.md` 与 `doc/test/operation.md`。

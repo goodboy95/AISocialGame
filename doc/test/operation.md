@@ -10,23 +10,18 @@
 
 ## 1. 部署执行
 
-1. 确认 `env.local` 存在、权限为 `0600`，并已注入数据库、管理员 BCrypt 哈希、TOTP keyring 与三服务 gRPC 鉴权变量。
-2. 确认 `APP_EXTERNAL_PAYSERVICE_JWT` 未过期（推荐每次部署前重新生成）。
-3. 启动前先幂等执行并核验 `backend/sql/20260810_admin_totp_auth.sql`；既有环境还应确认更早的日期迁移均已应用。
-4. 执行 `sudo ./build.sh`。
-5. 期望输出包含：
-   - 后端测试通过
-   - 前端构建完成
-   - 容器重建完成
-   - 前后端健康检查通过
-6. `build.sh` 不登录管理员，也不执行任何特权迁移；结束后仅代表部署完成，测试需执行第 7 节真人验收流程。
+1. 测试/正式环境通过发版中心发布：入口为 `ci/build-release.sh`（两阶段 Resolve/Build 契约，见 `ci/README.md`）；构建产物不包含运行时配置、秘密或证书。
+2. Linux 服务器运行时配置（数据库、管理员 BCrypt 哈希、TOTP keyring、三服务 gRPC 鉴权变量）由 config-center 在部署侧注入，不使用仓库本地配置。
+3. 确认 `APP_EXTERNAL_PAYSERVICE_JWT` 未过期（推荐每次发布前重新生成）。
+4. 启动前先幂等执行并核验 `backend/sql/20260810_admin_totp_auth.sql`；既有环境还应确认更早的日期迁移均已应用。
+5. 发布完成后仅代表部署完成，测试需执行第 7 节真人验收流程；发版链路不登录管理员，也不执行任何特权迁移。
 
 ## 1.1 VS Code F5 调试（工作区根：`backend/`）
 
 1. 在 VS Code 中打开 `backend/` 目录。
 2. 运行调试配置 `Backend: Launch AiSocialGameApplication`。
 3. 调试前会自动执行 `backend: compile`，确保 protobuf/gRPC 生成代码齐备。
-4. 调试配置读取权限为 `0600` 且未入库的 `../env.local`，因此会使用与部署一致的外部依赖配置。
+4. 调试配置读取权限为 `0600` 且未入库的 `../env.local`（首次使用前先 `cp env.example env.local` 并填入真实值），因此会使用与本地运行一致的外部依赖配置。
 5. 启动成功后访问 `http://127.0.0.1:11031/actuator/health`，确认返回健康状态。
 
 ## 2. SSO 登录/注册跳转
@@ -88,7 +83,7 @@
    - 狼人杀：3 人玩家 + AI
 3. 期望所有场景都能到结算页，且无流程卡死。
 4. 发言和投票必须结合场上信息，具备正常人类逻辑。
-5. 账号从根目录 `testuser.txt` 读取。
+5. 测试账号由执行者通过 SSO 自行准备，不再从仓库文件读取。
 6. 若余额不足，使用管理端创建兑换码并完成兑换后继续。
 7. 产出 4 篇完整游戏报告到 `result/game-reports/<run-id>/`（本地产物，不入库）。
 
@@ -98,7 +93,7 @@
 2. 根因：`APP_EXTERNAL_PAYSERVICE_JWT` 过期，导致后端调用 pay-service gRPC 认证失败。
 3. 处理：
    - 用 pay-service 的 `JWT_SECRET` 重新签发服务 JWT（`iss=aienie-services`，`aud=aienie-payservice-grpc`，`role=SERVICE`，`scopes=[billing.balance.read,billing.balance.convert,billing.onboarding.write,billing.checkin.read,billing.checkin.write,billing.redeem.write,billing.ledger.read]`）。
-   - 重新执行 `sudo ./build.sh` 部署。
+   - 重新通过发版中心发布。
 
 4. 现象：显式运行 `scripts/admin-billing-migrate-all.sh` 时，迁移接口报错
    `Missing scope: billing.balance.read` 或其他细粒度 scope。

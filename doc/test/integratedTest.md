@@ -2,25 +2,24 @@
 
 ## 1. 执行入口
 
-- 部署入口：`sudo ./build.sh`
+- 部署入口：发版中心（`ci/build-release.sh`）
 - 本地域名：`https://localsocialgame.testhut.top`
 - 前端端口：`11030`
 - 后端端口：`11031`
 
-## 2. build.sh 标准链路
+## 2. 发版链路
 
-统一使用 `build.sh`，不再区分研发/生产脚本入口。
+统一通过发版中心发布，入口为 `ci/build-release.sh`（两阶段 Resolve/Build 契约）。
 
 标准链路包含：
 
-1. 后端 `mvn clean test package`
-2. 前端 `pnpm install --frozen-lockfile && pnpm build`
-3. Docker Compose 重建 frontend 镜像（`docker compose build frontend`，确保镜像包含第 2 步最新产物）并重启前后端
-4. 健康检查（前端首页、后端 `/actuator/health`）
-5. 构建完成后不自动执行积分迁移；需要迁移时由授权运维人员通过管理登录与一次性操作 proof 显式执行
+1. Resolve 节点联网解析并缓存依赖，生成依赖清单
+2. Build 节点离线执行后端 `mvn` 测试打包与前端 `pnpm build`
+3. 平台组装运行时 Compose 包并注入不可变镜像摘要
+4. 运行时配置、秘密、证书与 Config Center 文件不进入构建产物，由 config-center 在部署侧提供
+5. 发布完成后不自动执行积分迁移；需要迁移时由授权运维人员通过管理登录与一次性操作 proof 显式执行
 
-说明：部署前必须先应用并核验幂等脚本 `backend/sql/20260810_admin_totp_auth.sql`，且
-`env.local` 必须存在、权限为 `0600`。`build.sh` 不执行管理员登录、特权迁移或 Playwright。
+说明：发布前必须先应用并核验幂等脚本 `backend/sql/20260810_admin_totp_auth.sql`。发版链路不执行管理员登录、特权迁移或 Playwright。
 
 ## 3. 真人验收（强制）
 
@@ -40,7 +39,7 @@
 
 ## 4. 账号与余额策略
 
-- 普通账号从仓库根目录 `testuser.txt` 获取。
+- 普通账号由测试执行者通过 SSO 自行准备。
 - 管理账号由 `APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD_HASH` 注入；TOTP 模式还需版本化加密 keyring。
 - 首次 TOTP 登录先完成 enrollment 并安全保存仅显示一次的恢复码；批量迁移脚本结束时必须 logout，且 `failed>0` 视为失败。
 - 余额不足时流程：
@@ -75,7 +74,7 @@
 
 - `POST /api/auth/sso-callback` 返回 `401 Invalid token`
   - 常见根因：`APP_EXTERNAL_PAYSERVICE_JWT` 过期
-  - 处置：按 pay-service 鉴权约束重签服务 JWT，再执行 `sudo ./build.sh`
+  - 处置：按 pay-service 鉴权约束重签服务 JWT，再通过发版中心重新发布
 
 - 对局流程卡住（未推进到结算）
   - 处置：按真实用户视角重试当前回合动作；若可稳定复现，先修复代码再重新部署与复测。

@@ -13,7 +13,7 @@
 - 默认配置已统一到：
   - `backend/src/main/resources/application.yml`
   - `env.example`
-  - `build.sh`
+  - `scripts/windows/Start-Backend.ps1`（Windows 本机调试固定端点）
 - 默认连接：
   - MySQL：`localbase.testhut.top:23306`
   - Redis：`localbase.testhut.top:26379`
@@ -32,7 +32,7 @@
 
 ## 部署脚本行为
 
-- `build.sh` 不部署、不初始化、不预检 MySQL/Redis/Qdrant；外部依赖不可用时由后端启动或业务调用暴露错误。
+- 发版链路与本地调试脚本都不部署、不初始化、不预检 MySQL/Redis/Qdrant；外部依赖不可用时由后端启动或业务调用暴露错误。
 
 ## Schema 稳定性
 

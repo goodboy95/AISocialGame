@@ -30,7 +30,7 @@
 
 ## 运行配置
 
-- `env.example` 是无敏感值模板；真实部署值只放在权限为 `0600` 且未入库的 `env.local` 中，`build.sh` 与容器加载同一文件。
+- `env.example` 是无敏感值模板；本地调试的真实值只放在权限为 `0600` 且未入库的 `env.local`（VS Code F5）或 `%LOCALAPPDATA%\Aienie\secrets\aisocialgame.env`（Windows 调试脚本）中，发版环境的运行时配置由 config-center 在部署侧注入。
 - 非 test profile 启动时会 fail-fast 校验：
   - `APP_ADMIN_PASSWORD_HASH` 必须为 BCrypt 摘要，`SPRING_DATASOURCE_PASSWORD` 必须存在。
   - 管理认证只接受严格 OS `ENV`/`AUTH_MODE` 四种组合；TOTP 模式必须配置有效 32 字节版本化 keyring。

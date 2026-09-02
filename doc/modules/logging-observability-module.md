@@ -9,7 +9,7 @@ Spring Boot 的日志配置集中在 `backend/src/main/resources/application.yml
 - 单文件默认上限 `10MB`，历史默认保留 `14` 天，总容量默认上限 `1GB`。
 - 可通过 `LOGGING_MAX_FILE_SIZE`、`LOGGING_MAX_HISTORY`、`LOGGING_TOTAL_SIZE_CAP` 和 `LOGGING_CLEAN_HISTORY_ON_START` 调整轮转策略。
 - 根日志和应用日志默认均为 `INFO`，分别由 `LOGGING_LEVEL_ROOT`、`LOGGING_LEVEL_APP` 控制。生产环境不应开启全局 `DEBUG` 或 `TRACE`。
-- `docker-compose.yml` 为 backend/frontend 的 `json-file` 容器日志设置默认 `10m × 5` 上限，可通过 `DOCKER_LOG_MAX_SIZE`、`DOCKER_LOG_MAX_FILE` 覆盖，避免 stdout/stderr 无界占用宿主机空间。
+- 发版运行时的容器 stdout/stderr 轮转由部署侧 Docker daemon 策略管理；应用文件日志写入运行时 Compose 挂载的 `./logs` 卷，records 写入 `./records` 卷。
 
 部署时应让日志目录只对运行账户及运维组可写，并使用受限的进程 `umask`；应用配置只负责轮转与容量，不替代宿主机权限控制。
 

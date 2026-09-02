@@ -64,7 +64,7 @@ identity/audience 或 TTL 越界均拒绝启动。
 - 若该 JWT 过期，会在 SSO 回调阶段触发 pay-service onboarding 调用失败，外显为：
   - `POST /api/auth/sso-callback` 返回 `401`
   - 响应消息：`Invalid token`
-- 部署前建议重新签发该 JWT 并注入环境变量，再执行 `build.sh`。
+- 发布前建议重新签发该 JWT 并注入环境变量，再通过发版中心发布。
 
 ## 运行链路
 

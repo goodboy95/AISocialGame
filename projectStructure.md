@@ -11,10 +11,9 @@ AISocialGame/
 ├── backend/                 Spring Boot 后端、SQL、proto 与测试
 ├── frontend/                React 18 + TypeScript + Vite 单一前端工程
 ├── doc/                     架构、模块、API、运维与可重复测试说明
-├── scripts/windows/         Windows 原生按需 Build/Start/Status/Stop/Test
-├── docker-compose.yml       本项目前后端容器编排
-├── env.example              无秘密配置模板
-└── build.sh                 Linux Compose 部署入口
+├── ci/                      发版中心两阶段发布契约（build-release.sh 唯一发版入口）
+├── scripts/windows/         Windows 本机调试启动脚本（Start-Backend/Start-Frontend）
+└── env.example              无秘密配置模板（本地 F5 调试用）
 ```
 
 ## 前端边界
@@ -38,8 +37,8 @@ AISocialGame/
 
 ## 运行入口
 
-- Linux Compose：`./build.sh`。
-- Windows 原生按需入口：`scripts/windows/Build-Local.ps1`、`Start-Local.ps1`、
-  `Get-LocalStatus.ps1`、`Stop-Local.ps1`、`Test-Local.ps1`。
+- 发版中心发布（Linux Docker）：`ci/build-release.sh`（运行时配置由 config-center 提供）。
+- Windows 本机调试入口：`scripts/windows/Start-Backend.ps1`、`Start-Frontend.ps1`
+  （前台运行，Ctrl+C 停止）。
 - 浏览器本地入口：`https://localsocialgame.testhut.top`；管理台为同站
   `/admin` 路由。

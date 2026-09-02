@@ -7,15 +7,16 @@
 - 后端：Java 25、Spring Boot、MySQL、Redis、gRPC
 - 前端：React 18、TypeScript、Vite、Tailwind、TanStack Query、shadcn/ui
 - 管理台：同一 React/Vite 前端内的 `/admin` 路由入口，按路径独立分包；不是独立 Vue/`manage` 项目
-- 部署：Docker Compose（仅编排本项目的前后端）
+- 部署：发版中心发布到 Linux Docker（`ci/build-release.sh` 唯一发版入口）
 
 ## 项目结构
 
 - `frontend/`：前端源码、构建配置、Playwright 工具配置
 - `backend/`：后端源码、SQL、proto、单测
 - `doc/`：接口、模块、测试与运维文档
-- `build.sh`：唯一部署脚本；本地域名默认为 `localsocialgame.testhut.top`，可通过 `APP_DOMAIN` 覆盖；每次部署重建 frontend 镜像（`docker compose build frontend`）以确保前端产物最新
-- `env.example`：无秘密的配置清单；复制为被忽略的 `env.local` 后填入真实值并设置权限 `0600`
+- `ci/`：发版中心两阶段发布契约（Resolve/Build，见 `ci/README.md`）
+- `scripts/windows/`：Windows 本机调试启动脚本（Start-Backend.ps1 / Start-Frontend.ps1）
+- `env.example`：无秘密的配置清单；复制为被忽略的 `env.local` 后填入真实值并设置权限 `0600`，仅供 VS Code F5 后端调试使用
 
 ## 认证与积分
 
@@ -66,7 +67,7 @@ MySQL、Redis、Qdrant 由外部环境提供，项目脚本不负责部署、初
 
 ## 部署
 
-### 启动前脚本清单
+### 上线前脚本清单（测试/正式环境）
 
 测试/正式环境默认以 `SPRING_JPA_HIBERNATE_DDL_AUTO=validate` 启动，后端不会在启动时自动改表。涉及表结构变更的 SQL 需要先在目标数据库执行，确认成功后再启动应用。
 
@@ -75,16 +76,16 @@ MySQL、Redis、Qdrant 由外部环境提供，项目脚本不负责部署、初
 
 ```bash
 mysql \
-  --host="${MYSQL_HOST:-localbase.testhut.top}" \
-  --port="${MYSQL_PORT:-23306}" \
-  --user="${SPRING_DATASOURCE_USERNAME:-aisocialgame}" \
+  --host="${MYSQL_HOST}" \
+  --port="${MYSQL_PORT}" \
+  --user="${SPRING_DATASOURCE_USERNAME}" \
   --password \
   aisocialgame < backend/sql/20260519_performance_stability.sql
 
 mysql \
-  --host="${MYSQL_HOST:-localbase.testhut.top}" \
-  --port="${MYSQL_PORT:-23306}" \
-  --user="${SPRING_DATASOURCE_USERNAME:-aisocialgame}" \
+  --host="${MYSQL_HOST}" \
+  --port="${MYSQL_PORT}" \
+  --user="${SPRING_DATASOURCE_USERNAME}" \
   --password \
   aisocialgame < backend/sql/20260810_admin_totp_auth.sql
 ```
@@ -92,80 +93,38 @@ mysql \
 说明：
 - 执行前先备份目标库；`20260519` 脚本仅在尚未应用时执行。
 - 启动应用前必须确认 `backend/sql/20260810_admin_totp_auth.sql` 已成功应用，认证表均存在。
-- 后续新增版本化 SQL 时，按文件日期顺序在测试/正式环境启动前执行。
+- 正式环境的 schema 计划由发版中心 production SQL ledger/checkpoint 合同管控（见 `ci/README.md`）。
 
-准备本机运行配置：
+### 发版中心发布（Linux Docker）
 
-```bash
-cp env.example env.local
-chmod 600 env.local
-# 编辑 env.local，替换全部占位符
-```
-
-`build.sh` 会拒绝缺失、符号链接或权限不是 `0600` 的 `env.local`。容器只读挂载并加载同一文件，
-不会以仅存在于宿主进程的秘密通过预检。
-
-每次部署执行：
-
-```bash
-./build.sh
-```
-
-如需切换域名，直接覆盖 `APP_DOMAIN`，不要再区分多套部署脚本：
-
-```bash
-APP_DOMAIN=socialgame.testhut.top ./build.sh
-```
-
-持续或可重复执行：
-- `build.sh` 只负责构建和部署，不登录管理员，也不自动执行余额迁移。
-- 历史账本需要全量迁移时，由授权运维人员在部署完成后显式运行
+- 发版入口统一为 `ci/build-release.sh`（两阶段 Resolve/Build 契约，详见 `ci/README.md`）。
+- 构建产物不包含任何运行时配置、秘密、证书或 Config Center 文件。
+- Linux 服务器上的运行时配置（数据库、Redis、gRPC 鉴权等）由 config-center 在部署侧注入（运行时以 `env.txt` 形式挂载），不使用仓库本地配置。
+- 发版链路只负责构建与发布，不登录管理员，也不自动执行余额迁移。
+- 历史账本需要全量迁移时，由授权运维人员在发布完成后显式运行
   `scripts/admin-billing-migrate-all.sh`。脚本会在首次使用时先完成 TOTP enrollment，
   再交互完成管理员登录和操作确认，结束时主动退出；返回 `failed>0` 时脚本以非零状态结束。
-
-### Linux
-
-统一部署：
-
-```bash
-./build.sh
-APP_DOMAIN=socialgame.testhut.top ./build.sh
-```
-
-脚本流程包含：
-
-1. 后端 `mvn clean test package`
-2. 前端 `pnpm install --frozen-lockfile && pnpm build`
-3. Docker Compose 重建前后端
-4. 健康检查
-
-说明：
-- 只维护一个 `build.sh`，环境差异通过 `APP_DOMAIN` 与已有环境变量覆盖，不再维护研发/生产双入口。
-- `build.sh` 不执行任何管理员登录或特权迁移；真实验收测试也不由它自动触发。
 
 ### VS Code F5（以 `backend/` 为工作区根）
 
 1. 在 VS Code 中直接打开 `backend/` 目录。
 2. 选择调试配置 `Backend: Launch AiSocialGameApplication` 并按 `F5`。
 3. 调试前会自动执行 `backend: compile`，用于生成 protobuf/gRPC 代码。
-4. 调试进程会读取权限为 `0600` 且未入库的 `../env.local`，未显式提供 `SERVER_PORT` 时会回退到 `BACKEND_PORT`。
+4. 调试进程会读取权限为 `0600` 且未入库的 `../env.local`，未显式提供 `SERVER_PORT` 时会回退到 `BACKEND_PORT`。首次使用前先 `cp env.example env.local && chmod 600 env.local` 并填入真实值。
 5. 启动成功后，可访问 `http://127.0.0.1:11031/actuator/health` 验证服务状态。
 
-### Windows 本机启动（localbase WSL）
+### Windows 本机调试启动（localbase WSL）
 
-共享 MySQL、Redis、Qdrant 和 AI/User/Pay 公共服务由 `aienie-wsl` 提供；Windows 原生应用是另一套本地实例。准备好仓库外的 `%LOCALAPPDATA%\Aienie\secrets\aisocialgame.env` 后，从项目根目录执行：
+共享 MySQL、Redis、Qdrant 和 AI/User/Pay 公共服务由 `aienie-wsl` 提供；Windows 原生应用是另一套本地实例。准备好仓库外的 `%LOCALAPPDATA%\Aenie\secrets\aisocialgame.env` 后，在两个终端分别执行：
 
 ```powershell
-.\scripts\windows\Build-Local.ps1
-.\scripts\windows\Start-Local.ps1
-.\scripts\windows\Get-LocalStatus.ps1
-.\scripts\windows\Stop-Local.ps1
-.\scripts\windows\Test-Local.ps1 -Level L2
+.\scripts\windows\Start-Backend.ps1    # 后端：mvn spring-boot:run，127.0.0.1:11031
+.\scripts\windows\Start-Frontend.ps1   # 前端：vite dev，127.0.0.1:11030
 ```
 
-标准入口不修改 hosts、ACL，不要求管理员权限或 UAC，也不访问 Config Center 或监控状态写入器。后端和前端分别限制在 `127.0.0.1:11031`、`127.0.0.1:11030`；跨服务只访问 `localbase.testhut.top` 和三个 `local*.testhut.top` TLS 服务。进程状态与日志位于 `%LOCALAPPDATA%\Aienie\native-runs\aisocialgame`。完整边界见 [`doc/operations/windows-native.md`](doc/operations/windows-native.md)。
+两个脚本都在前台运行，日志直接输出到当前控制台，Ctrl+C 停止，因此不需要单独的停止/状态脚本。首次运行 `Start-Frontend.ps1` 时若 `frontend/node_modules` 缺失会自动执行 `pnpm install --frozen-lockfile`；`Start-Backend.ps1` 可用 `-EnvironmentFile` 覆盖默认密钥文件路径。
 
-Linux Docker Compose 使用非敏感 `LOCALBASE_HOST_IP=172.20.0.2`（默认值相同）仅映射 `localbase.testhut.top` 到 WSL provider；user、AI、pay 服务仍保留各自的 `host-gateway` 映射。
+调试入口不修改 hosts、ACL，不要求管理员权限或 UAC，也不访问 Config Center 或监控状态写入器。后端和前端分别限制在 `127.0.0.1:11031`、`127.0.0.1:11030`；跨服务只访问 `localbase.testhut.top` 和三个 `local*.testhut.top` TLS 服务。完整边界见 [`doc/operations/windows-native.md`](doc/operations/windows-native.md)。
 
 ## 域名与端口
 

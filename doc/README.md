@@ -16,7 +16,7 @@
 
 - 项目结构：[structure.md](structure.md)
 - 前端入口：[../frontend/README.md](../frontend/README.md)（同一 React 工程按路径分离用户端与内嵌 Admin）
-- Windows 原生按需运维：[operations/windows-native.md](operations/windows-native.md)
+- Windows 本机调试启动：[operations/windows-native.md](operations/windows-native.md)
 - 模块索引：[modules/README.md](modules/README.md)
 - GameEngine 插件化模块：[modules/game-engine-module.md](modules/game-engine-module.md)
 - 海龟汤玩法模块：[modules/turtle-soup-module.md](modules/turtle-soup-module.md)
@@ -26,7 +26,6 @@
 - 日志与可观测性模块：[modules/logging-observability-module.md](modules/logging-observability-module.md)
 - API 文档：[api/](api/)
 - 测试与验收：[test/](test/)
-- 问题与试错记录：[issues.md](issues.md)、[trialAndError/](trialAndError/)
 
 ## 维护规则
 
